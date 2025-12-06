@@ -32,43 +32,61 @@ jobs:
       - name: 📱 Prebuild iOS
         run: npx expo prebuild --platform ios --clean
 
-      - name: 📋 List iOS directory
-        run: ls -la ios/
-
-      - name: 🔍 Find workspace name
-        id: find_workspace
-        run: |
-          WORKSPACE=$(find ios -name "*.xcworkspace" -maxdepth 1 | head -1 | xargs basename | sed 's/.xcworkspace//')
-          echo "WORKSPACE_NAME=$WORKSPACE" >> $GITHUB_OUTPUT
-          echo "Found workspace: $WORKSPACE"
-
       - name: 📦 Install CocoaPods
         run: |
           cd ios
-          pod install
+          pod install --repo-update
 
-      - name: 📱 Build iOS (Unsigned)
+      - name: 🔍 Find project info
+        id: project
         run: |
           cd ios
-          xcodebuild -workspace "${{ steps.find_workspace.outputs.WORKSPACE_NAME }}.xcworkspace" \
-            -scheme "${{ steps.find_workspace.outputs.WORKSPACE_NAME }}" \
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME=$(echo $WORKSPACE | sed 's/.xcworkspace//')
+          echo "workspace=$WORKSPACE" >> $GITHUB_OUTPUT
+          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+          echo "Found: $WORKSPACE / $SCHEME"
+
+      - name: 📱 Build iOS App
+        run: |
+          cd ios
+          xcodebuild \
+            -workspace "${{ steps.project.outputs.workspace }}" \
+            -scheme "${{ steps.project.outputs.scheme }}" \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -archivePath build/App.xcarchive \
-            archive \
+            -derivedDataPath build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            DEVELOPMENT_TEAM=""
+            DEVELOPMENT_TEAM="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: 📋 Debug - List build output
+        run: |
+          echo "=== Build directory ==="
+          find ios/build -name "*.app" -type d 2>/dev/null || echo "No .app found"
+          echo "=== Full tree ==="
+          ls -laR ios/build/Build/Products/Release-iphoneos/ 2>/dev/null || echo "No Release-iphoneos"
 
       - name: 📦 Create IPA
         run: |
-          cd ios/build/App.xcarchive/Products/Applications
+          APP_PATH=$(find ios/build -name "*.app" -type d | head -1)
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: No .app file found!"
+            exit 1
+          fi
+          
+          echo "Found app at: $APP_PATH"
+          
           mkdir -p Payload
-          mv *.app Payload/
+          cp -R "$APP_PATH" Payload/
           zip -r VinaliveAI.ipa Payload
-          mv VinaliveAI.ipa ${{ github.workspace }}/
+          
+          echo "IPA size:"
+          ls -la VinaliveAI.ipa
 
       - name: 📤 Upload IPA
         uses: actions/upload-artifact@v4

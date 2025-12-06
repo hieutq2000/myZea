@@ -8,17 +8,25 @@
             "developmentClient": true,
             "distribution": "internal",
             "ios": {
-                "simulator": true
+                "buildConfiguration": "Debug"
             }
         },
         "preview": {
             "distribution": "internal",
             "ios": {
-                "simulator": false
+                "buildConfiguration": "Release"
             }
         },
         "production": {
-            "autoIncrement": true
+            "autoIncrement": true,
+            "ios": {
+                "buildConfiguration": "Release"
+            }
+        },
+        "simulator": {
+            "ios": {
+                "simulator": true
+            }
         }
     },
     "submit": {
