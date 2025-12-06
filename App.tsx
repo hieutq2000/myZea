@@ -11,6 +11,7 @@ import {
 } from './src/types';
 import { getCurrentUser, logout as apiLogout, updateProfile, saveExamResult } from './src/utils/api';
 import { COLORS } from './src/utils/theme';
+import { useAppUpdates } from './src/hooks/useUpdates';
 
 type ViewType = 'AUTH' | 'HOME' | 'PROFILE' | 'SESSION';
 
@@ -21,6 +22,7 @@ interface SessionConfig {
 }
 
 export default function App() {
+  useAppUpdates(); // Auto check for updates
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<ViewType>('AUTH');
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);

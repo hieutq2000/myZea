@@ -64,6 +64,12 @@
           "speechRecognitionPermission": "Cho phép $(PRODUCT_NAME) nhận dạng giọng nói của bạn."
         }
       ]
-    ]
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/PROJECT_ID_HERE"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

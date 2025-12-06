@@ -10,6 +10,19 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Safe JSON parse helper
+function safeJsonParse(str, defaultValue = []) {
+    if (!str || str === '' || str === 'null' || str === 'undefined') {
+        return defaultValue;
+    }
+    try {
+        return JSON.parse(str);
+    } catch (e) {
+        console.error('JSON parse error:', e);
+        return defaultValue;
+    }
+}
+
 // Database connection pool
 let pool;
 
@@ -58,7 +71,6 @@ async function initDatabase() {
         console.log('✅ Database connected and tables created');
     } catch (error) {
         console.error('❌ Database connection failed:', error.message);
-        // Retry after 5 seconds
         setTimeout(initDatabase, 5000);
     }
 }
@@ -92,23 +104,19 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: 'Vui lòng điền đầy đủ thông tin' });
         }
 
-        // Check if user exists
         const [existing] = await pool.execute('SELECT id FROM users WHERE email = ?', [email]);
         if (existing.length > 0) {
             return res.status(400).json({ error: 'Email đã được sử dụng' });
         }
 
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = uuidv4();
 
-        // Create user
         await pool.execute(
             'INSERT INTO users (id, email, password, name, badges) VALUES (?, ?, ?, ?, ?)',
-            [userId, email, hashedPassword, name, JSON.stringify([])]
+            [userId, email, hashedPassword, name, '[]']
         );
 
-        // Generate token
         const token = jwt.sign({ id: userId, email }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
         res.json({
@@ -130,7 +138,6 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(400).json({ error: 'Vui lòng nhập email và mật khẩu' });
         }
 
-        // Find user
         const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
         if (users.length === 0) {
             return res.status(401).json({ error: 'Email hoặc mật khẩu không đúng' });
@@ -138,13 +145,11 @@ app.post('/api/auth/login', async (req, res) => {
 
         const user = users[0];
 
-        // Check password
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
             return res.status(401).json({ error: 'Email hoặc mật khẩu không đúng' });
         }
 
-        // Generate token
         const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
         res.json({
@@ -157,7 +162,7 @@ app.post('/api/auth/login', async (req, res) => {
                 voice: user.voice,
                 xp: user.xp,
                 level: user.level,
-                badges: JSON.parse(user.badges || '[]')
+                badges: safeJsonParse(user.badges)
             }
         });
     } catch (error) {
@@ -176,7 +181,6 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 
         const user = users[0];
 
-        // Get exam history
         const [results] = await pool.execute(
             'SELECT * FROM exam_results WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
             [user.id]
@@ -190,14 +194,14 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
             voice: user.voice,
             xp: user.xp,
             level: user.level,
-            badges: JSON.parse(user.badges || '[]'),
+            badges: safeJsonParse(user.badges),
             history: results.map(r => ({
                 id: r.id,
                 timestamp: r.created_at,
                 score: r.score,
                 duration: r.duration,
                 topic: r.topic,
-                transcript: JSON.parse(r.transcript || '[]')
+                transcript: safeJsonParse(r.transcript)
             }))
         });
     } catch (error) {
@@ -236,11 +240,9 @@ app.post('/api/exam/result', authenticateToken, async (req, res) => {
             [resultId, req.user.id, score, duration, topic, JSON.stringify(transcript || [])]
         );
 
-        // Update XP
         const xpGain = score === 'ĐẠT' ? 50 : 10;
         await pool.execute('UPDATE users SET xp = xp + ? WHERE id = ?', [xpGain, req.user.id]);
 
-        // Check level up
         const [users] = await pool.execute('SELECT xp, level FROM users WHERE id = ?', [req.user.id]);
         const user = users[0];
         const thresholds = [0, 100, 300, 600, 1000, 2000];
@@ -283,7 +285,7 @@ app.get('/api/exam/history', authenticateToken, async (req, res) => {
             score: r.score,
             duration: r.duration,
             topic: r.topic,
-            transcript: JSON.parse(r.transcript || '[]')
+            transcript: safeJsonParse(r.transcript)
         })));
     } catch (error) {
         console.error('Get history error:', error);
