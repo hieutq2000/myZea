@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "Vinalive AI",
+    "slug": "vinalive-ai-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f97316"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vinalive.ai",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Ứng dụng cần quyền camera để xác thực danh tính và giám sát trong quá trình thi.",
+        "NSMicrophoneUsageDescription": "Ứng dụng cần quyền microphone để ghi âm câu trả lời của bạn.",
+        "NSPhotoLibraryUsageDescription": "Ứng dụng cần quyền truy cập thư viện ảnh để chọn ảnh đại diện."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#f97316"
+      },
+      "package": "com.vinalive.ai",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép $(PRODUCT_NAME) sử dụng camera để xác thực và giám sát."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Cho phép $(PRODUCT_NAME) ghi âm câu trả lời của bạn."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép $(PRODUCT_NAME) truy cập thư viện ảnh để chọn ảnh đại diện."
+        }
+      ]
+    ]
+  }
+}
