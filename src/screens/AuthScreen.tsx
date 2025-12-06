@@ -27,7 +27,6 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [name, setName] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [offlineMode, setOfflineMode] = useState(false);
 
     const handleSubmit = async () => {
         if (!email || !password) {
@@ -48,17 +47,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             const isServerOnline = await checkServerHealth();
 
             if (!isServerOnline) {
-                // Offline mode - use local storage
-                setOfflineMode(true);
-                const localUser: User = {
-                    email,
-                    name: name || email.split('@')[0],
-                    xp: 0,
-                    level: 1,
-                    badges: [],
-                    history: [],
-                };
-                onLogin(localUser);
+                setError('Không thể kết nối đến server. Vui lòng kiểm tra:\n• Server đang chạy\n• Kết nối mạng WiFi');
+                Alert.alert(
+                    '❌ Lỗi kết nối',
+                    'Không thể kết nối đến server.\n\nVui lòng đảm bảo:\n• Server backend đang chạy\n• Điện thoại và máy chủ cùng mạng WiFi',
+                    [{ text: 'Đóng' }]
+                );
                 return;
             }
 
@@ -73,31 +67,6 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         } catch (err) {
             const errorMessage = (err as Error).message;
             setError(errorMessage);
-
-            // If server error, offer offline mode
-            if (errorMessage.includes('kết nối') || errorMessage.includes('server')) {
-                Alert.alert(
-                    'Không thể kết nối Server',
-                    'Bạn có muốn sử dụng chế độ Offline không?',
-                    [
-                        { text: 'Hủy', style: 'cancel' },
-                        {
-                            text: 'Chế độ Offline',
-                            onPress: () => {
-                                const localUser: User = {
-                                    email,
-                                    name: name || email.split('@')[0],
-                                    xp: 0,
-                                    level: 1,
-                                    badges: [],
-                                    history: [],
-                                };
-                                onLogin(localUser);
-                            }
-                        }
-                    ]
-                );
-            }
         } finally {
             setLoading(false);
         }
@@ -205,23 +174,10 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         </Text>
                     </TouchableOpacity>
 
-                    {/* Offline mode button */}
-                    <TouchableOpacity
-                        style={styles.offlineButton}
-                        onPress={() => {
-                            const localUser: User = {
-                                email: 'guest@local',
-                                name: 'Khách',
-                                xp: 0,
-                                level: 1,
-                                badges: [],
-                                history: [],
-                            };
-                            onLogin(localUser);
-                        }}
-                    >
-                        <Text style={styles.offlineText}>📴 Sử dụng Offline</Text>
-                    </TouchableOpacity>
+                    {/* Server info */}
+                    <View style={styles.serverInfo}>
+                        <Text style={styles.serverText}>🌐 Yêu cầu kết nối Server</Text>
+                    </View>
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -324,13 +280,16 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '500',
     },
-    offlineButton: {
+    serverInfo: {
         marginTop: SPACING.lg,
         alignItems: 'center',
         paddingVertical: SPACING.sm,
+        backgroundColor: COLORS.success + '15',
+        borderRadius: BORDER_RADIUS.md,
     },
-    offlineText: {
-        color: COLORS.textMuted,
-        fontSize: 14,
+    serverText: {
+        color: COLORS.success,
+        fontSize: 12,
+        fontWeight: '500',
     },
 });

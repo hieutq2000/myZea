@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ActivityIndicator, View, Text } from 'react-native';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -26,7 +25,6 @@ export default function App() {
   const [view, setView] = useState<ViewType>('AUTH');
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isOffline, setIsOffline] = useState(false);
 
   // Check for existing session on app start
   useEffect(() => {
@@ -35,32 +33,15 @@ export default function App() {
 
   const checkExistingSession = async () => {
     try {
-      // First try to get user from API
+      // Try to get user from API (requires server connection)
       const apiUser = await getCurrentUser();
       if (apiUser) {
         setUser(apiUser);
         setView(apiUser.avatar ? 'HOME' : 'PROFILE');
-        setIsOffline(false);
-      } else {
-        // Check for offline user
-        const savedUser = await AsyncStorage.getItem('offline_user');
-        if (savedUser) {
-          const parsedUser = JSON.parse(savedUser);
-          setUser(parsedUser);
-          setView(parsedUser.avatar ? 'HOME' : 'PROFILE');
-          setIsOffline(true);
-        }
       }
     } catch (error) {
       console.error('Session check error:', error);
-      // Try offline mode
-      const savedUser = await AsyncStorage.getItem('offline_user');
-      if (savedUser) {
-        const parsedUser = JSON.parse(savedUser);
-        setUser(parsedUser);
-        setView(parsedUser.avatar ? 'HOME' : 'PROFILE');
-        setIsOffline(true);
-      }
+      // No offline fallback - user must login
     } finally {
       setLoading(false);
     }
@@ -77,27 +58,16 @@ export default function App() {
     };
 
     setUser(fullUser);
-
-    // If offline, save to local storage
-    if (loggedInUser.email === 'guest@local') {
-      setIsOffline(true);
-      await AsyncStorage.setItem('offline_user', JSON.stringify(fullUser));
-    }
-
     setView(fullUser.avatar ? 'HOME' : 'PROFILE');
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
     setUser(updatedUser);
 
-    if (isOffline) {
-      await AsyncStorage.setItem('offline_user', JSON.stringify(updatedUser));
-    } else {
-      try {
-        await updateProfile(updatedUser.name, updatedUser.avatar, updatedUser.voice);
-      } catch (error) {
-        console.error('Failed to sync profile:', error);
-      }
+    try {
+      await updateProfile(updatedUser.name, updatedUser.avatar, updatedUser.voice);
+    } catch (error) {
+      console.error('Failed to sync profile:', error);
     }
 
     setView('HOME');
@@ -106,13 +76,11 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await apiLogout();
-      await AsyncStorage.removeItem('offline_user');
     } catch (error) {
       console.error('Logout error:', error);
     }
 
     setUser(null);
-    setIsOffline(false);
     setView('AUTH');
   };
 
@@ -160,22 +128,16 @@ export default function App() {
 
       setUser(updatedUser);
 
-      // Save to server or local
-      if (isOffline) {
-        await AsyncStorage.setItem('offline_user', JSON.stringify(updatedUser));
-      } else {
-        try {
-          await saveExamResult(
-            result.score as 'ĐẠT' | 'CHƯA ĐẠT',
-            result.duration,
-            result.topic || '',
-            result.transcript || []
-          );
-        } catch (error) {
-          console.error('Failed to save result to server:', error);
-          // Save locally as fallback
-          await AsyncStorage.setItem('offline_user', JSON.stringify(updatedUser));
-        }
+      // Save to server (required)
+      try {
+        await saveExamResult(
+          result.score as 'ĐẠT' | 'CHƯA ĐẠT',
+          result.duration,
+          result.topic || '',
+          result.transcript || []
+        );
+      } catch (error) {
+        console.error('Failed to save result to server:', error);
       }
     }
 
@@ -188,6 +150,7 @@ export default function App() {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
         <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={{ marginTop: 16, color: COLORS.textLight }}>Đang kết nối server...</Text>
       </View>
     );
   }
