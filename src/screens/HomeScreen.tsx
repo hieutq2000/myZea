@@ -11,6 +11,7 @@ import {
     Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Updates from 'expo-updates';
 import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { User, LiveMode, TargetAudience, Topic, TOPIC_LABELS, TOPIC_ICONS } from '../types';
@@ -25,6 +26,31 @@ interface HomeScreenProps {
 export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSession }: HomeScreenProps) {
     const [selectedMode, setSelectedMode] = useState<LiveMode | null>(null);
     const [targetAudience, setTargetAudience] = useState<TargetAudience>(TargetAudience.GENERAL);
+
+    const handleDebugUpdate = async () => {
+        try {
+            Alert.alert('Checking Update...', 'Connecting to Expo Updates server...');
+            const update = await Updates.checkForUpdateAsync();
+            if (update.isAvailable) {
+                Alert.alert('Update Found!', 'New version available. Download now?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Yes', onPress: async () => {
+                            Alert.alert('Downloading...', 'Please wait.');
+                            await Updates.fetchUpdateAsync();
+                            Alert.alert('Done!', 'App will reload now.', [
+                                { text: 'OK', onPress: () => Updates.reloadAsync() }
+                            ]);
+                        }
+                    }
+                ]);
+            } else {
+                Alert.alert('Up to date', 'No new updates found on "production" channel.');
+            }
+        } catch (error: any) {
+            Alert.alert('Error', `Update failed: ${error.message}`);
+        }
+    };
 
     const modes = [
         {
@@ -217,7 +243,10 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                     </TouchableOpacity>
 
                     <View style={styles.headerInfo}>
-                        <Text style={styles.greeting}>Xin chào (v1.3 - Production) 🎉</Text>
+                        <TouchableOpacity onPress={handleDebugUpdate}>
+                            <Text style={styles.greeting}>Xin chào (v1.3 - Production) 🎉</Text>
+                            <Text style={[styles.greeting, { fontSize: 10, color: COLORS.primary }]}>Tap to check update</Text>
+                        </TouchableOpacity>
                         <Text style={styles.userName} numberOfLines={1}>{user.name || 'Học viên'}</Text>
                     </View>
                 </View>
