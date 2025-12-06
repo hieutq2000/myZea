@@ -1,4 +1,4 @@
-# Vinalive AI Mobile
+# Vinalive AI Mobile (OTA Supported) 🚀
 
 Ứng dụng gia sư AI thông minh - Phiên bản React Native cho Expo Go.
 
