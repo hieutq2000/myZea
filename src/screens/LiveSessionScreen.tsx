@@ -13,9 +13,10 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Audio } from 'expo-av';
-import * as Speech from 'expo-speech';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, GEMINI_API_KEY } from '../utils/theme';
+import { speakWithGoogleTTS, stopTTS } from '../utils/googleTTS';
+import { verifyFaceWithAvatar, periodicFaceCheck, detectLiveness } from '../utils/faceVerification';
 import {
     User, LiveStatus, LiveMode, Topic, TOPIC_LABELS,
     AiVoice, TargetAudience, SessionLogEntry, ExamResult
@@ -46,9 +47,13 @@ export default function LiveSessionScreen({
 
     // Anti-cheat states
     const [faceDetected, setFaceDetected] = useState(false);
+    const [faceVerified, setFaceVerified] = useState(false);
+    const [verificationMessage, setVerificationMessage] = useState('');
+    const [isVerifying, setIsVerifying] = useState(false);
     const [warningCount, setWarningCount] = useState(0);
     const [showViolationWarning, setShowViolationWarning] = useState(false);
     const [currentScore, setCurrentScore] = useState<'ĐẠT' | 'CHƯA ĐẠT' | null>(null);
+    const [cheatingDetails, setCheatingDetails] = useState<string | null>(null);
 
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const cameraRef = useRef<CameraView>(null);
@@ -87,52 +92,145 @@ export default function LiveSessionScreen({
         scrollRef.current?.scrollToEnd({ animated: true });
     }, [sessionLog]);
 
-    // Simulate face detection (since Expo Go doesn't support ML Kit)
-    // In a real app, use expo-face-detector or native module
-    useEffect(() => {
-        if (status !== LiveStatus.CONNECTED) return;
+    // TTS function (moved up to avoid "used before declaration" error)
+    const speakText = useCallback((text: string) => {
+        setIsAiSpeaking(true);
 
-        // Simulate face detection after 2 seconds
-        const detectTimer = setTimeout(() => {
-            setFaceDetected(true);
-            if (isExamMode) {
-                speakText("Xác thực thành công. Bắt đầu bài thi.");
+        // Use Google Cloud TTS for high-quality neural voice
+        speakWithGoogleTTS(
+            text,
+            audience === TargetAudience.KIDS ? 'vi-VN-Wavenet-C' : 'vi-VN-Neural2-A',
+            () => setIsAiSpeaking(true),
+            () => setIsAiSpeaking(false),
+            () => setIsAiSpeaking(false)
+        );
+    }, [audience]);
+
+    // AI-powered face verification for exam mode
+    const performFaceVerification = useCallback(async () => {
+        if (!cameraRef.current || !user.avatar || !isExamMode) return;
+
+        setIsVerifying(true);
+        setVerificationMessage('🔍 Đang quét xác thực khuôn mặt...');
+
+        try {
+            // Capture current camera frame
+            const photo = await cameraRef.current.takePictureAsync({
+                base64: true,
+                quality: 0.5,
+            });
+
+            if (!photo?.base64) {
+                throw new Error('Không thể chụp ảnh từ camera');
             }
+
+            const cameraBase64 = `data:image/jpeg;base64,${photo.base64}`;
+
+            // Step 1: Check liveness (is it a real person, not a photo?)
+            setVerificationMessage('🔍 Kiểm tra người thật...');
+            const livenessResult = await detectLiveness(cameraBase64);
+
+            if (!livenessResult.isLive) {
+                setFaceVerified(false);
+                setVerificationMessage('❌ Phát hiện ảnh giả! Cần quay mặt thật.');
+                speakText('Cảnh báo! Phát hiện ảnh giả. Vui lòng quay camera vào khuôn mặt thật của bạn.');
+                handleCheatingDetected('Sử dụng ảnh giả thay vì khuôn mặt thật');
+                return;
+            }
+
+            // Step 2: Compare with registered avatar
+            setVerificationMessage('🔍 So sánh với ảnh đại diện...');
+            const verifyResult = await verifyFaceWithAvatar(cameraBase64, user.avatar);
+
+            if (verifyResult.isMatch) {
+                setFaceVerified(true);
+                setFaceDetected(true);
+                setVerificationMessage(`✅ Xác thực thành công (${verifyResult.confidence}%)`);
+                speakText('Xác thực khuôn mặt thành công. Bắt đầu bài thi.');
+            } else {
+                setFaceVerified(false);
+                setVerificationMessage(`❌ ${verifyResult.message}`);
+                speakText(`Xác thực thất bại. ${verifyResult.message}. Vui lòng đảm bảo bạn là người đã đăng ký.`);
+
+                if (verifyResult.confidence < 50) {
+                    handleCheatingDetected(`Khuôn mặt không khớp với ảnh đại diện (${verifyResult.confidence}%)`);
+                }
+            }
+        } catch (error) {
+            console.error('Face verification error:', error);
+            setVerificationMessage('⚠️ Lỗi xác thực, vui lòng thử lại');
+        } finally {
+            setIsVerifying(false);
+        }
+    }, [user.avatar, isExamMode, speakText]);
+
+    // Initial face verification when session starts
+    useEffect(() => {
+        if (status !== LiveStatus.CONNECTED || !isExamMode) return;
+
+        // Wait for camera to initialize, then verify
+        const verifyTimer = setTimeout(() => {
+            performFaceVerification();
         }, 2000);
 
-        return () => clearTimeout(detectTimer);
-    }, [status]);
+        return () => clearTimeout(verifyTimer);
+    }, [status, isExamMode, performFaceVerification]);
 
-    // Warning system for anti-cheat (demo)
+    // Periodic face check during exam (every 30 seconds)
     useEffect(() => {
-        if (!isExamMode || status !== LiveStatus.CONNECTED) return;
+        if (!isExamMode || status !== LiveStatus.CONNECTED || !faceVerified) return;
 
-        // In a real app, this would check actual face detection
-        const checkInterval = setInterval(() => {
-            // Simulate random loss of face (10% chance every 5 seconds for demo)
-            // In production, this would be actual face detection
-            if (Math.random() < 0.1 && faceDetected) {
-                setShowViolationWarning(true);
-                setWarningCount(prev => {
-                    const newCount = prev + 1;
-                    if (newCount >= 3) {
-                        // Auto-fail after 3 warnings
-                        handleViolation();
-                    }
-                    return newCount;
+        const checkInterval = setInterval(async () => {
+            if (!cameraRef.current || !user.avatar) return;
+
+            try {
+                const photo = await cameraRef.current.takePictureAsync({
+                    base64: true,
+                    quality: 0.3,
                 });
 
-                speakText("Cảnh báo! Vui lòng giữ khuôn mặt trong khung hình.");
+                if (!photo?.base64) return;
 
-                setTimeout(() => setShowViolationWarning(false), 3000);
+                const result = await periodicFaceCheck(
+                    `data:image/jpeg;base64,${photo.base64}`,
+                    user.avatar
+                );
+
+                if (!result.isSamePerson) {
+                    setShowViolationWarning(true);
+                    setWarningCount(prev => {
+                        const newCount = prev + 1;
+                        if (newCount >= 3) {
+                            handleCheatingDetected('Phát hiện người khác thi thay');
+                        }
+                        return newCount;
+                    });
+                    speakText('Cảnh báo! Phát hiện người khác. Vui lòng giữ đúng người thi trong khung hình.');
+                    setTimeout(() => setShowViolationWarning(false), 3000);
+                }
+
+                if (result.suspiciousActivity) {
+                    setShowViolationWarning(true);
+                    setWarningCount(prev => prev + 1);
+                    speakText(`Cảnh báo! ${result.message}`);
+                    setTimeout(() => setShowViolationWarning(false), 3000);
+                }
+            } catch (error) {
+                console.error('Periodic check error:', error);
             }
-        }, 10000);
+        }, 30000); // Check every 30 seconds
 
         return () => clearInterval(checkInterval);
-    }, [isExamMode, status, faceDetected]);
+    }, [isExamMode, status, faceVerified, user.avatar, speakText]);
 
-    const handleViolation = () => {
-        Speech.stop();
+    const handleCheatingDetected = (reason: string) => {
+        setCheatingDetails(reason);
+        setWarningCount(3); // Max warnings
+        handleViolation(reason);
+    };
+
+    const handleViolation = (reason?: string) => {
+        stopTTS();
         setCurrentScore('CHƯA ĐẠT');
 
         const result: ExamResult = {
@@ -144,9 +242,11 @@ export default function LiveSessionScreen({
             topic: TOPIC_LABELS[topic],
         };
 
+        const violationReason = reason || cheatingDetails || 'Không giữ khuôn mặt trong khung hình';
+
         Alert.alert(
             '❌ VI PHẠM QUY CHẾ THI',
-            'Bạn đã bị phát hiện vi phạm quy chế thi (không giữ khuôn mặt trong khung hình). Kết quả: CHƯA ĐẠT.',
+            `Bạn đã bị phát hiện vi phạm quy chế thi.\n\nLý do: ${violationReason}\n\nKết quả: CHƯA ĐẠT.`,
             [{ text: 'Đóng', onPress: () => onEnd(result) }]
         );
     };
@@ -157,16 +257,6 @@ export default function LiveSessionScreen({
         const secs = seconds % 60;
         return `${minutes} phút ${secs} giây`;
     };
-
-    const speakText = useCallback((text: string) => {
-        setIsAiSpeaking(true);
-        Speech.speak(text, {
-            language: 'vi-VN',
-            rate: 0.9,
-            onDone: () => setIsAiSpeaking(false),
-            onError: () => setIsAiSpeaking(false),
-        });
-    }, []);
 
     const addToLog = useCallback((speaker: 'AI' | 'USER', text: string) => {
         if (!text.trim()) return;
@@ -290,7 +380,7 @@ export default function LiveSessionScreen({
     };
 
     const handleEndSession = (score?: 'ĐẠT' | 'CHƯA ĐẠT') => {
-        Speech.stop();
+        stopTTS();
 
         if (isExamMode) {
             const result: ExamResult = {

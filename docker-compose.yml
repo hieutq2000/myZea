@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: vinalive-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: vinalive_db
+      MYSQL_USER: vinalive
+      MYSQL_PASSWORD: vinalive123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      timeout: 20s
+      retries: 10
+
+  api:
+    build: ./backend
+    container_name: vinalive-api
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      DB_HOST: mysql
+      DB_USER: vinalive
+      DB_PASSWORD: vinalive123
+      DB_NAME: vinalive_db
+      JWT_SECRET: change-this-to-a-very-long-random-string-in-production
+    ports:
+      - "3001:3001"
+
+  # Optional: phpMyAdmin for database management
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: vinalive-phpmyadmin
+    restart: always
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: vinalive
+      PMA_PASSWORD: vinalive123
+    ports:
+      - "8080:80"
+
+volumes:
+  mysql_data:

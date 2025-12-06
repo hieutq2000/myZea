@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { ActivityIndicator, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -9,6 +10,8 @@ import {
   User, ExamResult, LiveMode, Topic, TargetAudience,
   BADGES, LEVEL_THRESHOLDS
 } from './src/types';
+import { getCurrentUser, logout as apiLogout, updateProfile, saveExamResult } from './src/utils/api';
+import { COLORS } from './src/utils/theme';
 
 type ViewType = 'AUTH' | 'HOME' | 'PROFILE' | 'SESSION';
 
@@ -22,41 +25,48 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<ViewType>('AUTH');
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
 
-  // Load user from storage on app start
+  // Check for existing session on app start
   useEffect(() => {
-    loadUser();
+    checkExistingSession();
   }, []);
 
-  // Save user to storage whenever it changes
-  useEffect(() => {
-    if (user) {
-      saveUser(user);
-    }
-  }, [user]);
-
-  const loadUser = async () => {
+  const checkExistingSession = async () => {
     try {
-      const savedUser = await AsyncStorage.getItem('user');
+      // First try to get user from API
+      const apiUser = await getCurrentUser();
+      if (apiUser) {
+        setUser(apiUser);
+        setView(apiUser.avatar ? 'HOME' : 'PROFILE');
+        setIsOffline(false);
+      } else {
+        // Check for offline user
+        const savedUser = await AsyncStorage.getItem('offline_user');
+        if (savedUser) {
+          const parsedUser = JSON.parse(savedUser);
+          setUser(parsedUser);
+          setView(parsedUser.avatar ? 'HOME' : 'PROFILE');
+          setIsOffline(true);
+        }
+      }
+    } catch (error) {
+      console.error('Session check error:', error);
+      // Try offline mode
+      const savedUser = await AsyncStorage.getItem('offline_user');
       if (savedUser) {
         const parsedUser = JSON.parse(savedUser);
         setUser(parsedUser);
         setView(parsedUser.avatar ? 'HOME' : 'PROFILE');
+        setIsOffline(true);
       }
-    } catch (error) {
-      console.error('Error loading user:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const saveUser = async (userData: User) => {
-    try {
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-    } catch (error) {
-      console.error('Error saving user:', error);
-    }
-  };
-
-  const handleLogin = (loggedInUser: User) => {
+  const handleLogin = async (loggedInUser: User) => {
     const fullUser: User = {
       ...loggedInUser,
       history: loggedInUser.history || [],
@@ -65,18 +75,44 @@ export default function App() {
       badges: loggedInUser.badges || [],
       createdExams: loggedInUser.createdExams || [],
     };
+
     setUser(fullUser);
+
+    // If offline, save to local storage
+    if (loggedInUser.email === 'guest@local') {
+      setIsOffline(true);
+      await AsyncStorage.setItem('offline_user', JSON.stringify(fullUser));
+    }
+
     setView(fullUser.avatar ? 'HOME' : 'PROFILE');
   };
 
-  const handleUpdateUser = (updatedUser: User) => {
+  const handleUpdateUser = async (updatedUser: User) => {
     setUser(updatedUser);
+
+    if (isOffline) {
+      await AsyncStorage.setItem('offline_user', JSON.stringify(updatedUser));
+    } else {
+      try {
+        await updateProfile(updatedUser.name, updatedUser.avatar, updatedUser.voice);
+      } catch (error) {
+        console.error('Failed to sync profile:', error);
+      }
+    }
+
     setView('HOME');
   };
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem('user');
+    try {
+      await apiLogout();
+      await AsyncStorage.removeItem('offline_user');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+
     setUser(null);
+    setIsOffline(false);
     setView('AUTH');
   };
 
@@ -85,7 +121,7 @@ export default function App() {
     setView('SESSION');
   };
 
-  const handleEndSession = (result?: ExamResult) => {
+  const handleEndSession = async (result?: ExamResult) => {
     if (result && user) {
       // Update user with new result
       const updatedHistory = [result, ...(user.history || [])];
@@ -123,11 +159,38 @@ export default function App() {
       };
 
       setUser(updatedUser);
+
+      // Save to server or local
+      if (isOffline) {
+        await AsyncStorage.setItem('offline_user', JSON.stringify(updatedUser));
+      } else {
+        try {
+          await saveExamResult(
+            result.score as 'ĐẠT' | 'CHƯA ĐẠT',
+            result.duration,
+            result.topic || '',
+            result.transcript || []
+          );
+        } catch (error) {
+          console.error('Failed to save result to server:', error);
+          // Save locally as fallback
+          await AsyncStorage.setItem('offline_user', JSON.stringify(updatedUser));
+        }
+      }
     }
 
     setSessionConfig(null);
     setView('HOME');
   };
+
+  // Loading screen
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
 
   // Render different screens based on current view
   const renderScreen = () => {

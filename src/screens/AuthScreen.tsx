@@ -9,9 +9,11 @@ import {
     Platform,
     ScrollView,
     ActivityIndicator,
+    Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
+import { login, register, checkServerHealth } from '../utils/api';
 import { User, AuthView } from '../types';
 
 interface AuthScreenProps {
@@ -24,18 +26,81 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [offlineMode, setOfflineMode] = useState(false);
 
-    const handleSubmit = () => {
-        if (!email || !password) return;
+    const handleSubmit = async () => {
+        if (!email || !password) {
+            setError('Vui lòng nhập email và mật khẩu');
+            return;
+        }
+
+        if (view === AuthView.REGISTER && !name) {
+            setError('Vui lòng nhập họ tên');
+            return;
+        }
 
         setLoading(true);
-        setTimeout(() => {
+        setError(null);
+
+        try {
+            // Check server connection first
+            const isServerOnline = await checkServerHealth();
+
+            if (!isServerOnline) {
+                // Offline mode - use local storage
+                setOfflineMode(true);
+                const localUser: User = {
+                    email,
+                    name: name || email.split('@')[0],
+                    xp: 0,
+                    level: 1,
+                    badges: [],
+                    history: [],
+                };
+                onLogin(localUser);
+                return;
+            }
+
+            let response;
+            if (view === AuthView.LOGIN) {
+                response = await login(email, password);
+            } else {
+                response = await register(email, password, name);
+            }
+
+            onLogin(response.user);
+        } catch (err) {
+            const errorMessage = (err as Error).message;
+            setError(errorMessage);
+
+            // If server error, offer offline mode
+            if (errorMessage.includes('kết nối') || errorMessage.includes('server')) {
+                Alert.alert(
+                    'Không thể kết nối Server',
+                    'Bạn có muốn sử dụng chế độ Offline không?',
+                    [
+                        { text: 'Hủy', style: 'cancel' },
+                        {
+                            text: 'Chế độ Offline',
+                            onPress: () => {
+                                const localUser: User = {
+                                    email,
+                                    name: name || email.split('@')[0],
+                                    xp: 0,
+                                    level: 1,
+                                    badges: [],
+                                    history: [],
+                                };
+                                onLogin(localUser);
+                            }
+                        }
+                    ]
+                );
+            }
+        } finally {
             setLoading(false);
-            onLogin({
-                email,
-                name: name || email.split('@')[0],
-            });
-        }, 800);
+        }
     };
 
     return (
@@ -59,6 +124,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     <Text style={styles.cardTitle}>
                         {view === AuthView.LOGIN ? 'Đăng Nhập' : 'Đăng Ký'}
                     </Text>
+
+                    {error && (
+                        <View style={styles.errorBox}>
+                            <Text style={styles.errorText}>⚠️ {error}</Text>
+                        </View>
+                    )}
 
                     {view === AuthView.REGISTER && (
                         <View style={styles.inputGroup}>
@@ -122,13 +193,34 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
                     <TouchableOpacity
                         style={styles.switchButton}
-                        onPress={() => setView(view === AuthView.LOGIN ? AuthView.REGISTER : AuthView.LOGIN)}
+                        onPress={() => {
+                            setView(view === AuthView.LOGIN ? AuthView.REGISTER : AuthView.LOGIN);
+                            setError(null);
+                        }}
                     >
                         <Text style={styles.switchText}>
                             {view === AuthView.LOGIN
                                 ? 'Chưa có tài khoản? Đăng ký ngay'
                                 : 'Đã có tài khoản? Đăng nhập'}
                         </Text>
+                    </TouchableOpacity>
+
+                    {/* Offline mode button */}
+                    <TouchableOpacity
+                        style={styles.offlineButton}
+                        onPress={() => {
+                            const localUser: User = {
+                                email: 'guest@local',
+                                name: 'Khách',
+                                xp: 0,
+                                level: 1,
+                                badges: [],
+                                history: [],
+                            };
+                            onLogin(localUser);
+                        }}
+                    >
+                        <Text style={styles.offlineText}>📴 Sử dụng Offline</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>
@@ -177,6 +269,19 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: SPACING.lg,
     },
+    errorBox: {
+        backgroundColor: COLORS.error + '15',
+        borderRadius: BORDER_RADIUS.md,
+        padding: SPACING.md,
+        marginBottom: SPACING.md,
+        borderWidth: 1,
+        borderColor: COLORS.error,
+    },
+    errorText: {
+        color: COLORS.error,
+        fontSize: 14,
+        textAlign: 'center',
+    },
     inputGroup: {
         marginBottom: SPACING.md,
     },
@@ -218,5 +323,14 @@ const styles = StyleSheet.create({
         color: COLORS.primary,
         fontSize: 14,
         fontWeight: '500',
+    },
+    offlineButton: {
+        marginTop: SPACING.lg,
+        alignItems: 'center',
+        paddingVertical: SPACING.sm,
+    },
+    offlineText: {
+        color: COLORS.textMuted,
+        fontSize: 14,
     },
 });

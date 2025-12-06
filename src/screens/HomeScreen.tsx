@@ -136,6 +136,24 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                 <TouchableOpacity style={styles.xpBadge}>
                     <Text style={styles.xpText}>💎 {user.xp || 0}</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.logoutButton}
+                    onPress={() => {
+                        import('react-native').then(({ Alert }) => {
+                            Alert.alert(
+                                'Đăng xuất',
+                                'Bạn có chắc muốn đăng xuất?',
+                                [
+                                    { text: 'Hủy', style: 'cancel' },
+                                    { text: 'Đăng xuất', style: 'destructive', onPress: onLogout }
+                                ]
+                            );
+                        });
+                    }}
+                >
+                    <Text style={styles.logoutIcon}>🚪</Text>
+                </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -342,5 +360,12 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: COLORS.text,
         textAlign: 'center',
+    },
+    logoutButton: {
+        marginLeft: SPACING.sm,
+        padding: SPACING.sm,
+    },
+    logoutIcon: {
+        fontSize: 20,
     },
 });

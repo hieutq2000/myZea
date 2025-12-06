@@ -56,6 +56,13 @@
         {
           "photosPermission": "Cho phép $(PRODUCT_NAME) truy cập thư viện ảnh để chọn ảnh đại diện."
         }
+      ],
+      [
+        "@react-native-voice/voice",
+        {
+          "microphonePermission": "Cho phép $(PRODUCT_NAME) nhận dạng giọng nói của bạn.",
+          "speechRecognitionPermission": "Cho phép $(PRODUCT_NAME) nhận dạng giọng nói của bạn."
+        }
       ]
     ]
   }

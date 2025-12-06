@@ -11,13 +11,16 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-voice/voice": "^3.2.4",
     "expo": "~54.0.27",
     "expo-av": "^16.0.8",
     "expo-camera": "^17.0.10",
     "expo-dev-client": "^6.0.20",
+    "expo-file-system": "^19.0.20",
     "expo-image-picker": "^17.0.9",
     "expo-linear-gradient": "^15.0.8",
     "expo-speech": "^14.0.8",
+    "expo-speech-recognition": "^3.0.1",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
     "react-native": "0.81.5"
