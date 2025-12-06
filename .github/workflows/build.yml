@@ -3,6 +3,15 @@ name: Build iOS IPA
 on:
   push:
     branches: [main]
+    paths:
+      - 'ios/**'
+      - 'android/**'
+      - 'app.json'
+      - 'eas.json'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'package-lock.json'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 
 jobs:

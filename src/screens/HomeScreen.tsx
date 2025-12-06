@@ -217,7 +217,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                     </TouchableOpacity>
 
                     <View style={styles.headerInfo}>
-                        <Text style={styles.greeting}>Xin chào (v1.2) - OTA Works! 🎉</Text>
+                        <Text style={styles.greeting}>Xin chào (v1.2.1) - OTA Works! 🎉</Text>
                         <Text style={styles.userName} numberOfLines={1}>{user.name || 'Học viên'}</Text>
                     </View>
                 </View>
