@@ -23,22 +23,24 @@ jobs:
           node-version: 18.x
           cache: npm
 
-      - name: 🏗 Setup EAS
-        uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-          packager: npm
-
       - name: 📦 Install dependencies
         run: npm ci
 
-      - name: 🔍 Check Login & Publish
+      - name: 🔍 Check Token & Publish
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_NO_VCS: 1
         run: |
-          echo "Checking login status..."
-          eas whoami
-          echo "Publishing update..."
-          eas update --branch main --message "${{ github.event.head_commit.message }}" --auto
+          echo "--- DEBUG INFO ---"
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "❌ ERROR: EXPO_TOKEN variable is EMPTY. Please check GitHub Secrets!"
+            exit 1
+          else
+            echo "✅ EXPO_TOKEN is present in env (Length: ${#EXPO_TOKEN} chars)"
+          fi
+          
+          echo "--- LOGGING IN ---"
+          npx eas-cli whoami
+          
+          echo "--- PUBLISHING ---"
+          npx eas-cli update --branch main --message "${{ github.event.head_commit.message }}" --auto
