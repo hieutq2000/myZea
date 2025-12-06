@@ -35,12 +35,11 @@ jobs:
       - name: 📦 Install dependencies
         run: npm ci
 
-      - name: 🔍 Check Login
+      - name: 🔍 Check Login & Publish
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas whoami
-
-      - name: 🚀 Publish Update
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas update --branch main --message "${{ github.event.head_commit.message }}" --auto
+        run: |
+          echo "Checking login status..."
+          eas whoami
+          echo "Publishing update..."
+          eas update --branch main --message "${{ github.event.head_commit.message }}" --auto
