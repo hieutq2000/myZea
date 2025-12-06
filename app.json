@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vinalive AI",
     "slug": "vinalive-ai-mobile",
-    "version": "1.0.1",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -67,7 +67,7 @@
       ]
     ],
     "updates": {
-      "url": "https://u.expo.dev/PROJECT_ID_HERE"
+      "url": "https://u.expo.dev/7244ecfc-4a54-4232-a0a3-e17d5039b55c"
     },
     "runtimeVersion": {
       "policy": "appVersion"
