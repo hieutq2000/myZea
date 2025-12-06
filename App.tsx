@@ -23,6 +23,7 @@ interface SessionConfig {
 
 export default function App() {
   useAppUpdates(); // Auto check for updates
+  // Trigger OTA Update Build
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<ViewType>('AUTH');
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
