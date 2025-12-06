@@ -3,13 +3,11 @@ name: Build iOS IPA
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
   build-ios:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     
     steps:
       - name: 🏗 Checkout repository
@@ -24,40 +22,38 @@ jobs:
       - name: 📦 Install dependencies
         run: npm ci
 
-      - name: 🏗 Setup Expo and EAS
+      - name: 🏗 Setup Expo
         uses: expo/expo-github-action@v8
         with:
+          expo-version: latest
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: 🔐 Configure EAS credentials
+      - name: 📱 Build iOS (Unsigned IPA)
         run: |
-          echo "Configuring EAS for iOS build..."
+          npx expo prebuild --platform ios --clean
+          cd ios
+          xcodebuild -workspace vinaliveaimobile.xcworkspace \
+            -scheme vinaliveaimobile \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath $PWD/build/vinaliveaimobile.xcarchive \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
 
-      - name: 📱 Build iOS IPA
-        run: eas build --platform ios --profile production --non-interactive
+      - name: 📦 Create IPA
+        run: |
+          cd ios/build/vinaliveaimobile.xcarchive/Products/Applications
+          mkdir -p Payload
+          cp -R *.app Payload/
+          zip -r vinalive-ai.ipa Payload
+          mv vinalive-ai.ipa $GITHUB_WORKSPACE/
 
-  build-android:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: 🏗 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 🏗 Setup Node.js
-        uses: actions/setup-node@v4
+      - name: 📤 Upload IPA
+        uses: actions/upload-artifact@v4
         with:
-          node-version: 20
-          cache: npm
-
-      - name: 📦 Install dependencies
-        run: npm ci
-
-      - name: 🏗 Setup Expo and EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: 📱 Build Android APK
-        run: eas build --platform android --profile production --non-interactive
+          name: vinalive-ai-ipa
+          path: vinalive-ai.ipa
+          retention-days: 30
