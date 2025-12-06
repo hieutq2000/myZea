@@ -18,7 +18,7 @@ function safeJsonParse(str, defaultValue = []) {
     try {
         return JSON.parse(str);
     } catch (e) {
-        console.error('JSON parse error:', e);
+        // Return default value for invalid JSON
         return defaultValue;
     }
 }

@@ -11,6 +11,7 @@ import {
     Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { User, LiveMode, TargetAudience, Topic, TOPIC_LABELS, TOPIC_ICONS } from '../types';
 
@@ -28,7 +29,8 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
     const modes = [
         {
             id: LiveMode.PRACTICE,
-            icon: '📚',
+            icon: 'book-open',
+            iconSet: Feather,
             title: 'Luyện Tập',
             desc: 'Ôn tập kiến thức với AI',
             color: '#10B981',
@@ -36,7 +38,8 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
         },
         {
             id: LiveMode.EXAM,
-            icon: '📝',
+            icon: 'assignment',
+            iconSet: MaterialIcons,
             title: 'Thi Thử',
             desc: 'Kiểm tra với giám sát AI',
             color: '#F97316',
@@ -46,39 +49,45 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
 
     const renderModeSelection = () => (
         <View style={styles.modeSection}>
-            <Text style={styles.sectionTitle}>📖 Chọn Hình Thức Học</Text>
+            <View style={styles.sectionHeader}>
+                <MaterialIcons name="category" size={20} color={COLORS.primary} />
+                <Text style={styles.sectionTitle}>Chọn Hình Thức Học</Text>
+            </View>
 
             <View style={styles.modeGrid}>
-                {modes.map((mode) => (
-                    <TouchableOpacity
-                        key={mode.id}
-                        style={[
-                            styles.modeCard,
-                            selectedMode === mode.id && styles.modeCardActive,
-                            { borderColor: selectedMode === mode.id ? mode.color : COLORS.border }
-                        ]}
-                        onPress={() => setSelectedMode(mode.id)}
-                        activeOpacity={0.7}
-                    >
-                        <View style={[styles.modeIconContainer, { backgroundColor: mode.bgColor }]}>
-                            <Text style={styles.modeIcon}>{mode.icon}</Text>
-                        </View>
-                        <View style={styles.modeInfo}>
-                            <Text style={[
-                                styles.modeTitle,
-                                selectedMode === mode.id && { color: mode.color }
-                            ]}>
-                                {mode.title}
-                            </Text>
-                            <Text style={styles.modeDesc}>{mode.desc}</Text>
-                        </View>
-                        {selectedMode === mode.id && (
-                            <View style={[styles.modeCheck, { backgroundColor: mode.color }]}>
-                                <Text style={styles.modeCheckIcon}>✓</Text>
+                {modes.map((mode) => {
+                    const IconComponent = mode.iconSet;
+                    return (
+                        <TouchableOpacity
+                            key={mode.id}
+                            style={[
+                                styles.modeCard,
+                                selectedMode === mode.id && styles.modeCardActive,
+                                { borderColor: selectedMode === mode.id ? mode.color : COLORS.border }
+                            ]}
+                            onPress={() => setSelectedMode(mode.id)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[styles.modeIconContainer, { backgroundColor: mode.bgColor }]}>
+                                <IconComponent name={mode.icon as any} size={24} color={mode.color} />
                             </View>
-                        )}
-                    </TouchableOpacity>
-                ))}
+                            <View style={styles.modeInfo}>
+                                <Text style={[
+                                    styles.modeTitle,
+                                    selectedMode === mode.id && { color: mode.color }
+                                ]}>
+                                    {mode.title}
+                                </Text>
+                                <Text style={styles.modeDesc}>{mode.desc}</Text>
+                            </View>
+                            {selectedMode === mode.id && (
+                                <View style={[styles.modeCheck, { backgroundColor: mode.color }]}>
+                                    <Feather name="check" size={14} color={COLORS.white} />
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    );
+                })}
             </View>
 
             {/* Kids Mode Toggle */}
@@ -94,22 +103,33 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                 )}
                 activeOpacity={0.8}
             >
-                <Text style={styles.kidsToggleIcon}>
-                    {targetAudience === TargetAudience.KIDS ? '🧒' : '👶'}
-                </Text>
-                <Text style={[
-                    styles.kidsToggleText,
-                    targetAudience === TargetAudience.KIDS && styles.kidsToggleTextActive
-                ]}>
-                    {targetAudience === TargetAudience.KIDS ? 'Chế độ trẻ em đang BẬT' : 'Bật chế độ trẻ em'}
-                </Text>
+                <View style={[styles.toggleIconBox, targetAudience === TargetAudience.KIDS && { backgroundColor: '#FBCFE8' }]}>
+                    <MaterialIcons
+                        name={targetAudience === TargetAudience.KIDS ? "child-care" : "person-outline"}
+                        size={24}
+                        color={targetAudience === TargetAudience.KIDS ? '#DB2777' : COLORS.textMuted}
+                    />
+                </View>
+
+                <View style={styles.toggleContent}>
+                    <Text style={[
+                        styles.kidsToggleTitle,
+                        targetAudience === TargetAudience.KIDS && { color: '#DB2777' }
+                    ]}>
+                        Chế độ trẻ em (Kids)
+                    </Text>
+                    <Text style={styles.kidsToggleSubtitle}>
+                        {targetAudience === TargetAudience.KIDS ? 'Nội dung phù hợp với bé' : 'Chuyển sang giao diện cho bé'}
+                    </Text>
+                </View>
+
                 <View style={[
-                    styles.kidsSwitch,
-                    targetAudience === TargetAudience.KIDS && styles.kidsSwitchActive
+                    styles.switchTrack,
+                    targetAudience === TargetAudience.KIDS && styles.switchTrackActive
                 ]}>
                     <View style={[
-                        styles.kidsSwitchKnob,
-                        targetAudience === TargetAudience.KIDS && styles.kidsSwitchKnobActive
+                        styles.switchThumb,
+                        targetAudience === TargetAudience.KIDS && styles.switchThumbActive
                     ]} />
                 </View>
             </TouchableOpacity>
@@ -125,9 +145,15 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
 
         return (
             <View style={styles.topicsSection}>
-                <Text style={styles.sectionTitle}>
-                    {targetAudience === TargetAudience.KIDS ? '🌈 Chọn Chủ Đề' : '🎯 Chọn Môn Học'}
-                </Text>
+                <View style={styles.sectionHeader}>
+                    <Feather name="target" size={20} color={targetAudience === TargetAudience.KIDS ? '#DB2777' : COLORS.primary} />
+                    <Text style={[
+                        styles.sectionTitle,
+                        targetAudience === TargetAudience.KIDS && { color: '#DB2777' }
+                    ]}>
+                        {targetAudience === TargetAudience.KIDS ? 'Chọn Chủ Đề Vui Nhộn' : 'Chọn Môn Học'}
+                    </Text>
+                </View>
 
                 <View style={styles.topicsGrid}>
                     {topics.map((topic) => (
@@ -154,8 +180,12 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                                 ]}>
                                     {TOPIC_LABELS[topic]}
                                 </Text>
-                                <View style={styles.topicArrow}>
-                                    <Text style={styles.topicArrowText}>→</Text>
+                                <View style={[styles.topicArrow, targetAudience === TargetAudience.KIDS && { backgroundColor: '#FBCFE8' }]}>
+                                    <Feather
+                                        name="chevron-right"
+                                        size={20}
+                                        color={targetAudience === TargetAudience.KIDS ? '#DB2777' : COLORS.primary}
+                                    />
                                 </View>
                             </LinearGradient>
                         </TouchableOpacity>
@@ -169,37 +199,43 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
 
-            {/* Compact Header */}
+            {/* Modern Header */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.profileBtn} onPress={onOpenProfile}>
-                    {user.avatar ? (
-                        <Image source={{ uri: user.avatar }} style={styles.avatar} />
-                    ) : (
-                        <LinearGradient
-                            colors={COLORS.gradientPrimary as [string, string]}
-                            style={styles.avatarGradient}
-                        >
-                            <Text style={styles.avatarText}>{user.name?.charAt(0) || '👤'}</Text>
-                        </LinearGradient>
-                    )}
-                </TouchableOpacity>
+                <View style={styles.headerLeft}>
+                    <TouchableOpacity style={styles.profileBtn} onPress={onOpenProfile}>
+                        {user.avatar ? (
+                            <Image source={{ uri: user.avatar }} style={styles.avatar} />
+                        ) : (
+                            <LinearGradient
+                                colors={COLORS.gradientPrimary as [string, string]}
+                                style={styles.avatarGradient}
+                            >
+                                <Text style={styles.avatarText}>{user.name?.charAt(0) || '👤'}</Text>
+                            </LinearGradient>
+                        )}
+                        <View style={styles.onlineIndicator} />
+                    </TouchableOpacity>
 
-                <View style={styles.headerCenter}>
-                    <Text style={styles.greeting}>Xin chào 👋</Text>
-                    <Text style={styles.userName}>{user.name || 'Học viên'}</Text>
+                    <View style={styles.headerInfo}>
+                        <Text style={styles.greeting}>Xin chào,</Text>
+                        <Text style={styles.userName} numberOfLines={1}>{user.name || 'Học viên'}</Text>
+                    </View>
                 </View>
 
                 <View style={styles.headerRight}>
-                    <View style={styles.statBadge}>
-                        <Text style={styles.statIcon}>⭐</Text>
-                        <Text style={styles.statValue}>Lv.{user.level || 1}</Text>
-                    </View>
-                    <View style={styles.statBadge}>
-                        <Text style={styles.statIcon}>💎</Text>
-                        <Text style={styles.statValue}>{user.xp || 0}</Text>
-                    </View>
                     <TouchableOpacity
-                        style={styles.logoutBtn}
+                        style={styles.actionBtn}
+                        onPress={() => {
+                            // Notification feature placeholder
+                            Alert.alert('Thông báo', 'Không có thông báo mới');
+                        }}
+                    >
+                        <Feather name="bell" size={22} color={COLORS.text} />
+                        <View style={styles.badgeDot} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.actionBtn, styles.logoutBtn]}
                         onPress={() => Alert.alert(
                             'Đăng xuất',
                             'Bạn có chắc muốn đăng xuất?',
@@ -209,7 +245,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                             ]
                         )}
                     >
-                        <Text style={styles.logoutIcon}>🚪</Text>
+                        <MaterialIcons name="logout" size={22} color="#EF4444" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -219,24 +255,48 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* Quick Stats Card */}
+                {/* Stats Card - Card style glass effect */}
                 <View style={styles.statsCard}>
                     <View style={styles.statsRow}>
                         <View style={styles.statItem}>
+                            <View style={[styles.statIconBox, { backgroundColor: '#E0F2FE' }]}>
+                                <Feather name="file-text" size={18} color="#0284C7" />
+                            </View>
                             <Text style={styles.statNumber}>{user.history?.length || 0}</Text>
                             <Text style={styles.statLabel}>Bài thi</Text>
                         </View>
+
                         <View style={styles.statDivider} />
+
                         <View style={styles.statItem}>
+                            <View style={[styles.statIconBox, { backgroundColor: '#DCFCE7' }]}>
+                                <Feather name="check-circle" size={18} color="#16A34A" />
+                            </View>
                             <Text style={styles.statNumber}>
                                 {user.history?.filter(h => h.score === 'ĐẠT').length || 0}
                             </Text>
                             <Text style={styles.statLabel}>Đạt</Text>
                         </View>
+
                         <View style={styles.statDivider} />
+
                         <View style={styles.statItem}>
+                            <View style={[styles.statIconBox, { backgroundColor: '#FEF3C7' }]}>
+                                <Feather name="award" size={18} color="#D97706" />
+                            </View>
                             <Text style={styles.statNumber}>{user.badges?.length || 0}</Text>
                             <Text style={styles.statLabel}>Huy hiệu</Text>
+                        </View>
+                    </View>
+
+                    {/* Level Progress Bar */}
+                    <View style={styles.levelContainer}>
+                        <View style={styles.levelInfo}>
+                            <Text style={styles.levelText}>Level {user.level || 1}</Text>
+                            <Text style={styles.xpText}>{user.xp || 0} XP</Text>
+                        </View>
+                        <View style={styles.progressBarBg}>
+                            <View style={[styles.progressBarFill, { width: `${Math.min((user.xp || 0) % 100, 100)}%` }]} />
                         </View>
                     </View>
                 </View>
@@ -258,73 +318,92 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         paddingHorizontal: SPACING.md,
-        paddingVertical: SPACING.sm,
+        paddingVertical: SPACING.md,
         backgroundColor: COLORS.white,
         borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
+        borderBottomColor: '#F1F5F9',
+        ...SHADOWS.xs,
     },
-    profileBtn: {
-        marginRight: SPACING.sm,
-    },
-    avatar: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        borderWidth: 2,
-        borderColor: COLORS.primary,
-    },
-    avatarGradient: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+    headerLeft: {
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-    },
-    avatarText: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: COLORS.white,
-    },
-    headerCenter: {
         flex: 1,
-    },
-    greeting: {
-        fontSize: 12,
-        color: COLORS.textMuted,
-    },
-    userName: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: COLORS.text,
     },
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 12,
     },
-    statBadge: {
-        flexDirection: 'row',
+    profileBtn: {
+        position: 'relative',
+        marginRight: 12,
+    },
+    avatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        borderWidth: 2,
+        borderColor: COLORS.primary,
+    },
+    avatarGradient: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         alignItems: 'center',
-        backgroundColor: '#F1F5F9',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-        gap: 4,
+        justifyContent: 'center',
     },
-    statIcon: {
-        fontSize: 12,
+    avatarText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: COLORS.white,
     },
-    statValue: {
-        fontSize: 12,
-        fontWeight: '600',
+    onlineIndicator: {
+        position: 'absolute',
+        bottom: 2,
+        right: 2,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: '#22C55E',
+        borderWidth: 2,
+        borderColor: COLORS.white,
+    },
+    headerInfo: {
+        flex: 1,
+    },
+    greeting: {
+        fontSize: 13,
+        color: COLORS.textLight,
+        marginBottom: 2,
+    },
+    userName: {
+        fontSize: 18,
+        fontWeight: '700',
         color: COLORS.text,
     },
-    logoutBtn: {
-        padding: 8,
+    actionBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    logoutIcon: {
-        fontSize: 18,
+    logoutBtn: {
+        backgroundColor: '#FEF2F2',
+    },
+    badgeDot: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#EF4444',
+        borderWidth: 1.5,
+        borderColor: '#F1F5F9',
     },
     content: {
         flex: 1,
@@ -335,82 +414,122 @@ const styles = StyleSheet.create({
     statsCard: {
         backgroundColor: COLORS.white,
         borderRadius: BORDER_RADIUS.xl,
-        padding: SPACING.md,
-        marginBottom: SPACING.lg,
-        ...SHADOWS.sm,
+        padding: SPACING.lg,
+        marginBottom: SPACING.xl,
+        ...SHADOWS.md,
     },
     statsRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-around',
+        justifyContent: 'space-between',
+        marginBottom: SPACING.lg,
     },
     statItem: {
         alignItems: 'center',
         flex: 1,
     },
+    statIconBox: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
     statNumber: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 'bold',
-        color: COLORS.primary,
+        color: COLORS.text,
     },
     statLabel: {
         fontSize: 12,
-        color: COLORS.textMuted,
-        marginTop: 2,
+        color: COLORS.textLight,
     },
     statDivider: {
         width: 1,
-        height: 30,
-        backgroundColor: '#E2E8F0',
+        height: 40,
+        backgroundColor: '#F1F5F9',
+    },
+    levelContainer: {
+        marginTop: SPACING.xs,
+    },
+    levelInfo: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    levelText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    xpText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: COLORS.primary,
+    },
+    progressBarBg: {
+        height: 8,
+        backgroundColor: '#F1F5F9',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
+        backgroundColor: COLORS.primary,
+        borderRadius: 4,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: SPACING.md,
+        gap: 8,
     },
     sectionTitle: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: '700',
         color: COLORS.text,
-        marginBottom: SPACING.md,
     },
     modeSection: {
-        marginBottom: SPACING.lg,
+        marginBottom: SPACING.xl,
     },
     modeGrid: {
-        gap: SPACING.sm,
+        gap: SPACING.md,
     },
     modeCard: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: COLORS.white,
-        borderRadius: BORDER_RADIUS.lg,
+        borderRadius: BORDER_RADIUS.xl,
         padding: SPACING.md,
-        borderWidth: 2,
+        borderWidth: 1.5,
         borderColor: COLORS.border,
         ...SHADOWS.sm,
     },
     modeCardActive: {
-        backgroundColor: '#FFFBEB',
+        backgroundColor: '#FAFAFA',
+        ...SHADOWS.md,
     },
     modeIconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
+        width: 52,
+        height: 52,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: SPACING.md,
-    },
-    modeIcon: {
-        fontSize: 24,
     },
     modeInfo: {
         flex: 1,
     },
     modeTitle: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         color: COLORS.text,
+        marginBottom: 2,
     },
     modeDesc: {
-        fontSize: 12,
-        color: COLORS.textMuted,
-        marginTop: 2,
+        fontSize: 13,
+        color: COLORS.textLight,
     },
     modeCheck: {
         width: 24,
@@ -419,59 +538,69 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    modeCheckIcon: {
-        color: COLORS.white,
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
     kidsToggle: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: COLORS.white,
-        borderRadius: BORDER_RADIUS.lg,
+        borderRadius: BORDER_RADIUS.xl,
         padding: SPACING.md,
-        marginTop: SPACING.md,
-        borderWidth: 2,
-        borderColor: '#E2E8F0',
+        marginTop: SPACING.lg,
+        borderWidth: 1.5,
+        borderColor: '#F1F5F9',
+        ...SHADOWS.sm,
     },
     kidsToggleActive: {
-        borderColor: '#EC4899',
-        backgroundColor: '#FDF2F8',
+        borderColor: '#FBCFE8',
+        backgroundColor: '#FFF1F2',
     },
-    kidsToggleIcon: {
-        fontSize: 24,
-        marginRight: SPACING.sm,
-    },
-    kidsToggleText: {
-        flex: 1,
-        fontSize: 14,
-        color: COLORS.textMuted,
-    },
-    kidsToggleTextActive: {
-        color: '#EC4899',
-        fontWeight: '600',
-    },
-    kidsSwitch: {
+    toggleIconBox: {
         width: 44,
-        height: 24,
-        borderRadius: 12,
+        height: 44,
+        borderRadius: 14,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: SPACING.md,
+    },
+    toggleContent: {
+        flex: 1,
+    },
+    kidsToggleTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: COLORS.text,
+        marginBottom: 2,
+    },
+    kidsToggleSubtitle: {
+        fontSize: 12,
+        color: COLORS.textLight,
+    },
+    switchTrack: {
+        width: 48,
+        height: 28,
+        borderRadius: 14,
         backgroundColor: '#E2E8F0',
         padding: 2,
     },
-    kidsSwitchActive: {
-        backgroundColor: '#EC4899',
+    switchTrackActive: {
+        backgroundColor: '#DB2777',
     },
-    kidsSwitchKnob: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
+    switchThumb: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
         backgroundColor: COLORS.white,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1,
+        elevation: 2,
     },
-    kidsSwitchKnobActive: {
-        marginLeft: 20,
+    switchThumbActive: {
+        transform: [{ translateX: 20 }],
     },
     topicsSection: {
-        marginBottom: SPACING.md,
+        marginBottom: SPACING.lg,
     },
     topicsGrid: {
         gap: SPACING.sm,
@@ -480,6 +609,7 @@ const styles = StyleSheet.create({
         borderRadius: BORDER_RADIUS.lg,
         overflow: 'hidden',
         ...SHADOWS.sm,
+        backgroundColor: COLORS.white,
     },
     kidsTopicCard: {
         borderWidth: 2,
@@ -491,7 +621,7 @@ const styles = StyleSheet.create({
         padding: SPACING.md,
     },
     topicIcon: {
-        fontSize: 28,
+        fontSize: 26,
         marginRight: SPACING.md,
     },
     topicLabel: {
@@ -502,19 +632,14 @@ const styles = StyleSheet.create({
     },
     kidsTopicLabel: {
         color: '#DB2777',
+        fontWeight: '700',
     },
     topicArrow: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: COLORS.white,
+        width: 32,
+        height: 32,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center',
-        ...SHADOWS.sm,
-    },
-    topicArrowText: {
-        fontSize: 16,
-        color: COLORS.primary,
-        fontWeight: 'bold',
     },
 });
