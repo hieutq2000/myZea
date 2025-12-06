@@ -17,6 +17,7 @@ async function initDatabase() {
     try {
         pool = mysql.createPool({
             host: process.env.DB_HOST || 'localhost',
+            port: parseInt(process.env.DB_PORT) || 3306,
             user: process.env.DB_USER || 'vinalive',
             password: process.env.DB_PASSWORD || 'vinalive123',
             database: process.env.DB_NAME || 'vinalive_db',
