@@ -29,31 +29,50 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: 📱 Build iOS (Unsigned IPA)
+      - name: 📱 Prebuild iOS
+        run: npx expo prebuild --platform ios --clean
+
+      - name: 📋 List iOS directory
+        run: ls -la ios/
+
+      - name: 🔍 Find workspace name
+        id: find_workspace
         run: |
-          npx expo prebuild --platform ios --clean
+          WORKSPACE=$(find ios -name "*.xcworkspace" -maxdepth 1 | head -1 | xargs basename | sed 's/.xcworkspace//')
+          echo "WORKSPACE_NAME=$WORKSPACE" >> $GITHUB_OUTPUT
+          echo "Found workspace: $WORKSPACE"
+
+      - name: 📦 Install CocoaPods
+        run: |
           cd ios
-          xcodebuild -workspace vinaliveaimobile.xcworkspace \
-            -scheme vinaliveaimobile \
+          pod install
+
+      - name: 📱 Build iOS (Unsigned)
+        run: |
+          cd ios
+          xcodebuild -workspace "${{ steps.find_workspace.outputs.WORKSPACE_NAME }}.xcworkspace" \
+            -scheme "${{ steps.find_workspace.outputs.WORKSPACE_NAME }}" \
             -configuration Release \
             -sdk iphoneos \
-            -archivePath $PWD/build/vinaliveaimobile.xcarchive \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/App.xcarchive \
             archive \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=""
 
       - name: 📦 Create IPA
         run: |
-          cd ios/build/vinaliveaimobile.xcarchive/Products/Applications
+          cd ios/build/App.xcarchive/Products/Applications
           mkdir -p Payload
-          cp -R *.app Payload/
-          zip -r vinalive-ai.ipa Payload
-          mv vinalive-ai.ipa $GITHUB_WORKSPACE/
+          mv *.app Payload/
+          zip -r VinaliveAI.ipa Payload
+          mv VinaliveAI.ipa ${{ github.workspace }}/
 
       - name: 📤 Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: vinalive-ai-ipa
-          path: vinalive-ai.ipa
+          name: VinaliveAI-IPA
+          path: VinaliveAI.ipa
           retention-days: 30
