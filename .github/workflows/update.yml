@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
     paths-ignore:
       - 'README.md'
       - 'ios/**'
@@ -42,5 +43,5 @@ jobs:
           echo "--- LOGGING IN ---"
           npx eas-cli whoami
           
-          echo "--- PUBLISHING ---"
-          npx eas-cli update --branch main --message "${{ github.event.head_commit.message }}" --auto
+          echo "--- PUBLISHING TO PRODUCTION ---"
+          npx eas-cli update --channel production --message "${{ github.event.head_commit.message }}" --auto
