@@ -91,7 +91,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                                 selectedMode === mode.id && styles.modeCardActive,
                                 { borderColor: selectedMode === mode.id ? mode.color : COLORS.border }
                             ]}
-                            onPress={() => setSelectedMode(mode.id)}
+                            onPress={() => setSelectedMode(selectedMode === mode.id ? null : mode.id)}
                             activeOpacity={0.7}
                         >
                             <View style={[styles.modeIconContainer, { backgroundColor: mode.bgColor }]}>
