@@ -5,10 +5,11 @@ import {
     TouchableOpacity,
     Modal,
     StyleSheet,
-    Image,
     Dimensions,
+    ScrollView,
 } from 'react-native';
 import { COLORS, BORDER_RADIUS, SHADOWS } from '../utils/theme';
+import { getLatestChangelog } from '../utils/changelog';
 
 interface UpdateModalProps {
     visible: boolean;
@@ -20,6 +21,8 @@ interface UpdateModalProps {
 const { width } = Dimensions.get('window');
 
 export default function UpdateModal({ visible, onUpdate, onClose, isDownloading }: UpdateModalProps) {
+    const changelog = getLatestChangelog();
+
     return (
         <Modal
             visible={visible}
@@ -37,10 +40,32 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
                     {/* Title */}
                     <Text style={styles.title}>Ứng dụng đã có phiên bản mới</Text>
 
+                    {/* Version Badge */}
+                    {changelog && (
+                        <View style={styles.versionBadge}>
+                            <Text style={styles.versionText}>v{changelog.version}</Text>
+                        </View>
+                    )}
+
+                    {/* Changelog Title */}
+                    {changelog && (
+                        <Text style={styles.changelogTitle}>{changelog.title}</Text>
+                    )}
+
+                    {/* Changes List */}
+                    {changelog && changelog.changes.length > 0 && (
+                        <ScrollView style={styles.changesList} showsVerticalScrollIndicator={false}>
+                            {changelog.changes.map((change, index) => (
+                                <View key={index} style={styles.changeItem}>
+                                    <Text style={styles.changeText}>{change}</Text>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    )}
+
                     {/* Description */}
                     <Text style={styles.description}>
-                        Bạn vui lòng cập nhật Ứng dụng lên phiên bản mới nhất.{'\n'}
-                        Nếu không cập nhật, Bạn sẽ không chạy được phiên bản hiện tại trên điện thoại.
+                        Bạn vui lòng cập nhật để trải nghiệm các tính năng mới nhất.
                     </Text>
 
                     {/* Update Button */}
@@ -50,7 +75,7 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
                         disabled={isDownloading}
                     >
                         <Text style={styles.updateButtonText}>
-                            {isDownloading ? 'Đang tải xuống...' : 'Cập nhật'}
+                            {isDownloading ? 'Đang tải xuống...' : 'Cập nhật ngay'}
                         </Text>
                     </TouchableOpacity>
 
@@ -69,13 +94,14 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.6)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
     },
     container: {
         width: width - 40,
+        maxHeight: '80%',
         backgroundColor: COLORS.white,
         borderRadius: BORDER_RADIUS.xl,
         padding: 24,
@@ -99,14 +125,49 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: COLORS.text,
         textAlign: 'center',
+        marginBottom: 8,
+    },
+    versionBadge: {
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
         marginBottom: 12,
     },
-    description: {
+    versionText: {
+        color: COLORS.white,
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    changelogTitle: {
         fontSize: 14,
-        color: COLORS.textLight,
+        fontWeight: '600',
+        color: COLORS.text,
         textAlign: 'center',
+        marginBottom: 12,
+    },
+    changesList: {
+        maxHeight: 120,
+        width: '100%',
+        marginBottom: 12,
+    },
+    changeItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+    },
+    changeText: {
+        fontSize: 13,
+        color: COLORS.textLight,
         lineHeight: 20,
-        marginBottom: 24,
+    },
+    description: {
+        fontSize: 13,
+        color: COLORS.textMuted,
+        textAlign: 'center',
+        lineHeight: 18,
+        marginBottom: 20,
     },
     updateButton: {
         width: '100%',
