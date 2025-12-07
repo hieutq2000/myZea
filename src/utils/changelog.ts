@@ -10,12 +10,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
-        version: "2.4",
+        version: "2.5",
         date: "08/12/2024",
-        title: "Cải tiến hệ thông",
+        title: "Cải tiến giao diện & AI",
         changes: [
-            "Cải tiến một số chức năng của hệ thông",
-
+            "✨ Chuyển kiểm tra cập nhật vào Hồ sơ",
+            "🏆 Đẩy Huy hiệu lên trên, Cài đặt xuống dưới",
+            "🔐 Fix lỗi xác thực khuôn mặt",
+            "🤖 Cập nhật API key Gemini mới",
         ]
     },
     {

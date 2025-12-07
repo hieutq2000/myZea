@@ -368,6 +368,36 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
                     </View>
                 </View>
 
+                {/* Badges */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <MaterialIcons name="emoji-events" size={20} color={COLORS.primary} />
+                        <Text style={styles.cardTitle}>Huy hiệu</Text>
+                        <Text style={styles.badgeCount}>
+                            {user.badges?.length || 0}/{BADGES.length}
+                        </Text>
+                    </View>
+
+                    <View style={styles.badgesGrid}>
+                        {BADGES.map((badge) => {
+                            const unlocked = user.badges?.includes(badge.id);
+                            return (
+                                <View
+                                    key={badge.id}
+                                    style={[styles.badgeCard, !unlocked && styles.badgeLocked]}
+                                >
+                                    <Text style={[styles.badgeIcon, !unlocked && styles.badgeIconLocked]}>
+                                        {badge.icon}
+                                    </Text>
+                                    <Text style={[styles.badgeName, !unlocked && styles.badgeNameLocked]}>
+                                        {badge.name}
+                                    </Text>
+                                </View>
+                            );
+                        })}
+                    </View>
+                </View>
+
                 {/* Settings */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
@@ -406,36 +436,6 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
                         </View>
                         <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
                     </TouchableOpacity>
-                </View>
-
-                {/* Badges */}
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <MaterialIcons name="emoji-events" size={20} color={COLORS.primary} />
-                        <Text style={styles.cardTitle}>Huy hiệu</Text>
-                        <Text style={styles.badgeCount}>
-                            {user.badges?.length || 0}/{BADGES.length}
-                        </Text>
-                    </View>
-
-                    <View style={styles.badgesGrid}>
-                        {BADGES.map((badge) => {
-                            const unlocked = user.badges?.includes(badge.id);
-                            return (
-                                <View
-                                    key={badge.id}
-                                    style={[styles.badgeCard, !unlocked && styles.badgeLocked]}
-                                >
-                                    <Text style={[styles.badgeIcon, !unlocked && styles.badgeIconLocked]}>
-                                        {badge.icon}
-                                    </Text>
-                                    <Text style={[styles.badgeName, !unlocked && styles.badgeNameLocked]}>
-                                        {badge.name}
-                                    </Text>
-                                </View>
-                            );
-                        })}
-                    </View>
                 </View>
 
                 {/* Submit Button */}
