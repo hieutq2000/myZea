@@ -2,7 +2,7 @@ module.exports = {
     expo: {
         name: "Vinalive AI",
         slug: "vinalive-ai-mobile",
-        version: "2.7.0",
+        version: "2.7.1",
         orientation: "portrait",
         icon: "./assets/icon.png",
         userInterfaceStyle: "light",
