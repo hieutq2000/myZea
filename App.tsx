@@ -5,13 +5,14 @@ import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import LiveSessionScreen from './src/screens/LiveSessionScreen';
+import UpdateModal from './src/components/UpdateModal';
 import {
   User, ExamResult, LiveMode, Topic, TargetAudience,
   BADGES, LEVEL_THRESHOLDS
 } from './src/types';
 import { getCurrentUser, logout as apiLogout, updateProfile, saveExamResult } from './src/utils/api';
 import { COLORS } from './src/utils/theme';
-import { useAppUpdates } from './src/hooks/useUpdates';
+import { useAppUpdates } from './src/hooks/useAppUpdates';
 
 type ViewType = 'AUTH' | 'HOME' | 'PROFILE' | 'SESSION';
 
@@ -22,8 +23,8 @@ interface SessionConfig {
 }
 
 export default function App() {
-  useAppUpdates(); // Auto check for updates
-  // Trigger OTA Update Build
+  const { isUpdateAvailable, isDownloading, downloadAndApply, dismissUpdate } = useAppUpdates();
+
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<ViewType>('AUTH');
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
@@ -206,6 +207,12 @@ export default function App() {
     <>
       <StatusBar style="dark" />
       {renderScreen()}
+      <UpdateModal
+        visible={isUpdateAvailable}
+        isDownloading={isDownloading}
+        onUpdate={downloadAndApply}
+        onClose={dismissUpdate}
+      />
     </>
   );
 }

@@ -29,26 +29,26 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
 
     const handleDebugUpdate = async () => {
         try {
-            Alert.alert('Checking Update...', 'Connecting to Expo Updates server...');
+            Alert.alert('Đang kiểm tra...', 'Đang kết nối tới máy chủ cập nhật...');
             const update = await Updates.checkForUpdateAsync();
             if (update.isAvailable) {
-                Alert.alert('Update Found!', 'New version available. Download now?', [
-                    { text: 'Cancel', style: 'cancel' },
+                Alert.alert('Có bản cập nhật mới!', 'Phiên bản mới đã sẵn sàng. Tải xuống ngay?', [
+                    { text: 'Để sau', style: 'cancel' },
                     {
-                        text: 'Yes', onPress: async () => {
-                            Alert.alert('Downloading...', 'Please wait.');
+                        text: 'Cập nhật', onPress: async () => {
+                            Alert.alert('Đang tải xuống...', 'Vui lòng chờ trong giây lát.');
                             await Updates.fetchUpdateAsync();
-                            Alert.alert('Done!', 'App will reload now.', [
+                            Alert.alert('Hoàn tất!', 'Ứng dụng sẽ khởi động lại ngay.', [
                                 { text: 'OK', onPress: () => Updates.reloadAsync() }
                             ]);
                         }
                     }
                 ]);
             } else {
-                Alert.alert('Up to date', 'No new updates found on "production" channel.');
+                Alert.alert('Đã cập nhật', 'Bạn đang sử dụng phiên bản mới nhất.');
             }
         } catch (error: any) {
-            Alert.alert('Error', `Update failed: ${error.message}`);
+            Alert.alert('Lỗi', `Không thể kiểm tra cập nhật: ${error.message}`);
         }
     };
 
@@ -244,8 +244,8 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
 
                     <View style={styles.headerInfo}>
                         <TouchableOpacity onPress={handleDebugUpdate}>
-                            <Text style={styles.greeting}>Xin chào (v1.4) 🎉</Text>
-                            <Text style={[styles.greeting, { fontSize: 10, color: COLORS.primary }]}>Tap to check update</Text>
+                            <Text style={styles.greeting}>Xin chào (v1.5) 🎉</Text>
+                            <Text style={[styles.greeting, { fontSize: 10, color: COLORS.primary }]}>Chạm để kiểm tra cập nhật</Text>
                         </TouchableOpacity>
                         <Text style={styles.userName} numberOfLines={1}>{user.name || 'Học viên'}</Text>
                     </View>
