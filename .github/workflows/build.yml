@@ -7,6 +7,7 @@ on:
       - 'ios/**'
       - 'android/**'
       - 'app.json'
+      - 'app.config.js'
       - 'eas.json'
       - 'package.json'
       - 'yarn.lock'
