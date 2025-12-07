@@ -12,6 +12,8 @@ import {
     Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { login, register, checkServerHealth } from '../utils/api';
 import { User, AuthView } from '../types';
@@ -27,6 +29,41 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [name, setName] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
+
+    // Load saved credentials on mount
+    React.useEffect(() => {
+        loadSavedCredentials();
+    }, []);
+
+    const loadSavedCredentials = async () => {
+        try {
+            const savedEmail = await AsyncStorage.getItem('savedEmail');
+            const savedPassword = await AsyncStorage.getItem('savedPassword');
+            if (savedEmail && savedPassword) {
+                setEmail(savedEmail);
+                setPassword(savedPassword);
+                setRememberMe(true);
+            }
+        } catch (e) {
+            console.log('Error loading credentials');
+        }
+    };
+
+    const saveCredentials = async () => {
+        try {
+            if (rememberMe) {
+                await AsyncStorage.setItem('savedEmail', email);
+                await AsyncStorage.setItem('savedPassword', password);
+            } else {
+                await AsyncStorage.removeItem('savedEmail');
+                await AsyncStorage.removeItem('savedPassword');
+            }
+        } catch (e) {
+            console.log('Error saving credentials');
+        }
+    };
 
     const handleSubmit = async () => {
         if (!email || !password) {
@@ -64,6 +101,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             }
 
             onLogin(response.user);
+            await saveCredentials();
         } catch (err) {
             const errorMessage = (err as Error).message;
             setError(errorMessage);
@@ -128,15 +166,38 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Mật khẩu</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="••••••••"
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry
-                            placeholderTextColor={COLORS.textMuted}
-                        />
+                        <View style={styles.passwordContainer}>
+                            <TextInput
+                                style={styles.passwordInput}
+                                placeholder="••••••••"
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry={!showPassword}
+                                placeholderTextColor={COLORS.textMuted}
+                            />
+                            <TouchableOpacity
+                                style={styles.eyeButton}
+                                onPress={() => setShowPassword(!showPassword)}
+                            >
+                                <Feather
+                                    name={showPassword ? 'eye' : 'eye-off'}
+                                    size={20}
+                                    color={COLORS.textMuted}
+                                />
+                            </TouchableOpacity>
+                        </View>
                     </View>
+
+                    {/* Remember Me */}
+                    <TouchableOpacity
+                        style={styles.rememberContainer}
+                        onPress={() => setRememberMe(!rememberMe)}
+                    >
+                        <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                            {rememberMe && <Feather name="check" size={14} color={COLORS.white} />}
+                        </View>
+                        <Text style={styles.rememberText}>Ghi nhớ mật khẩu</Text>
+                    </TouchableOpacity>
 
                     <TouchableOpacity
                         style={styles.submitButton}
@@ -174,10 +235,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         </Text>
                     </TouchableOpacity>
 
-                    {/* Server info */}
-                    <View style={styles.serverInfo}>
-                        <Text style={styles.serverText}>🌐 Yêu cầu kết nối Server</Text>
-                    </View>
+
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -280,16 +338,45 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '500',
     },
-    serverInfo: {
-        marginTop: SPACING.lg,
+    passwordContainer: {
+        flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: SPACING.sm,
-        backgroundColor: COLORS.success + '15',
-        borderRadius: BORDER_RADIUS.md,
+        backgroundColor: COLORS.backgroundDark,
+        borderRadius: BORDER_RADIUS.lg,
+        borderWidth: 1,
+        borderColor: COLORS.border,
     },
-    serverText: {
-        color: COLORS.success,
-        fontSize: 12,
-        fontWeight: '500',
+    passwordInput: {
+        flex: 1,
+        padding: SPACING.md,
+        fontSize: 16,
+        color: COLORS.text,
+    },
+    eyeButton: {
+        padding: SPACING.md,
+    },
+    rememberContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: SPACING.sm,
+        marginBottom: SPACING.sm,
+    },
+    checkbox: {
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: COLORS.border,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: SPACING.sm,
+    },
+    checkboxChecked: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
+    },
+    rememberText: {
+        fontSize: 14,
+        color: COLORS.textLight,
     },
 });

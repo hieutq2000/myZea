@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "1.8",
+        date: "07/12/2024",
+        title: "Cải tiến màn hình Đăng nhập",
+        changes: [
+            "👁️ Thêm nút xem/ẩn mật khẩu",
+            "✅ Thêm tùy chọn 'Ghi nhớ mật khẩu'",
+            "🗑️ Bỏ thông báo kết nối server",
+        ]
+    },
+    {
         version: "1.7",
         date: "07/12/2024",
         title: "Thêm Changelog vào popup cập nhật",
