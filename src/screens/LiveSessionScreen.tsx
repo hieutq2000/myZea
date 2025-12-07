@@ -16,7 +16,8 @@ import { Audio } from 'expo-av';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, GEMINI_API_KEY } from '../utils/theme';
 import { speakWithGoogleTTS, stopTTS } from '../utils/googleTTS';
-import { verifyFaceWithAvatar, periodicFaceCheck, detectLiveness } from '../utils/faceVerification';
+import { periodicFaceCheck } from '../utils/faceVerification';
+import FaceVerificationScreen from './FaceVerificationScreen';
 import {
     User, LiveStatus, LiveMode, Topic, TOPIC_LABELS,
     AiVoice, TargetAudience, SessionLogEntry, ExamResult
@@ -48,6 +49,7 @@ export default function LiveSessionScreen({
     // Anti-cheat states
     const [faceDetected, setFaceDetected] = useState(false);
     const [faceVerified, setFaceVerified] = useState(false);
+    const [showFaceVerification, setShowFaceVerification] = useState(false);
     const [verificationMessage, setVerificationMessage] = useState('');
     const [isVerifying, setIsVerifying] = useState(false);
     const [warningCount, setWarningCount] = useState(0);
@@ -106,75 +108,8 @@ export default function LiveSessionScreen({
         );
     }, [audience]);
 
-    // AI-powered face verification for exam mode
-    const performFaceVerification = useCallback(async () => {
-        if (!cameraRef.current || !user.avatar || !isExamMode) return;
-
-        setIsVerifying(true);
-        setVerificationMessage('🔍 Đang quét xác thực khuôn mặt...');
-
-        try {
-            // Capture current camera frame
-            const photo = await cameraRef.current.takePictureAsync({
-                base64: true,
-                quality: 0.5,
-            });
-
-            if (!photo?.base64) {
-                throw new Error('Không thể chụp ảnh từ camera');
-            }
-
-            const cameraBase64 = `data:image/jpeg;base64,${photo.base64}`;
-
-            // Step 1: Check liveness (is it a real person, not a photo?)
-            setVerificationMessage('🔍 Kiểm tra người thật...');
-            const livenessResult = await detectLiveness(cameraBase64);
-
-            if (!livenessResult.isLive) {
-                setFaceVerified(false);
-                setVerificationMessage('❌ Phát hiện ảnh giả! Cần quay mặt thật.');
-                speakText('Cảnh báo! Phát hiện ảnh giả. Vui lòng quay camera vào khuôn mặt thật của bạn.');
-                handleCheatingDetected('Sử dụng ảnh giả thay vì khuôn mặt thật');
-                return;
-            }
-
-            // Step 2: Compare with registered avatar
-            setVerificationMessage('🔍 So sánh với ảnh đại diện...');
-            const verifyResult = await verifyFaceWithAvatar(cameraBase64, user.avatar);
-
-            if (verifyResult.isMatch) {
-                setFaceVerified(true);
-                setFaceDetected(true);
-                setVerificationMessage(`✅ Xác thực thành công (${verifyResult.confidence}%)`);
-                speakText('Xác thực khuôn mặt thành công. Bắt đầu bài thi.');
-            } else {
-                setFaceVerified(false);
-                setVerificationMessage(`❌ ${verifyResult.message}`);
-                speakText(`Xác thực thất bại. ${verifyResult.message}. Vui lòng đảm bảo bạn là người đã đăng ký.`);
-
-                if (verifyResult.confidence < 50) {
-                    handleCheatingDetected(`Khuôn mặt không khớp với ảnh đại diện (${verifyResult.confidence}%)`);
-                }
-            }
-        } catch (error) {
-            console.error('Face verification error:', error);
-            setVerificationMessage('⚠️ Lỗi xác thực, vui lòng thử lại');
-        } finally {
-            setIsVerifying(false);
-        }
-    }, [user.avatar, isExamMode, speakText]);
-
-    // Initial face verification when session starts
-    useEffect(() => {
-        if (status !== LiveStatus.CONNECTED || !isExamMode) return;
-
-        // Wait for camera to initialize, then verify
-        const verifyTimer = setTimeout(() => {
-            performFaceVerification();
-        }, 2000);
-
-        return () => clearTimeout(verifyTimer);
-    }, [status, isExamMode, performFaceVerification]);
+    // Note: Face verification is now handled by FaceVerificationScreen
+    // before the session starts, so we removed the old inline verification code
 
     // Periodic face check during exam (every 30 seconds)
     useEffect(() => {
@@ -406,7 +341,14 @@ export default function LiveSessionScreen({
     };
 
     useEffect(() => {
-        startSession();
+        // For exam mode, show face verification first
+        if (isExamMode) {
+            setShowFaceVerification(true);
+        } else {
+            // Practice mode - start directly
+            startSession();
+        }
+
         return () => {
             Speech.stop();
             if (recording) {
@@ -450,6 +392,21 @@ export default function LiveSessionScreen({
             ))}
         </ScrollView>
     );
+
+    // Show Face Verification Screen for Exam Mode
+    if (showFaceVerification && isExamMode) {
+        return (
+            <FaceVerificationScreen
+                avatarBase64={user.avatar || ''}
+                onVerified={() => {
+                    setShowFaceVerification(false);
+                    setFaceVerified(true);
+                    startSession();
+                }}
+                onCancel={() => onEnd()}
+            />
+        );
+    }
 
     if (status === LiveStatus.CONNECTING) {
         return (

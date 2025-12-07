@@ -10,13 +10,25 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "2.1",
+        date: "07/12/2024",
+        title: "Màn hình xác thực khuôn mặt mới",
+        changes: [
+            "🔐 Màn hình xác thực khuôn mặt riêng biệt",
+            "📷 Khung đặt mặt rõ ràng với animation",
+            "✅ Hiển thị % độ khớp khuôn mặt",
+            "🔄 Cho phép thử lại nếu thất bại",
+        ]
+    },
+    {
         version: "2.0",
         date: "07/12/2024",
-        title: "Cập nhật icon mới",
+        title: "Màn hình xác thực khuôn mặt mới",
         changes: [
-            "🎨 Thay đổi icon Camera, Gallery sang Ionicons",
-            "👤 Icon avatar placeholder mới",
-            "✨ Giao diện chuyên nghiệp hơn",
+            "🔐 Màn hình xác thực khuôn mặt riêng biệt",
+            "📷 Khung đặt mặt rõ ràng với animation",
+            "✅ Hiển thị % độ khớp khuôn mặt",
+            "🔄 Cho phép thử lại nếu thất bại",
         ]
     },
     {

@@ -10,6 +10,7 @@ import {
     SafeAreaView,
     Alert,
     StatusBar,
+    Modal,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -180,7 +181,12 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
                     </View>
 
                     {/* Image Options Modal */}
-                    {showImageOptions && (
+                    <Modal
+                        visible={showImageOptions}
+                        transparent
+                        animationType="fade"
+                        onRequestClose={() => setShowImageOptions(false)}
+                    >
                         <View style={styles.imageOptionsOverlay}>
                             <View style={styles.imageOptionsCard}>
                                 <Text style={styles.imageOptionsTitle}>Chọn ảnh đại diện</Text>
@@ -215,7 +221,7 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
                                 </TouchableOpacity>
                             </View>
                         </View>
-                    )}
+                    </Modal>
 
                     {/* Level & XP */}
                     <View style={styles.levelContainer}>
@@ -425,15 +431,10 @@ const styles = StyleSheet.create({
         borderColor: COLORS.background,
     },
     imageOptionsOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 100,
     },
     imageOptionsCard: {
         backgroundColor: COLORS.white,
