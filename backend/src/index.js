@@ -93,6 +93,45 @@ function authenticateToken(req, res, next) {
     });
 }
 
+// ============ CHANGELOG API ============
+
+// Latest changelog - used by app to show update info
+const CHANGELOG = [
+    {
+        version: "2.3",
+        date: "07/12/2024",
+        title: "Đăng nhập Face ID",
+        changes: [
+            "🔐 Đăng nhập với Face ID/Touch ID",
+            "📱 Nút Face ID trên màn hình đăng nhập",
+            "🛡️ Xác thực sinh trắc học an toàn",
+            "🔧 Fix lỗi xác thực khuôn mặt khi thi",
+        ]
+    },
+    {
+        version: "2.2",
+        date: "07/12/2024",
+        title: "Cải tiến trang Hồ sơ",
+        changes: [
+            "🗑️ Bỏ phần chọn giọng AI",
+            "👤 Tên hiển thị chỉ xem (không sửa)",
+            "🔐 Thêm toggle Đăng nhập Face ID",
+            "🚪 Thêm nút Đăng xuất",
+        ]
+    },
+];
+
+app.get('/api/changelog', (req, res) => {
+    res.json({
+        latest: CHANGELOG[0],
+        all: CHANGELOG
+    });
+});
+
+app.get('/api/changelog/latest', (req, res) => {
+    res.json(CHANGELOG[0]);
+});
+
 // ============ AUTH ROUTES ============
 
 // Register

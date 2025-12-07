@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -7,9 +7,16 @@ import {
     StyleSheet,
     Dimensions,
     ScrollView,
+    ActivityIndicator,
 } from 'react-native';
-import { COLORS, BORDER_RADIUS, SHADOWS } from '../utils/theme';
-import { getLatestChangelog } from '../utils/changelog';
+import { COLORS, BORDER_RADIUS, SHADOWS, API_URL } from '../utils/theme';
+
+interface ChangelogEntry {
+    version: string;
+    date: string;
+    title: string;
+    changes: string[];
+}
 
 interface UpdateModalProps {
     visible: boolean;
@@ -21,7 +28,30 @@ interface UpdateModalProps {
 const { width } = Dimensions.get('window');
 
 export default function UpdateModal({ visible, onUpdate, onClose, isDownloading }: UpdateModalProps) {
-    const changelog = getLatestChangelog();
+    const [changelog, setChangelog] = useState<ChangelogEntry | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch latest changelog from server
+    useEffect(() => {
+        if (visible) {
+            fetchChangelog();
+        }
+    }, [visible]);
+
+    const fetchChangelog = async () => {
+        setLoading(true);
+        try {
+            const response = await fetch(`${API_URL}/api/changelog/latest`);
+            if (response.ok) {
+                const data = await response.json();
+                setChangelog(data);
+            }
+        } catch (error) {
+            console.log('[UpdateModal] Failed to fetch changelog:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <Modal
@@ -38,35 +68,36 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
                     </View>
 
                     {/* Title */}
-                    <Text style={styles.title}>Ứng dụng đã có phiên bản mới</Text>
+                    <Text style={styles.title}>Có phiên bản mới!</Text>
 
-                    {/* Version Badge */}
-                    {changelog && (
-                        <View style={styles.versionBadge}>
-                            <Text style={styles.versionText}>v{changelog.version}</Text>
-                        </View>
+                    {loading ? (
+                        <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 20 }} />
+                    ) : changelog ? (
+                        <>
+                            {/* Version Badge */}
+                            <View style={styles.versionBadge}>
+                                <Text style={styles.versionText}>v{changelog.version}</Text>
+                            </View>
+
+                            {/* Changelog Title */}
+                            <Text style={styles.changelogTitle}>{changelog.title}</Text>
+
+                            {/* Changes List */}
+                            {changelog.changes.length > 0 && (
+                                <ScrollView style={styles.changesList} showsVerticalScrollIndicator={false}>
+                                    {changelog.changes.map((change, index) => (
+                                        <View key={index} style={styles.changeItem}>
+                                            <Text style={styles.changeText}>{change}</Text>
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                            )}
+                        </>
+                    ) : (
+                        <Text style={styles.description}>
+                            Phiên bản mới đã sẵn sàng với nhiều cải tiến!
+                        </Text>
                     )}
-
-                    {/* Changelog Title */}
-                    {changelog && (
-                        <Text style={styles.changelogTitle}>{changelog.title}</Text>
-                    )}
-
-                    {/* Changes List */}
-                    {changelog && changelog.changes.length > 0 && (
-                        <ScrollView style={styles.changesList} showsVerticalScrollIndicator={false}>
-                            {changelog.changes.map((change, index) => (
-                                <View key={index} style={styles.changeItem}>
-                                    <Text style={styles.changeText}>{change}</Text>
-                                </View>
-                            ))}
-                        </ScrollView>
-                    )}
-
-                    {/* Description */}
-                    <Text style={styles.description}>
-                        Bạn vui lòng cập nhật để trải nghiệm các tính năng mới nhất.
-                    </Text>
 
                     {/* Update Button */}
                     <TouchableOpacity
@@ -75,7 +106,7 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
                         disabled={isDownloading}
                     >
                         <Text style={styles.updateButtonText}>
-                            {isDownloading ? 'Đang tải xuống...' : 'Cập nhật ngay'}
+                            {isDownloading ? '⏳ Đang tải xuống...' : '🚀 Cập nhật ngay'}
                         </Text>
                     </TouchableOpacity>
 
@@ -121,58 +152,56 @@ const styles = StyleSheet.create({
         fontSize: 40,
     },
     title: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
         color: COLORS.text,
         textAlign: 'center',
-        marginBottom: 8,
+        marginBottom: 12,
     },
     versionBadge: {
         backgroundColor: COLORS.primary,
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        borderRadius: 16,
         marginBottom: 12,
     },
     versionText: {
         color: COLORS.white,
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: 14,
+        fontWeight: '700',
     },
     changelogTitle: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
         color: COLORS.text,
         textAlign: 'center',
         marginBottom: 12,
     },
     changesList: {
-        maxHeight: 120,
+        maxHeight: 140,
         width: '100%',
-        marginBottom: 12,
+        marginBottom: 16,
     },
     changeItem: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
         paddingVertical: 4,
         paddingHorizontal: 8,
     },
     changeText: {
-        fontSize: 13,
+        fontSize: 14,
         color: COLORS.textLight,
-        lineHeight: 20,
+        lineHeight: 22,
     },
     description: {
-        fontSize: 13,
-        color: COLORS.textMuted,
+        fontSize: 15,
+        color: COLORS.textLight,
         textAlign: 'center',
-        lineHeight: 18,
-        marginBottom: 20,
+        lineHeight: 22,
+        marginVertical: 16,
     },
     updateButton: {
         width: '100%',
         backgroundColor: COLORS.primary,
-        paddingVertical: 14,
+        paddingVertical: 16,
         borderRadius: BORDER_RADIUS.lg,
         alignItems: 'center',
         marginBottom: 12,

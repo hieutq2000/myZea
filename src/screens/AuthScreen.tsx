@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -12,8 +12,9 @@ import {
     Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { login, register, checkServerHealth } from '../utils/api';
 import { User, AuthView } from '../types';
@@ -31,11 +32,28 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [error, setError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
+    const [faceIdEnabled, setFaceIdEnabled] = useState(false);
+    const [hasBiometrics, setHasBiometrics] = useState(false);
+    const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
 
-    // Load saved credentials on mount
-    React.useEffect(() => {
+    // Load saved credentials and Face ID setting on mount
+    useEffect(() => {
         loadSavedCredentials();
+        checkBiometrics();
     }, []);
+
+    const checkBiometrics = async () => {
+        try {
+            const compatible = await LocalAuthentication.hasHardwareAsync();
+            const enrolled = await LocalAuthentication.isEnrolledAsync();
+            setHasBiometrics(compatible && enrolled);
+
+            const faceIdSetting = await AsyncStorage.getItem('faceIdEnabled');
+            setFaceIdEnabled(faceIdSetting === 'true');
+        } catch (e) {
+            console.log('Biometric check error:', e);
+        }
+    };
 
     const loadSavedCredentials = async () => {
         try {
@@ -45,9 +63,38 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 setEmail(savedEmail);
                 setPassword(savedPassword);
                 setRememberMe(true);
+                setHasSavedCredentials(true);
             }
         } catch (e) {
             console.log('Error loading credentials');
+        }
+    };
+
+    const handleFaceIdLogin = async () => {
+        if (!hasSavedCredentials) {
+            Alert.alert('Thông báo', 'Chưa có thông tin đăng nhập được lưu. Vui lòng đăng nhập thủ công trước.');
+            return;
+        }
+
+        try {
+            const result = await LocalAuthentication.authenticateAsync({
+                promptMessage: 'Xác thực để đăng nhập',
+                cancelLabel: 'Hủy',
+                fallbackLabel: 'Nhập mật khẩu',
+                disableDeviceFallback: false,
+            });
+
+            if (result.success) {
+                // Biometric authentication successful, proceed with login
+                handleSubmit();
+            } else if (result.error === 'user_cancel') {
+                // User cancelled, do nothing
+            } else {
+                Alert.alert('Lỗi', 'Xác thực sinh trắc học thất bại');
+            }
+        } catch (e) {
+            console.log('Face ID error:', e);
+            Alert.alert('Lỗi', 'Không thể sử dụng Face ID');
         }
     };
 
@@ -198,6 +245,18 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         </View>
                         <Text style={styles.rememberText}>Ghi nhớ mật khẩu</Text>
                     </TouchableOpacity>
+
+                    {/* Face ID Button - only show in login mode when enabled */}
+                    {view === AuthView.LOGIN && faceIdEnabled && hasBiometrics && hasSavedCredentials && (
+                        <TouchableOpacity
+                            style={styles.faceIdButton}
+                            onPress={handleFaceIdLogin}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="finger-print" size={24} color={COLORS.primary} />
+                            <Text style={styles.faceIdText}>Đăng nhập với Face ID</Text>
+                        </TouchableOpacity>
+                    )}
 
                     <TouchableOpacity
                         style={styles.submitButton}
@@ -378,5 +437,22 @@ const styles = StyleSheet.create({
     rememberText: {
         fontSize: 14,
         color: COLORS.textLight,
+    },
+    faceIdButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: SPACING.md,
+        paddingHorizontal: SPACING.lg,
+        backgroundColor: COLORS.primary + '15',
+        borderRadius: BORDER_RADIUS.lg,
+        marginTop: SPACING.md,
+        marginBottom: SPACING.sm,
+        gap: SPACING.sm,
+    },
+    faceIdText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: COLORS.primary,
     },
 });

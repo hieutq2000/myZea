@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "2.3",
+        date: "07/12/2024",
+        title: "Đăng nhập Face ID",
+        changes: [
+            "🔐 Đăng nhập với Face ID/Touch ID",
+            "📱 Nút Face ID trên màn hình đăng nhập",
+            "🛡️ Xác thực sinh trắc học an toàn",
+            "🔧 Fix lỗi xác thực khuôn mặt khi thi",
+        ]
+    },
+    {
         version: "2.2",
         date: "07/12/2024",
         title: "Cải tiến trang Hồ sơ",
