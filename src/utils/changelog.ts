@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "2.0",
+        date: "07/12/2024",
+        title: "Cập nhật icon mới",
+        changes: [
+            "🎨 Thay đổi icon Camera, Gallery sang Ionicons",
+            "👤 Icon avatar placeholder mới",
+            "✨ Giao diện chuyên nghiệp hơn",
+        ]
+    },
+    {
         version: "1.9",
         date: "07/12/2024",
         title: "Thêm thanh Tab điều hướng",

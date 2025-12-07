@@ -9,9 +9,12 @@ import {
     Image,
     SafeAreaView,
     Alert,
+    StatusBar,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { User, AiVoice, VOICE_LABELS, BADGES, LEVEL_THRESHOLDS } from '../types';
 
@@ -26,12 +29,14 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
     const [avatar, setAvatar] = useState<string | undefined>(user.avatar);
     const [voice, setVoice] = useState<AiVoice>(user.voice || AiVoice.KORE);
     const [showCamera, setShowCamera] = useState(false);
+    const [showImageOptions, setShowImageOptions] = useState(false);
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const cameraRef = useRef<CameraView>(null);
 
     const isOnboarding = !user.avatar;
 
     const handleTakePhoto = async () => {
+        setShowImageOptions(false);
         if (!cameraPermission?.granted) {
             const result = await requestCameraPermission();
             if (!result.granted) {
@@ -61,6 +66,7 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
     };
 
     const handlePickImage = async () => {
+        setShowImageOptions(false);
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
@@ -105,7 +111,7 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
                             style={styles.cameraCancelBtn}
                             onPress={() => setShowCamera(false)}
                         >
-                            <Text style={styles.cameraCancelText}>Hủy</Text>
+                            <Ionicons name="close" size={28} color={COLORS.white} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -115,7 +121,9 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
                             <View style={styles.captureBtnInner} />
                         </TouchableOpacity>
 
-                        <View style={{ width: 60 }} />
+                        <TouchableOpacity style={styles.cameraFlipBtn}>
+                            <Ionicons name="camera-reverse" size={28} color={COLORS.white} />
+                        </TouchableOpacity>
                     </View>
                 </CameraView>
             </SafeAreaView>
@@ -124,54 +132,125 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>
-                        {isOnboarding ? '🎉 Chào mừng bạn mới!' : 'Hồ Sơ Của Tôi'}
-                    </Text>
-                    {isOnboarding && (
-                        <Text style={styles.headerSubtitle}>
-                            Hãy hoàn tất hồ sơ để bắt đầu học nhé!
-                        </Text>
-                    )}
-                </View>
+            <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
 
+            {/* Header */}
+            <View style={styles.header}>
+                {!isOnboarding && (
+                    <TouchableOpacity style={styles.backBtn} onPress={onCancel}>
+                        <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+                    </TouchableOpacity>
+                )}
+                <Text style={styles.headerTitle}>
+                    {isOnboarding ? 'Tạo hồ sơ' : 'Hồ sơ'}
+                </Text>
+                <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Avatar Section */}
                 <View style={styles.avatarSection}>
-                    <View style={styles.levelBadge}>
-                        <Text style={styles.levelText}>Level {currentLevel}</Text>
+                    <View style={styles.avatarWrapper}>
+                        <TouchableOpacity
+                            style={styles.avatarContainer}
+                            onPress={() => setShowImageOptions(true)}
+                        >
+                            {avatar ? (
+                                <Image source={{ uri: avatar }} style={styles.avatar} />
+                            ) : (
+                                <LinearGradient
+                                    colors={['#E2E8F0', '#CBD5E1']}
+                                    style={styles.avatarPlaceholder}
+                                >
+                                    <Ionicons name="person" size={50} color={COLORS.textMuted} />
+                                </LinearGradient>
+                            )}
+                        </TouchableOpacity>
+
+                        {/* Edit Avatar Button */}
+                        <TouchableOpacity
+                            style={styles.editAvatarBtn}
+                            onPress={() => setShowImageOptions(true)}
+                        >
+                            <Ionicons name="camera" size={18} color={COLORS.white} />
+                        </TouchableOpacity>
                     </View>
 
-                    <View style={styles.avatarContainer}>
-                        {avatar ? (
-                            <Image source={{ uri: avatar }} style={styles.avatar} />
-                        ) : (
-                            <View style={styles.avatarPlaceholder}>
-                                <Text style={styles.avatarPlaceholderText}>📷</Text>
+                    {/* Image Options Modal */}
+                    {showImageOptions && (
+                        <View style={styles.imageOptionsOverlay}>
+                            <View style={styles.imageOptionsCard}>
+                                <Text style={styles.imageOptionsTitle}>Chọn ảnh đại diện</Text>
+
+                                <TouchableOpacity style={styles.imageOption} onPress={handleTakePhoto}>
+                                    <View style={[styles.imageOptionIcon, { backgroundColor: '#EEF2FF' }]}>
+                                        <Ionicons name="camera" size={24} color="#6366F1" />
+                                    </View>
+                                    <View style={styles.imageOptionText}>
+                                        <Text style={styles.imageOptionTitle}>Chụp ảnh</Text>
+                                        <Text style={styles.imageOptionDesc}>Sử dụng camera</Text>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.imageOption} onPress={handlePickImage}>
+                                    <View style={[styles.imageOptionIcon, { backgroundColor: '#FEF3C7' }]}>
+                                        <Ionicons name="images" size={24} color="#F59E0B" />
+                                    </View>
+                                    <View style={styles.imageOptionText}>
+                                        <Text style={styles.imageOptionTitle}>Chọn từ thư viện</Text>
+                                        <Text style={styles.imageOptionDesc}>Tải ảnh có sẵn</Text>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={styles.imageOptionsCancel}
+                                    onPress={() => setShowImageOptions(false)}
+                                >
+                                    <Text style={styles.imageOptionsCancelText}>Hủy</Text>
+                                </TouchableOpacity>
                             </View>
-                        )}
-                    </View>
+                        </View>
+                    )}
 
-                    <View style={styles.avatarButtons}>
-                        <TouchableOpacity style={styles.avatarBtn} onPress={handleTakePhoto}>
-                            <Text style={styles.avatarBtnIcon}>📷</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.avatarBtn} onPress={handlePickImage}>
-                            <Text style={styles.avatarBtnIcon}>🖼️</Text>
-                        </TouchableOpacity>
+                    {/* Level & XP */}
+                    <View style={styles.levelContainer}>
+                        <View style={styles.levelBadge}>
+                            <MaterialIcons name="star" size={16} color="#F59E0B" />
+                            <Text style={styles.levelText}>Level {currentLevel}</Text>
+                        </View>
                     </View>
 
                     <View style={styles.xpContainer}>
-                        <Text style={styles.xpText}>💎 {currentXp} XP</Text>
+                        <View style={styles.xpHeader}>
+                            <Text style={styles.xpText}>{currentXp} XP</Text>
+                            <Text style={styles.xpNext}>{nextLevelXp} XP</Text>
+                        </View>
                         <View style={styles.xpBar}>
-                            <View style={[styles.xpProgress, { width: `${Math.min(100, progress)}%` }]} />
+                            <LinearGradient
+                                colors={COLORS.gradientPrimary as [string, string]}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={[styles.xpProgress, { width: `${Math.min(100, progress)}%` }]}
+                            />
                         </View>
                         <Text style={styles.xpNextLevel}>
-                            {nextLevelXp - currentXp} XP để lên Level {currentLevel + 1}
+                            Còn {nextLevelXp - currentXp} XP để lên Level {currentLevel + 1}
                         </Text>
                     </View>
                 </View>
 
-                <View style={styles.form}>
+                {/* Name Input */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Feather name="user" size={20} color={COLORS.primary} />
+                        <Text style={styles.cardTitle}>Thông tin cá nhân</Text>
+                    </View>
+
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Tên hiển thị</Text>
                         <TextInput
@@ -182,70 +261,96 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
                             placeholderTextColor={COLORS.textMuted}
                         />
                     </View>
+                </View>
 
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>🎙️ Giọng Gia Sư AI</Text>
-                        <View style={styles.voiceGrid}>
-                            {Object.values(AiVoice).map((v) => (
-                                <TouchableOpacity
-                                    key={v}
-                                    style={[
-                                        styles.voiceCard,
-                                        voice === v && styles.voiceCardActive
-                                    ]}
-                                    onPress={() => setVoice(v)}
-                                >
-                                    <Text style={styles.voiceIcon}>
-                                        {VOICE_LABELS[v].gender === 'female' ? '👩‍🏫' : '👨‍🏫'}
-                                    </Text>
-                                    <Text style={[
-                                        styles.voiceLabel,
-                                        voice === v && styles.voiceLabelActive
-                                    ]}>
-                                        {VOICE_LABELS[v].label}
-                                    </Text>
-                                    <Text style={styles.voiceDesc}>{VOICE_LABELS[v].desc}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                {/* Voice Selection */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <MaterialIcons name="record-voice-over" size={20} color={COLORS.primary} />
+                        <Text style={styles.cardTitle}>Giọng gia sư AI</Text>
                     </View>
 
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>🏅 Huy Hiệu</Text>
-                        <View style={styles.badgesGrid}>
-                            {BADGES.map((badge) => {
-                                const unlocked = user.badges?.includes(badge.id);
-                                return (
-                                    <View
-                                        key={badge.id}
-                                        style={[styles.badgeCard, !unlocked && styles.badgeLocked]}
-                                    >
-                                        <Text style={[styles.badgeIcon, !unlocked && styles.badgeIconLocked]}>
-                                            {badge.icon}
-                                        </Text>
-                                        <Text style={[styles.badgeName, !unlocked && styles.badgeNameLocked]}>
-                                            {badge.name}
-                                        </Text>
+                    <View style={styles.voiceGrid}>
+                        {Object.values(AiVoice).map((v) => (
+                            <TouchableOpacity
+                                key={v}
+                                style={[
+                                    styles.voiceCard,
+                                    voice === v && styles.voiceCardActive
+                                ]}
+                                onPress={() => setVoice(v)}
+                            >
+                                <View style={[
+                                    styles.voiceIcon,
+                                    voice === v && styles.voiceIconActive
+                                ]}>
+                                    <Text style={styles.voiceEmoji}>
+                                        {VOICE_LABELS[v].gender === 'female' ? '👩‍🏫' : '👨‍🏫'}
+                                    </Text>
+                                </View>
+                                <Text style={[
+                                    styles.voiceLabel,
+                                    voice === v && styles.voiceLabelActive
+                                ]}>
+                                    {VOICE_LABELS[v].label}
+                                </Text>
+                                <Text style={styles.voiceDesc}>{VOICE_LABELS[v].desc}</Text>
+                                {voice === v && (
+                                    <View style={styles.voiceCheck}>
+                                        <Ionicons name="checkmark" size={14} color={COLORS.white} />
                                     </View>
-                                );
-                            })}
-                        </View>
+                                )}
+                            </TouchableOpacity>
+                        ))}
                     </View>
                 </View>
 
+                {/* Badges */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <MaterialIcons name="emoji-events" size={20} color={COLORS.primary} />
+                        <Text style={styles.cardTitle}>Huy hiệu</Text>
+                        <Text style={styles.badgeCount}>
+                            {user.badges?.length || 0}/{BADGES.length}
+                        </Text>
+                    </View>
+
+                    <View style={styles.badgesGrid}>
+                        {BADGES.map((badge) => {
+                            const unlocked = user.badges?.includes(badge.id);
+                            return (
+                                <View
+                                    key={badge.id}
+                                    style={[styles.badgeCard, !unlocked && styles.badgeLocked]}
+                                >
+                                    <Text style={[styles.badgeIcon, !unlocked && styles.badgeIconLocked]}>
+                                        {badge.icon}
+                                    </Text>
+                                    <Text style={[styles.badgeName, !unlocked && styles.badgeNameLocked]}>
+                                        {badge.name}
+                                    </Text>
+                                </View>
+                            );
+                        })}
+                    </View>
+                </View>
+
+                {/* Submit Button */}
                 <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                    <Text style={styles.submitText}>
-                        {isOnboarding ? 'Bắt Đầu Học Thôi! 🚀' : 'Lưu Thay Đổi'}
-                    </Text>
+                    <LinearGradient
+                        colors={COLORS.gradientPrimary as [string, string]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.submitGradient}
+                    >
+                        <Text style={styles.submitText}>
+                            {isOnboarding ? 'Bắt đầu học!' : 'Lưu thay đổi'}
+                        </Text>
+                        <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+                    </LinearGradient>
                 </TouchableOpacity>
 
-                {!isOnboarding && (
-                    <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
-                        <Text style={styles.cancelText}>Hủy</Text>
-                    </TouchableOpacity>
-                )}
-
-                <View style={{ height: 50 }} />
+                <View style={{ height: 100 }} />
             </ScrollView>
         </SafeAreaView>
     );
@@ -256,96 +361,170 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: COLORS.background,
     },
-    scrollContent: {
-        padding: SPACING.lg,
-    },
     header: {
-        marginBottom: SPACING.lg,
-    },
-    headerTitle: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: COLORS.text,
-        textAlign: 'center',
-    },
-    headerSubtitle: {
-        fontSize: 16,
-        color: COLORS.textLight,
-        textAlign: 'center',
-        marginTop: SPACING.xs,
-    },
-    avatarSection: {
-        alignItems: 'center',
-        backgroundColor: COLORS.white,
-        borderRadius: BORDER_RADIUS.xl,
-        padding: SPACING.lg,
-        marginBottom: SPACING.lg,
-        ...SHADOWS.md,
-    },
-    levelBadge: {
-        backgroundColor: COLORS.secondary,
-        paddingHorizontal: SPACING.md,
-        paddingVertical: SPACING.xs,
-        borderRadius: BORDER_RADIUS.full,
-        marginBottom: SPACING.md,
-    },
-    levelText: {
-        color: COLORS.white,
-        fontWeight: 'bold',
-        fontSize: 12,
-    },
-    avatarContainer: {
-        marginBottom: SPACING.md,
-    },
-    avatar: {
-        width: 140,
-        height: 140,
-        borderRadius: 70,
-        borderWidth: 4,
-        borderColor: COLORS.primary,
-    },
-    avatarPlaceholder: {
-        width: 140,
-        height: 140,
-        borderRadius: 70,
-        backgroundColor: COLORS.backgroundDark,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 4,
-        borderColor: COLORS.border,
-    },
-    avatarPlaceholderText: {
-        fontSize: 48,
-    },
-    avatarButtons: {
         flexDirection: 'row',
-        gap: SPACING.md,
-        marginBottom: SPACING.md,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: SPACING.lg,
+        paddingVertical: SPACING.md,
     },
-    avatarBtn: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: COLORS.primary,
+    backBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: COLORS.white,
         alignItems: 'center',
         justifyContent: 'center',
         ...SHADOWS.sm,
     },
-    avatarBtnIcon: {
-        fontSize: 24,
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: COLORS.text,
     },
-    xpContainer: {
-        width: '100%',
+    scrollContent: {
+        padding: SPACING.lg,
+        paddingTop: 0,
+    },
+    avatarSection: {
         alignItems: 'center',
+        marginBottom: SPACING.lg,
     },
-    xpText: {
+    avatarWrapper: {
+        position: 'relative',
+        marginBottom: SPACING.md,
+    },
+    avatarContainer: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        overflow: 'hidden',
+        ...SHADOWS.md,
+    },
+    avatar: {
+        width: '100%',
+        height: '100%',
+    },
+    avatarPlaceholder: {
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    editAvatarBtn: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: COLORS.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 3,
+        borderColor: COLORS.background,
+    },
+    imageOptionsOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 100,
+    },
+    imageOptionsCard: {
+        backgroundColor: COLORS.white,
+        borderRadius: BORDER_RADIUS.xl,
+        padding: SPACING.lg,
+        width: '90%',
+        ...SHADOWS.lg,
+    },
+    imageOptionsTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: COLORS.text,
+        textAlign: 'center',
+        marginBottom: SPACING.lg,
+    },
+    imageOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: SPACING.md,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+    },
+    imageOptionIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: SPACING.md,
+    },
+    imageOptionText: {
+        flex: 1,
+    },
+    imageOptionTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    imageOptionDesc: {
+        fontSize: 13,
+        color: COLORS.textMuted,
+    },
+    imageOptionsCancel: {
+        marginTop: SPACING.lg,
+        paddingVertical: SPACING.md,
+        alignItems: 'center',
+    },
+    imageOptionsCancelText: {
+        fontSize: 16,
+        color: COLORS.textMuted,
+        fontWeight: '600',
+    },
+    levelContainer: {
+        marginBottom: SPACING.sm,
+    },
+    levelBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: SPACING.md,
+        paddingVertical: SPACING.xs,
+        borderRadius: BORDER_RADIUS.full,
+        gap: 4,
+    },
+    levelText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#92400E',
+    },
+    xpContainer: {
+        width: '100%',
+        backgroundColor: COLORS.white,
+        borderRadius: BORDER_RADIUS.lg,
+        padding: SPACING.md,
+        ...SHADOWS.sm,
+    },
+    xpHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         marginBottom: SPACING.xs,
     },
+    xpText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: COLORS.primary,
+    },
+    xpNext: {
+        fontSize: 12,
+        color: COLORS.textMuted,
+    },
     xpBar: {
-        width: '100%',
         height: 8,
         backgroundColor: COLORS.backgroundDark,
         borderRadius: 4,
@@ -353,29 +532,45 @@ const styles = StyleSheet.create({
     },
     xpProgress: {
         height: '100%',
-        backgroundColor: COLORS.primary,
         borderRadius: 4,
     },
     xpNextLevel: {
         fontSize: 12,
-        color: COLORS.textLight,
+        color: COLORS.textMuted,
         marginTop: SPACING.xs,
+        textAlign: 'center',
     },
-    form: {
+    card: {
         backgroundColor: COLORS.white,
         borderRadius: BORDER_RADIUS.xl,
         padding: SPACING.lg,
-        marginBottom: SPACING.lg,
-        ...SHADOWS.md,
+        marginBottom: SPACING.md,
+        ...SHADOWS.sm,
     },
-    inputGroup: {
-        marginBottom: SPACING.lg,
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: SPACING.md,
+        gap: SPACING.sm,
     },
-    label: {
+    cardTitle: {
         fontSize: 16,
         fontWeight: '600',
         color: COLORS.text,
-        marginBottom: SPACING.sm,
+        flex: 1,
+    },
+    badgeCount: {
+        fontSize: 14,
+        color: COLORS.textMuted,
+    },
+    inputGroup: {
+        marginBottom: 0,
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: COLORS.textLight,
+        marginBottom: SPACING.xs,
     },
     input: {
         backgroundColor: COLORS.backgroundDark,
@@ -383,8 +578,6 @@ const styles = StyleSheet.create({
         padding: SPACING.md,
         fontSize: 16,
         color: COLORS.text,
-        borderWidth: 1,
-        borderColor: COLORS.border,
     },
     voiceGrid: {
         gap: SPACING.sm,
@@ -400,15 +593,26 @@ const styles = StyleSheet.create({
     },
     voiceCardActive: {
         borderColor: COLORS.primary,
-        backgroundColor: COLORS.primary + '10',
+        backgroundColor: COLORS.primary + '08',
     },
     voiceIcon: {
-        fontSize: 24,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: COLORS.white,
+        alignItems: 'center',
+        justifyContent: 'center',
         marginRight: SPACING.md,
+    },
+    voiceIconActive: {
+        backgroundColor: COLORS.primary + '20',
+    },
+    voiceEmoji: {
+        fontSize: 24,
     },
     voiceLabel: {
         flex: 1,
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '600',
         color: COLORS.text,
     },
@@ -419,6 +623,15 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: COLORS.textMuted,
     },
+    voiceCheck: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: COLORS.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: SPACING.sm,
+    },
     badgesGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -427,22 +640,22 @@ const styles = StyleSheet.create({
     badgeCard: {
         width: '30%',
         alignItems: 'center',
-        padding: SPACING.sm,
+        padding: SPACING.md,
         backgroundColor: COLORS.backgroundDark,
-        borderRadius: BORDER_RADIUS.md,
+        borderRadius: BORDER_RADIUS.lg,
     },
     badgeLocked: {
-        opacity: 0.5,
+        opacity: 0.4,
     },
     badgeIcon: {
         fontSize: 32,
         marginBottom: SPACING.xs,
     },
     badgeIconLocked: {
-        opacity: 0.4,
+        filter: 'grayscale(1)',
     },
     badgeName: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '600',
         color: COLORS.text,
         textAlign: 'center',
@@ -451,24 +664,22 @@ const styles = StyleSheet.create({
         color: COLORS.textMuted,
     },
     submitBtn: {
-        backgroundColor: COLORS.primary,
+        marginTop: SPACING.md,
         borderRadius: BORDER_RADIUS.lg,
-        padding: SPACING.md,
-        alignItems: 'center',
+        overflow: 'hidden',
         ...SHADOWS.md,
+    },
+    submitGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: SPACING.md + 2,
+        gap: SPACING.sm,
     },
     submitText: {
         color: COLORS.white,
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: 'bold',
-    },
-    cancelBtn: {
-        marginTop: SPACING.md,
-        alignItems: 'center',
-    },
-    cancelText: {
-        color: COLORS.textLight,
-        fontSize: 16,
     },
     cameraContainer: {
         flex: 1,
@@ -486,23 +697,33 @@ const styles = StyleSheet.create({
         width: 250,
         height: 250,
         borderRadius: 125,
-        borderWidth: 4,
-        borderColor: COLORS.white,
+        borderWidth: 3,
+        borderColor: 'rgba(255,255,255,0.5)',
         borderStyle: 'dashed',
     },
     cameraButtons: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'space-around',
         alignItems: 'center',
-        padding: SPACING.xl,
-        paddingBottom: SPACING.xxl,
+        paddingVertical: SPACING.xl,
+        paddingHorizontal: SPACING.lg,
+        backgroundColor: 'rgba(0,0,0,0.3)',
     },
     cameraCancelBtn: {
-        width: 60,
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    cameraCancelText: {
-        color: COLORS.white,
-        fontSize: 16,
+    cameraFlipBtn: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     captureBtn: {
         width: 80,
@@ -511,11 +732,13 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.3)',
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 3,
+        borderColor: COLORS.white,
     },
     captureBtnInner: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
         backgroundColor: COLORS.white,
     },
 });
