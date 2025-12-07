@@ -73,7 +73,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
             id: LiveMode.EXAM,
             icon: 'assignment',
             iconSet: MaterialIcons,
-            title: 'Thi Thử',
+            title: 'AI Dò Bài',
             desc: 'Kiểm tra với giám sát AI',
             color: '#F97316',
             bgColor: '#FFF7ED'

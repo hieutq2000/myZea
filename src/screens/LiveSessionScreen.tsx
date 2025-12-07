@@ -11,6 +11,7 @@ import {
     Animated,
     Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Audio } from 'expo-av';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -56,6 +57,7 @@ export default function LiveSessionScreen({
     const [showViolationWarning, setShowViolationWarning] = useState(false);
     const [currentScore, setCurrentScore] = useState<'ĐẠT' | 'CHƯA ĐẠT' | null>(null);
     const [cheatingDetails, setCheatingDetails] = useState<string | null>(null);
+    const [showIntro, setShowIntro] = useState(false);
 
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const cameraRef = useRef<CameraView>(null);
@@ -267,7 +269,7 @@ export default function LiveSessionScreen({
             // Start recording
             try {
                 if (isAiSpeaking) {
-                    Speech.stop();
+                    stopTTS();
                     setIsAiSpeaking(false);
                 }
 
@@ -343,16 +345,16 @@ export default function LiveSessionScreen({
     };
 
     useEffect(() => {
-        // For exam mode, show face verification first
+        // For exam mode, show intro first
         if (isExamMode) {
-            setShowFaceVerification(true);
+            setShowIntro(true);
         } else {
             // Practice mode - start directly
             startSession();
         }
 
         return () => {
-            Speech.stop();
+            stopTTS();
             if (recording) {
                 recording.stopAndUnloadAsync();
             }
@@ -394,6 +396,90 @@ export default function LiveSessionScreen({
             ))}
         </ScrollView>
     );
+
+    const renderIntro = () => (
+        <SafeAreaView style={styles.container}>
+            <View style={[styles.header, { backgroundColor: '#0056D2', borderBottomWidth: 0, paddingVertical: SPACING.md }]}>
+                <TouchableOpacity style={{ width: 40 }} onPress={() => onEnd()}>
+                    <Ionicons name="chevron-back" size={28} color={COLORS.white} />
+                </TouchableOpacity>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.white, flex: 1, textAlign: 'center', marginRight: 40 }}>
+                    AI dò bài
+                </Text>
+            </View>
+
+            <ScrollView style={{ flex: 1, backgroundColor: COLORS.white }} contentContainerStyle={{ padding: SPACING.md, paddingBottom: 100 }}>
+                {/* Info Items */}
+                <View style={{ marginBottom: SPACING.xl }}>
+                    {[
+                        { icon: 'list', label: 'Số lượng', value: '3 câu hỏi' },
+                        { icon: 'hourglass-outline', label: 'Thời lượng mỗi câu', value: '180 giây' },
+                        { icon: 'document-text-outline', label: 'Tiêu chí đánh giá', value: 'Chuyên môn' },
+                        { icon: 'trophy-outline', label: 'Cách lấy điểm', value: 'Lấy điểm cao nhất' }
+                    ].map((item, index) => (
+                        <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg }}>
+                            <View style={{
+                                width: 40, height: 40, borderRadius: 20,
+                                borderWidth: 1, borderColor: '#0056D2',
+                                alignItems: 'center', justifyContent: 'center',
+                                marginRight: SPACING.md
+                            }}>
+                                <Ionicons name={item.icon as any} size={20} color="#0056D2" />
+                            </View>
+                            <View>
+                                <Text style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 2 }}>{item.label}</Text>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: '#0056D2' }}>{item.value}</Text>
+                            </View>
+                        </View>
+                    ))}
+                </View>
+
+                {/* Notes */}
+                <View>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.md }}>
+                        Lưu ý trước khi bắt đầu
+                    </Text>
+                    {[
+                        "Đảm bảo camera và micro hoạt động tốt.",
+                        "Ngồi ở nơi yên tĩnh, đủ ánh sáng, kết nối Internet ổn định.",
+                        "Trong suốt bài kiểm tra, không rời khỏi màn hình, luôn giữ khuôn mặt chính diện để hệ thống xác thực.",
+                        "Nếu bạn chọn \"Bỏ qua\", hệ thống sẽ chuyển sang câu hỏi tiếp theo và câu đó không được tính điểm. Nếu nhân viên thoát bài thi, hệ thống sẽ ghi nhận kết quả bài thi là Không đạt.",
+                        "Nhân viên được phép thi nhiều lần trong ngày. Hệ thống sẽ lưu lại kết quả của mọi lần thi.",
+                        "Sau khi hoàn thành, kết quả sẽ hiển thị Đạt / Không đạt"
+                    ].map((note, index) => (
+                        <View key={index} style={{ flexDirection: 'row', marginBottom: SPACING.sm }}>
+                            <Text style={{ fontSize: 18, color: COLORS.text, marginRight: SPACING.sm, lineHeight: 24 }}>•</Text>
+                            <Text style={{ flex: 1, fontSize: 14, color: COLORS.text, lineHeight: 22 }}>
+                                {note}
+                            </Text>
+                        </View>
+                    ))}
+                </View>
+            </ScrollView>
+
+            <View style={{ padding: SPACING.md, backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                <TouchableOpacity
+                    style={{
+                        backgroundColor: '#0056D2',
+                        paddingVertical: 16,
+                        borderRadius: BORDER_RADIUS.lg,
+                        alignItems: 'center'
+                    }}
+                    onPress={() => {
+                        setShowIntro(false);
+                        setShowFaceVerification(true);
+                    }}
+                >
+                    <Text style={{ color: COLORS.white, fontSize: 16, fontWeight: 'bold' }}>Bắt đầu kiểm tra</Text>
+                </TouchableOpacity>
+            </View>
+        </SafeAreaView>
+    );
+
+    // Show Intro Screen
+    if (showIntro && isExamMode) {
+        return renderIntro();
+    }
 
     // Show Face Verification Screen for Exam Mode
     if (showFaceVerification && isExamMode) {
