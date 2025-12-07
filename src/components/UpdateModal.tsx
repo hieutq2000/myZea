@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { COLORS, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { getLatestChangelog, ChangelogEntry } from '../utils/changelog';
+import { API_URL } from '../utils/api';
 
 
 
@@ -36,12 +37,26 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
 
     const loadChangelog = async () => {
         setLoading(true);
-        // Simulate a small delay for better UX
-        setTimeout(() => {
-            const data = getLatestChangelog();
-            setChangelog(data);
-            setLoading(false);
-        }, 500);
+        try {
+            // Try to fetch from backend first (has the NEWEST version)
+            const response = await fetch(`${API_URL}/api/changelog/latest`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setChangelog(data);
+                setLoading(false);
+                return;
+            }
+        } catch (error) {
+            console.log('[UpdateModal] Failed to fetch from API, using local');
+        }
+
+        // Fallback to local changelog
+        const data = getLatestChangelog();
+        setChangelog(data);
+        setLoading(false);
     };
 
     return (

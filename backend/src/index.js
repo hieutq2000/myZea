@@ -98,6 +98,25 @@ function authenticateToken(req, res, next) {
 // Latest changelog - used by app to show update info
 const CHANGELOG = [
     {
+        version: "2.5",
+        date: "08/12/2024",
+        title: "Cải tiến giao diện & AI",
+        changes: [
+            "✨ Chuyển kiểm tra cập nhật vào Hồ sơ",
+            "🏆 Đẩy Huy hiệu lên trên, Cài đặt xuống dưới",
+            "🔐 Fix lỗi xác thực khuôn mặt",
+            "🤖 Cập nhật API key Gemini mới",
+        ]
+    },
+    {
+        version: "2.4",
+        date: "08/12/2024",
+        title: "Cải tiến hệ thống",
+        changes: [
+            "Cải tiến một số chức năng của hệ thống",
+        ]
+    },
+    {
         version: "2.3",
         date: "07/12/2024",
         title: "Đăng nhập Face ID",
@@ -105,18 +124,6 @@ const CHANGELOG = [
             "🔐 Đăng nhập với Face ID/Touch ID",
             "📱 Nút Face ID trên màn hình đăng nhập",
             "🛡️ Xác thực sinh trắc học an toàn",
-            "🔧 Fix lỗi xác thực khuôn mặt khi thi",
-        ]
-    },
-    {
-        version: "2.2",
-        date: "07/12/2024",
-        title: "Cải tiến trang Hồ sơ",
-        changes: [
-            "🗑️ Bỏ phần chọn giọng AI",
-            "👤 Tên hiển thị chỉ xem (không sửa)",
-            "🔐 Thêm toggle Đăng nhập Face ID",
-            "🚪 Thêm nút Đăng xuất",
         ]
     },
 ];
