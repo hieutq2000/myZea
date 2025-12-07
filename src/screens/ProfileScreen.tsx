@@ -17,8 +17,11 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Updates from 'expo-updates';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { User, BADGES, LEVEL_THRESHOLDS } from '../types';
+import { getLatestChangelog } from '../utils/changelog';
+import UpdateModal from '../components/UpdateModal';
 
 interface ProfileScreenProps {
     user: User;
@@ -34,6 +37,8 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
     const [faceIdEnabled, setFaceIdEnabled] = useState(false);
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const cameraRef = useRef<CameraView>(null);
+    const [showUpdateModal, setShowUpdateModal] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const isOnboarding = !user.avatar;
 
@@ -69,6 +74,35 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
                 { text: 'Đăng xuất', style: 'destructive', onPress: () => onLogout?.() }
             ]
         );
+    };
+
+    const handleCheckUpdate = async () => {
+        try {
+            Alert.alert('Đang kiểm tra...', 'Đang kết nối tới máy chủ cập nhật...');
+            const update = await Updates.checkForUpdateAsync();
+            if (update.isAvailable) {
+                setShowUpdateModal(true);
+            } else {
+                Alert.alert('Đã cập nhật', 'Bạn đang sử dụng phiên bản mới nhất.');
+            }
+        } catch (error: any) {
+            Alert.alert('Lỗi', `Không thể kiểm tra cập nhật: ${error.message}`);
+        }
+    };
+
+    const handleDownloadUpdate = async () => {
+        try {
+            setIsDownloading(true);
+            await Updates.fetchUpdateAsync();
+            Alert.alert('Hoàn tất!', 'Ứng dụng sẽ khởi động lại ngay.', [
+                { text: 'OK', onPress: () => Updates.reloadAsync() }
+            ]);
+        } catch (error: any) {
+            Alert.alert('Lỗi', `Không thể tải bản cập nhật: ${error.message}`);
+        } finally {
+            setIsDownloading(false);
+            setShowUpdateModal(false);
+        }
     };
 
     const handleTakePhoto = async () => {
@@ -358,6 +392,20 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
                             thumbColor={faceIdEnabled ? COLORS.primary : '#f4f3f4'}
                         />
                     </View>
+
+                    {/* App Update Row */}
+                    <TouchableOpacity style={styles.settingRow} onPress={handleCheckUpdate}>
+                        <View style={styles.settingInfo}>
+                            <View style={[styles.settingIconContainer, { backgroundColor: '#DCFCE7' }]}>
+                                <Ionicons name="cloud-download-outline" size={22} color="#16A34A" />
+                            </View>
+                            <View>
+                                <Text style={styles.settingLabel}>Cập nhật ứng dụng</Text>
+                                <Text style={styles.settingDesc}>Phiên bản hiện tại: v{getLatestChangelog()?.version || '?'}</Text>
+                            </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+                    </TouchableOpacity>
                 </View>
 
                 {/* Badges */}
@@ -415,6 +463,14 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
 
                 <View style={{ height: 100 }} />
             </ScrollView>
+
+            {/* Update Modal */}
+            <UpdateModal
+                visible={showUpdateModal}
+                onUpdate={handleDownloadUpdate}
+                onClose={() => setShowUpdateModal(false)}
+                isDownloading={isDownloading}
+            />
         </SafeAreaView>
     );
 }
