@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Updates from 'expo-updates';
 import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
+import UpdateModal from '../components/UpdateModal';
 import { User, LiveMode, TargetAudience, Topic, TOPIC_LABELS, TOPIC_ICONS } from '../types';
 
 interface HomeScreenProps {
@@ -26,29 +27,35 @@ interface HomeScreenProps {
 export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSession }: HomeScreenProps) {
     const [selectedMode, setSelectedMode] = useState<LiveMode | null>(null);
     const [targetAudience, setTargetAudience] = useState<TargetAudience>(TargetAudience.GENERAL);
+    const [showUpdateModal, setShowUpdateModal] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const handleDebugUpdate = async () => {
         try {
             Alert.alert('Đang kiểm tra...', 'Đang kết nối tới máy chủ cập nhật...');
             const update = await Updates.checkForUpdateAsync();
             if (update.isAvailable) {
-                Alert.alert('Có bản cập nhật mới!', 'Phiên bản mới đã sẵn sàng. Tải xuống ngay?', [
-                    { text: 'Để sau', style: 'cancel' },
-                    {
-                        text: 'Cập nhật', onPress: async () => {
-                            Alert.alert('Đang tải xuống...', 'Vui lòng chờ trong giây lát.');
-                            await Updates.fetchUpdateAsync();
-                            Alert.alert('Hoàn tất!', 'Ứng dụng sẽ khởi động lại ngay.', [
-                                { text: 'OK', onPress: () => Updates.reloadAsync() }
-                            ]);
-                        }
-                    }
-                ]);
+                setShowUpdateModal(true);
             } else {
                 Alert.alert('Đã cập nhật', 'Bạn đang sử dụng phiên bản mới nhất.');
             }
         } catch (error: any) {
             Alert.alert('Lỗi', `Không thể kiểm tra cập nhật: ${error.message}`);
+        }
+    };
+
+    const handleDownloadUpdate = async () => {
+        try {
+            setIsDownloading(true);
+            await Updates.fetchUpdateAsync();
+            Alert.alert('Hoàn tất!', 'Ứng dụng sẽ khởi động lại ngay.', [
+                { text: 'OK', onPress: () => Updates.reloadAsync() }
+            ]);
+        } catch (error: any) {
+            Alert.alert('Lỗi', `Không thể tải bản cập nhật: ${error.message}`);
+        } finally {
+            setIsDownloading(false);
+            setShowUpdateModal(false);
         }
     };
 
@@ -335,6 +342,13 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
 
                 <View style={{ height: 40 }} />
             </ScrollView>
+            {/* Update Modal */}
+            <UpdateModal
+                visible={showUpdateModal}
+                onUpdate={handleDownloadUpdate}
+                onClose={() => setShowUpdateModal(false)}
+                isDownloading={isDownloading}
+            />
         </SafeAreaView>
     );
 }

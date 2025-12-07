@@ -9,14 +9,10 @@ import {
     ScrollView,
     ActivityIndicator,
 } from 'react-native';
-import { COLORS, BORDER_RADIUS, SHADOWS, API_URL } from '../utils/theme';
+import { COLORS, BORDER_RADIUS, SHADOWS } from '../utils/theme';
+import { getLatestChangelog, ChangelogEntry } from '../utils/changelog';
 
-interface ChangelogEntry {
-    version: string;
-    date: string;
-    title: string;
-    changes: string[];
-}
+
 
 interface UpdateModalProps {
     visible: boolean;
@@ -31,26 +27,21 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
     const [changelog, setChangelog] = useState<ChangelogEntry | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // Fetch latest changelog from server
+    // Load latest changelog
     useEffect(() => {
         if (visible) {
-            fetchChangelog();
+            loadChangelog();
         }
     }, [visible]);
 
-    const fetchChangelog = async () => {
+    const loadChangelog = async () => {
         setLoading(true);
-        try {
-            const response = await fetch(`${API_URL}/api/changelog/latest`);
-            if (response.ok) {
-                const data = await response.json();
-                setChangelog(data);
-            }
-        } catch (error) {
-            console.log('[UpdateModal] Failed to fetch changelog:', error);
-        } finally {
+        // Simulate a small delay for better UX
+        setTimeout(() => {
+            const data = getLatestChangelog();
+            setChangelog(data);
             setLoading(false);
-        }
+        }, 500);
     };
 
     return (

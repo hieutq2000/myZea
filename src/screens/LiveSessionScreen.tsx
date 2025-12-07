@@ -220,6 +220,8 @@ export default function LiveSessionScreen({
 
             if (isExamMode) {
                 speakText("Đang quét an ninh. Vui lòng nhìn thẳng vào camera...");
+            } else {
+                speakText("Xin chào! Đang kết nối với gia sư AI. Vui lòng đợi trong giây lát...");
             }
 
             // Wait for face detection before starting
