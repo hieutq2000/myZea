@@ -180,7 +180,19 @@ export default function FaceVerificationScreen({
         onVerified(); // Allow to proceed with warning
     };
 
-    if (!cameraPermission?.granted) {
+    // Show loading while checking permission
+    if (!cameraPermission) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.permissionContainer}>
+                    <ActivityIndicator size="large" color={COLORS.primary} />
+                    <Text style={styles.permissionText}>Đang kiểm tra quyền camera...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (!cameraPermission.granted) {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.permissionContainer}>
@@ -190,6 +202,9 @@ export default function FaceVerificationScreen({
                     </Text>
                     <TouchableOpacity style={styles.permissionBtn} onPress={requestCameraPermission}>
                         <Text style={styles.permissionBtnText}>Cấp quyền Camera</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.permissionBtn, { marginTop: 10, backgroundColor: COLORS.textMuted }]} onPress={onVerified}>
+                        <Text style={styles.permissionBtnText}>Bỏ qua xác thực</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>

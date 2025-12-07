@@ -90,4 +90,4 @@ export const SHADOWS = {
 };
 
 // API Key - Recommend: Make repo PRIVATE or restrict key in Google Cloud Console
-export const GEMINI_API_KEY = 'AIzaSyBqPEWwqb5vl4iImITXNp1YFRZGCnTTpLI';
+export const GEMINI_API_KEY = 'AIzaSyCIDItsEo5ACD6BFoqJ0Vl__l4dYi200ZM';
