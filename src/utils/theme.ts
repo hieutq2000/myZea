@@ -89,4 +89,4 @@ export const SHADOWS = {
     },
 };
 
-export const GEMINI_API_KEY = 'AIzaSyA1uWcXVWFWfoyhAicrqgcOa3BY33ohGXo';
+export const GEMINI_API_KEY = 'AIzaSyAcjkuETt4Rn9lZCvqWL5jmrPziNKIFflE';

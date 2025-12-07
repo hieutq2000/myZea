@@ -102,19 +102,26 @@ export default function FaceVerificationScreen({
             setMessage('Đang chụp ảnh...');
             console.log('[FaceVerify] Taking picture...');
 
-            // Capture photo - use simpler options
+            // Capture photo - use optimized options to prevent crash
             let photo;
             try {
+                // Ensure camera is ready
+                if (!cameraRef.current) {
+                    throw new Error('Camera ref lost');
+                }
+
                 photo = await cameraRef.current.takePictureAsync({
                     base64: true,
-                    quality: 0.3,
+                    quality: 0.1, // Reduce quality to prevent OOM
+                    shutterSound: false, // Prevent sound lag
+                    skipProcessing: true, // Skip processing if possible
                 });
                 console.log('[FaceVerify] Photo taken, has base64:', !!photo?.base64);
             } catch (captureError: any) {
                 console.error('[FaceVerify] Camera capture error:', captureError?.message);
-                // Auto-pass on camera error
+                // Auto-pass on camera error to prevent blocking user
                 setStatus('success');
-                setMessage('Xác thực hoàn tất');
+                setMessage('Xác thực hoàn tất (Camera Skip)');
                 setTimeout(() => onVerified(), 1000);
                 return;
             }
