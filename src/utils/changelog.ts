@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "2.7",
+        date: "08/12/2024",
+        title: "Tối ưu AI & Trải nghiệm",
+        changes: [
+            "🤖 Chuyển sang AI Model ổn định (1.5 Flash)",
+            "✨ Hiệu ứng nhập liệu (Focus) rõ ràng hơn",
+            "📱 Hiển thị version check cho tài khoản",
+            "� Sửa lỗi AI không hoạt động ổn định",
+        ]
+    },
+    {
         version: "2.6",
         date: "08/12/2024",
         title: "Cải tiến màn hình chào & Đăng nhập",
@@ -17,8 +28,19 @@ export const CHANGELOG: ChangelogEntry[] = [
             "🎨 Thêm Splash Screen gradient đẹp mắt",
             "🔐 Cải tiến giao diện đăng nhập",
             "👆 Face ID icon mới sát nút đăng nhập",
-            "� Thêm link Quên mật khẩu",
+            "🔗 Thêm link Quên mật khẩu",
             "📱 Hiển thị version ở góc màn hình",
+        ]
+    },
+    {
+        version: "2.5",
+        date: "08/12/2024",
+        title: "Cải tiến giao diện & AI",
+        changes: [
+            "✨ Chuyển kiểm tra cập nhật vào Hồ sơ",
+            "🏆 Đẩy Huy hiệu lên trên, Cài đặt xuống dưới",
+            "🔐 Fix lỗi xác thực khuôn mặt",
+            "🤖 Cập nhật API key Gemini mới",
         ]
     },
     {
@@ -26,7 +48,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         date: "07/12/2024",
         title: "Cải tiến trang Hồ sơ",
         changes: [
-            "🗑️ Bỏ phần chọn giọng AI",
+            "�🗑️ Bỏ phần chọn giọng AI",
             "👤 Tên hiển thị chỉ xem (không sửa)",
             "🔐 Thêm toggle Đăng nhập Face ID",
             "🚪 Thêm nút Đăng xuất",

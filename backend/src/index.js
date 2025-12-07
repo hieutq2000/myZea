@@ -98,7 +98,17 @@ function authenticateToken(req, res, next) {
 // Latest changelog - used by app to show update info
 const CHANGELOG = [
     {
-        version: "2.6",
+        version: "2.7",
+        date: "08/12/2024",
+        title: "Tối ưu AI & Trải nghiệm",
+        changes: [
+            "🤖 Chuyển sang AI Model ổn định (1.5 Flash)",
+            "✨ Hiệu ứng nhập liệu (Focus) rõ ràng hơn",
+            "📱 Hiển thị version check cho tài khoản",
+            "🐛 Sửa lỗi AI không hoạt động ổn định",
+        ]
+    },
+    {
         date: "08/12/2024",
         title: "Cải tiến màn hình chào & Đăng nhập",
         changes: [
@@ -370,7 +380,7 @@ app.post('/api/ai/generate', authenticateToken, async (req, res) => {
         }
 
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -438,7 +448,7 @@ Lưu ý: confidence >= 60 là match thành công. Nếu ảnh mờ hoặc khó n
         }];
 
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

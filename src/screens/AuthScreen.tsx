@@ -36,6 +36,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [faceIdEnabled, setFaceIdEnabled] = useState(false);
     const [hasBiometrics, setHasBiometrics] = useState(false);
     const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
+    const [focusedField, setFocusedField] = useState<'EMAIL' | 'PASSWORD' | 'NAME' | null>(null);
 
     // Load saved credentials and Face ID setting on mount
     useEffect(() => {
@@ -197,19 +198,27 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Email</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[
+                                styles.input,
+                                focusedField === 'EMAIL' && styles.inputFocused
+                            ]}
                             placeholder="email@example.com"
                             value={email}
                             onChangeText={setEmail}
                             keyboardType="email-address"
                             autoCapitalize="none"
                             placeholderTextColor={COLORS.textMuted}
+                            onFocus={() => setFocusedField('EMAIL')}
+                            onBlur={() => setFocusedField(null)}
                         />
                     </View>
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Mật khẩu</Text>
-                        <View style={styles.passwordContainer}>
+                        <View style={[
+                            styles.passwordContainer,
+                            focusedField === 'PASSWORD' && styles.inputFocused
+                        ]}>
                             <TextInput
                                 style={styles.passwordInput}
                                 placeholder="••••••••"
@@ -217,6 +226,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                                 onChangeText={setPassword}
                                 secureTextEntry={!showPassword}
                                 placeholderTextColor={COLORS.textMuted}
+                                onFocus={() => setFocusedField('PASSWORD')}
+                                onBlur={() => setFocusedField(null)}
                             />
                             <TouchableOpacity
                                 style={styles.eyeButton}
@@ -380,6 +391,11 @@ const styles = StyleSheet.create({
         color: COLORS.text,
         borderWidth: 1,
         borderColor: COLORS.border,
+    },
+    inputFocused: {
+        borderColor: COLORS.primary,
+        borderWidth: 2,
+        backgroundColor: COLORS.white,
     },
     gradientButton: {
         paddingVertical: SPACING.md,

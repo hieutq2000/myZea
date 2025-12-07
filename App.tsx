@@ -14,6 +14,7 @@ import {
   BADGES, LEVEL_THRESHOLDS
 } from './src/types';
 import { getCurrentUser, logout as apiLogout, updateProfile, saveExamResult } from './src/utils/api';
+import { getLatestChangelog } from './src/utils/changelog';
 import { COLORS } from './src/utils/theme';
 import { useAppUpdates } from './src/hooks/useAppUpdates';
 
@@ -242,6 +243,14 @@ export default function App() {
           onTabChange={handleTabChange}
         />
       )}
+
+      {/* Version check for logged in users (excluding session mode) */}
+      {user && view !== 'SESSION' && (
+        <View style={{ position: 'absolute', bottom: 90, right: 16, zIndex: -1, opacity: 0.5 }}>
+          <Text style={{ fontSize: 10, color: '#9CA3AF' }}>v{getLatestChangelog()?.version}</Text>
+        </View>
+      )}
+
       <UpdateModal
         visible={isUpdateAvailable}
         isDownloading={isDownloading}
