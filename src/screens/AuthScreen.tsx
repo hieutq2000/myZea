@@ -18,6 +18,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { login, register, checkServerHealth } from '../utils/api';
 import { User, AuthView } from '../types';
+import { getLatestChangelog } from '../utils/changelog';
 
 interface AuthScreenProps {
     onLogin: (user: User) => void;
@@ -31,7 +32,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);
+
     const [faceIdEnabled, setFaceIdEnabled] = useState(false);
     const [hasBiometrics, setHasBiometrics] = useState(false);
     const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
@@ -62,7 +63,6 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             if (savedEmail && savedPassword) {
                 setEmail(savedEmail);
                 setPassword(savedPassword);
-                setRememberMe(true);
                 setHasSavedCredentials(true);
             }
         } catch (e) {
@@ -100,13 +100,9 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
     const saveCredentials = async () => {
         try {
-            if (rememberMe) {
-                await AsyncStorage.setItem('savedEmail', email);
-                await AsyncStorage.setItem('savedPassword', password);
-            } else {
-                await AsyncStorage.removeItem('savedEmail');
-                await AsyncStorage.removeItem('savedPassword');
-            }
+            // Always save credentials for Face ID login
+            await AsyncStorage.setItem('savedEmail', email);
+            await AsyncStorage.setItem('savedPassword', password);
         } catch (e) {
             console.log('Error saving credentials');
         }
@@ -170,7 +166,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 <View style={styles.header}>
                     <Text style={styles.logo}>🎓</Text>
                     <Text style={styles.title}>Vinalive AI</Text>
-                    <Text style={styles.subtitle}>Gia sư AI thông minh</Text>
+                    <Text style={styles.subtitle}>Trợ lý học tập AI cá nhân</Text>
                 </View>
 
                 {/* Form Card */}
@@ -235,50 +231,57 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         </View>
                     </View>
 
-                    {/* Remember Me */}
-                    <TouchableOpacity
-                        style={styles.rememberContainer}
-                        onPress={() => setRememberMe(!rememberMe)}
-                    >
-                        <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                            {rememberMe && <Feather name="check" size={14} color={COLORS.white} />}
-                        </View>
-                        <Text style={styles.rememberText}>Ghi nhớ mật khẩu</Text>
-                    </TouchableOpacity>
-
-                    {/* Face ID Button - only show in login mode when enabled */}
-                    {view === AuthView.LOGIN && faceIdEnabled && hasBiometrics && hasSavedCredentials && (
+                    {/* Login Button Row with Face ID */}
+                    <View style={styles.loginRow}>
                         <TouchableOpacity
-                            style={styles.faceIdButton}
-                            onPress={handleFaceIdLogin}
+                            style={styles.submitButton}
+                            onPress={handleSubmit}
+                            disabled={loading}
                             activeOpacity={0.8}
                         >
-                            <Ionicons name="finger-print" size={24} color={COLORS.primary} />
-                            <Text style={styles.faceIdText}>Đăng nhập với Face ID</Text>
+                            <LinearGradient
+                                colors={COLORS.gradientPrimary as [string, string]}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={styles.gradientButton}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color={COLORS.white} />
+                                ) : (
+                                    <Text style={styles.submitText}>
+                                        {view === AuthView.LOGIN ? 'Đăng Nhập' : 'Đăng Ký'}
+                                    </Text>
+                                )}
+                            </LinearGradient>
+                        </TouchableOpacity>
+
+                        {/* Face ID Button - Icon only, next to login button */}
+                        {view === AuthView.LOGIN && faceIdEnabled && hasBiometrics && hasSavedCredentials && (
+                            <TouchableOpacity
+                                style={styles.faceIdIconButton}
+                                onPress={handleFaceIdLogin}
+                                activeOpacity={0.8}
+                            >
+                                <View style={styles.faceIdIconContainer}>
+                                    <Ionicons name="scan-outline" size={28} color={COLORS.primary} />
+                                </View>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* Forgot Password - only show in login mode */}
+                    {view === AuthView.LOGIN && (
+                        <TouchableOpacity
+                            style={styles.forgotPasswordButton}
+                            onPress={() => Alert.alert(
+                                'Quên mật khẩu',
+                                'Vui lòng liên hệ admin để được hỗ trợ reset mật khẩu.\n\nEmail: support@vinalive.ai',
+                                [{ text: 'Đóng' }]
+                            )}
+                        >
+                            <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
                         </TouchableOpacity>
                     )}
-
-                    <TouchableOpacity
-                        style={styles.submitButton}
-                        onPress={handleSubmit}
-                        disabled={loading}
-                        activeOpacity={0.8}
-                    >
-                        <LinearGradient
-                            colors={COLORS.gradientPrimary as [string, string]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.gradientButton}
-                        >
-                            {loading ? (
-                                <ActivityIndicator color={COLORS.white} />
-                            ) : (
-                                <Text style={styles.submitText}>
-                                    {view === AuthView.LOGIN ? 'Đăng Nhập' : 'Đăng Ký'}
-                                </Text>
-                            )}
-                        </LinearGradient>
-                    </TouchableOpacity>
 
                     <TouchableOpacity
                         style={styles.switchButton}
@@ -297,6 +300,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
                 </View>
             </ScrollView>
+
+            {/* Version Badge - Bottom Right */}
+            <View style={styles.versionBadge}>
+                <Text style={styles.versionText}>v{getLatestChangelog()?.version || '?'}</Text>
+            </View>
         </KeyboardAvoidingView>
     );
 }
@@ -373,11 +381,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: COLORS.border,
     },
-    submitButton: {
-        marginTop: SPACING.lg,
-        borderRadius: BORDER_RADIUS.lg,
-        overflow: 'hidden',
-    },
     gradientButton: {
         paddingVertical: SPACING.md,
         alignItems: 'center',
@@ -414,45 +417,52 @@ const styles = StyleSheet.create({
     eyeButton: {
         padding: SPACING.md,
     },
-    rememberContainer: {
+    loginRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: SPACING.sm,
-        marginBottom: SPACING.sm,
-    },
-    checkbox: {
-        width: 22,
-        height: 22,
-        borderRadius: 6,
-        borderWidth: 2,
-        borderColor: COLORS.border,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: SPACING.sm,
-    },
-    checkboxChecked: {
-        backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
-    },
-    rememberText: {
-        fontSize: 14,
-        color: COLORS.textLight,
-    },
-    faceIdButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: SPACING.md,
-        paddingHorizontal: SPACING.lg,
-        backgroundColor: COLORS.primary + '15',
-        borderRadius: BORDER_RADIUS.lg,
-        marginTop: SPACING.md,
-        marginBottom: SPACING.sm,
+        marginTop: SPACING.lg,
         gap: SPACING.sm,
     },
-    faceIdText: {
-        fontSize: 16,
-        fontWeight: '600',
+    submitButton: {
+        flex: 1,
+        borderRadius: BORDER_RADIUS.lg,
+        overflow: 'hidden',
+    },
+    faceIdIconButton: {
+        width: 52,
+        height: 52,
+        borderRadius: BORDER_RADIUS.lg,
+        backgroundColor: '#E8F4FD',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#B8D4E8',
+    },
+    faceIdIconContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    forgotPasswordButton: {
+        marginTop: SPACING.md,
+        alignItems: 'center',
+    },
+    forgotPasswordText: {
         color: COLORS.primary,
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    versionBadge: {
+        position: 'absolute',
+        bottom: 20,
+        right: 20,
+        backgroundColor: 'rgba(0,0,0,0.1)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+    },
+    versionText: {
+        fontSize: 12,
+        color: COLORS.textMuted,
+        fontWeight: '500',
     },
 });

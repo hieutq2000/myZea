@@ -6,6 +6,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import LiveSessionScreen from './src/screens/LiveSessionScreen';
+import SplashScreen from './src/screens/SplashScreen';
 import UpdateModal from './src/components/UpdateModal';
 import BottomTabBar, { TabType } from './src/components/BottomTabBar';
 import {
@@ -31,6 +32,7 @@ export default function App() {
   const [view, setView] = useState<ViewType>('AUTH');
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
 
   // Check for existing session on app start
   useEffect(() => {
@@ -150,6 +152,11 @@ export default function App() {
     setSessionConfig(null);
     setView('HOME');
   };
+
+  // Custom Splash Screen
+  if (showSplash) {
+    return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
 
   // Loading screen
   if (loading) {
