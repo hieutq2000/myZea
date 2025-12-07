@@ -174,6 +174,7 @@ export default function App() {
             user={user}
             onUpdate={handleUpdateUser}
             onCancel={() => setView('HOME')}
+            onLogout={handleLogout}
           />
         );
 

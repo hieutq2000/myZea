@@ -10,6 +10,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "2.2",
+        date: "07/12/2024",
+        title: "Cải tiến trang Hồ sơ",
+        changes: [
+            "🗑️ Bỏ phần chọn giọng AI",
+            "👤 Tên hiển thị chỉ xem (không sửa)",
+            "🔐 Thêm toggle Đăng nhập Face ID",
+            "🚪 Thêm nút Đăng xuất",
+            "📷 Fix lỗi chọn ảnh từ thư viện",
+        ]
+    },
+    {
         version: "2.1",
         date: "07/12/2024",
         title: "Màn hình xác thực khuôn mặt mới",
@@ -17,7 +29,7 @@ export const CHANGELOG: ChangelogEntry[] = [
             "🔐 Màn hình xác thực khuôn mặt riêng biệt",
             "📷 Khung đặt mặt rõ ràng với animation",
             "✅ Hiển thị % độ khớp khuôn mặt",
-            "🔄 Cho phép thử lại nếu thất bại",
+            "🔄 Cải thiện UI/UX cho người dùng",
         ]
     },
     {

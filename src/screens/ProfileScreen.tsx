@@ -1,8 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
-    TextInput,
     TouchableOpacity,
     StyleSheet,
     ScrollView,
@@ -11,30 +10,66 @@ import {
     Alert,
     StatusBar,
     Modal,
+    Switch,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
-import { User, AiVoice, VOICE_LABELS, BADGES, LEVEL_THRESHOLDS } from '../types';
+import { User, BADGES, LEVEL_THRESHOLDS } from '../types';
 
 interface ProfileScreenProps {
     user: User;
     onUpdate: (user: User) => void;
     onCancel: () => void;
+    onLogout?: () => void;
 }
 
-export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScreenProps) {
-    const [name, setName] = useState(user.name);
+export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: ProfileScreenProps) {
     const [avatar, setAvatar] = useState<string | undefined>(user.avatar);
-    const [voice, setVoice] = useState<AiVoice>(user.voice || AiVoice.KORE);
     const [showCamera, setShowCamera] = useState(false);
     const [showImageOptions, setShowImageOptions] = useState(false);
+    const [faceIdEnabled, setFaceIdEnabled] = useState(false);
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const cameraRef = useRef<CameraView>(null);
 
     const isOnboarding = !user.avatar;
+
+    // Load Face ID setting
+    useEffect(() => {
+        loadFaceIdSetting();
+    }, []);
+
+    const loadFaceIdSetting = async () => {
+        try {
+            const saved = await AsyncStorage.getItem('faceIdEnabled');
+            setFaceIdEnabled(saved === 'true');
+        } catch (e) {
+            console.log('Error loading Face ID setting');
+        }
+    };
+
+    const toggleFaceId = async (value: boolean) => {
+        setFaceIdEnabled(value);
+        try {
+            await AsyncStorage.setItem('faceIdEnabled', value.toString());
+        } catch (e) {
+            console.log('Error saving Face ID setting');
+        }
+    };
+
+    const handleLogout = () => {
+        Alert.alert(
+            'Đăng xuất',
+            'Bạn có chắc muốn đăng xuất?',
+            [
+                { text: 'Hủy', style: 'cancel' },
+                { text: 'Đăng xuất', style: 'destructive', onPress: () => onLogout?.() }
+            ]
+        );
+    };
 
     const handleTakePhoto = async () => {
         setShowImageOptions(false);
@@ -68,16 +103,47 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
 
     const handlePickImage = async () => {
         setShowImageOptions(false);
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.7,
-            base64: true,
-        });
 
-        if (!result.canceled && result.assets[0]?.base64) {
-            setAvatar(`data:image/jpeg;base64,${result.assets[0].base64}`);
+        try {
+            // Request permission first
+            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+            if (!permissionResult.granted) {
+                Alert.alert(
+                    'Quyền truy cập',
+                    'Cần quyền truy cập thư viện ảnh để chọn ảnh đại diện',
+                    [{ text: 'Đóng' }]
+                );
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.7,
+                base64: true,
+            });
+
+            console.log('[ImagePicker] Result:', result.canceled, result.assets?.length);
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const asset = result.assets[0];
+
+                if (asset.base64) {
+                    setAvatar(`data:image/jpeg;base64,${asset.base64}`);
+                    console.log('[ImagePicker] Avatar set successfully');
+                } else if (asset.uri) {
+                    // Fallback: use URI if base64 not available
+                    setAvatar(asset.uri);
+                    console.log('[ImagePicker] Using URI fallback:', asset.uri);
+                } else {
+                    Alert.alert('Lỗi', 'Không thể đọc ảnh đã chọn');
+                }
+            }
+        } catch (error) {
+            console.error('[ImagePicker] Error:', error);
+            Alert.alert('Lỗi', 'Không thể mở thư viện ảnh. Vui lòng thử lại.');
         }
     };
 
@@ -86,7 +152,7 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
             Alert.alert('Thông báo', 'Bạn cần chụp hoặc tải ảnh đại diện để tiếp tục!');
             return;
         }
-        onUpdate({ ...user, name, avatar, voice });
+        onUpdate({ ...user, avatar });
     };
 
     const currentLevel = user.level || 1;
@@ -250,64 +316,47 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
                     </View>
                 </View>
 
-                {/* Name Input */}
+                {/* Personal Info - Read Only */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <Feather name="user" size={20} color={COLORS.primary} />
                         <Text style={styles.cardTitle}>Thông tin cá nhân</Text>
                     </View>
 
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Tên hiển thị</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={name}
-                            onChangeText={setName}
-                            placeholder="Nhập tên của bạn"
-                            placeholderTextColor={COLORS.textMuted}
-                        />
+                    <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Tên hiển thị</Text>
+                        <Text style={styles.infoValue}>{user.name}</Text>
+                    </View>
+
+                    <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Email</Text>
+                        <Text style={styles.infoValue}>{user.email}</Text>
                     </View>
                 </View>
 
-                {/* Voice Selection */}
+                {/* Settings */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
-                        <MaterialIcons name="record-voice-over" size={20} color={COLORS.primary} />
-                        <Text style={styles.cardTitle}>Giọng gia sư AI</Text>
+                        <Ionicons name="settings-outline" size={20} color={COLORS.primary} />
+                        <Text style={styles.cardTitle}>Cài đặt</Text>
                     </View>
 
-                    <View style={styles.voiceGrid}>
-                        {Object.values(AiVoice).map((v) => (
-                            <TouchableOpacity
-                                key={v}
-                                style={[
-                                    styles.voiceCard,
-                                    voice === v && styles.voiceCardActive
-                                ]}
-                                onPress={() => setVoice(v)}
-                            >
-                                <View style={[
-                                    styles.voiceIcon,
-                                    voice === v && styles.voiceIconActive
-                                ]}>
-                                    <Text style={styles.voiceEmoji}>
-                                        {VOICE_LABELS[v].gender === 'female' ? '👩‍🏫' : '👨‍🏫'}
-                                    </Text>
-                                </View>
-                                <Text style={[
-                                    styles.voiceLabel,
-                                    voice === v && styles.voiceLabelActive
-                                ]}>
-                                    {VOICE_LABELS[v].label}
-                                </Text>
-                                <Text style={styles.voiceDesc}>{VOICE_LABELS[v].desc}</Text>
-                                {voice === v && (
-                                    <View style={styles.voiceCheck}>
-                                        <Ionicons name="checkmark" size={14} color={COLORS.white} />
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        ))}
+                    <View style={styles.settingRow}>
+                        <View style={styles.settingInfo}>
+                            <View style={styles.settingIconContainer}>
+                                <Ionicons name="finger-print" size={22} color={COLORS.primary} />
+                            </View>
+                            <View>
+                                <Text style={styles.settingLabel}>Đăng nhập Face ID</Text>
+                                <Text style={styles.settingDesc}>Xác thực khuôn mặt khi đăng nhập</Text>
+                            </View>
+                        </View>
+                        <Switch
+                            value={faceIdEnabled}
+                            onValueChange={toggleFaceId}
+                            trackColor={{ false: COLORS.border, true: COLORS.primary + '60' }}
+                            thumbColor={faceIdEnabled ? COLORS.primary : '#f4f3f4'}
+                        />
                     </View>
                 </View>
 
@@ -355,6 +404,14 @@ export default function ProfileScreen({ user, onUpdate, onCancel }: ProfileScree
                         <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
                     </LinearGradient>
                 </TouchableOpacity>
+
+                {/* Logout Button - only show if not onboarding */}
+                {!isOnboarding && onLogout && (
+                    <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                        <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
+                        <Text style={styles.logoutText}>Đăng xuất</Text>
+                    </TouchableOpacity>
+                )}
 
                 <View style={{ height: 100 }} />
             </ScrollView>
@@ -741,5 +798,67 @@ const styles = StyleSheet.create({
         height: 60,
         borderRadius: 30,
         backgroundColor: COLORS.white,
+    },
+    infoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: SPACING.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+    },
+    infoLabel: {
+        fontSize: 14,
+        color: COLORS.textMuted,
+    },
+    infoValue: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: COLORS.text,
+    },
+    settingRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: SPACING.sm,
+    },
+    settingInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    settingIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        backgroundColor: COLORS.primary + '15',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: SPACING.md,
+    },
+    settingLabel: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: COLORS.text,
+    },
+    settingDesc: {
+        fontSize: 12,
+        color: COLORS.textMuted,
+        marginTop: 2,
+    },
+    logoutBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: SPACING.lg,
+        paddingVertical: SPACING.md,
+        backgroundColor: COLORS.error + '10',
+        borderRadius: BORDER_RADIUS.lg,
+        gap: SPACING.sm,
+    },
+    logoutText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: COLORS.error,
     },
 });

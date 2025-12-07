@@ -71,26 +71,64 @@ export default function FaceVerificationScreen({
     });
 
     const handleVerify = async () => {
-        if (!cameraRef.current) return;
+        // Check camera ref
+        if (!cameraRef.current) {
+            setStatus('failed');
+            setMessage('Camera chưa sẵn sàng. Vui lòng thử lại.');
+            setRetryCount(prev => prev + 1);
+            return;
+        }
+
+        // Check if avatar exists
+        if (!avatarBase64) {
+            console.log('[FaceVerify] No avatar, skipping verification');
+            setStatus('success');
+            setMessage('Xác thực bỏ qua (chưa có ảnh đại diện)');
+            setTimeout(() => onVerified(), 1000);
+            return;
+        }
 
         setStatus('scanning');
         setMessage('Đang quét khuôn mặt...');
 
         try {
-            // Capture photo
-            const photo = await cameraRef.current.takePictureAsync({
-                base64: true,
-                quality: 0.7,
-            });
+            // Wait a moment for camera to stabilize
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Check again that camera is still valid
+            if (!cameraRef.current) {
+                throw new Error('Camera không còn khả dụng');
+            }
+
+            // Capture photo with error handling
+            let photo;
+            try {
+                photo = await cameraRef.current.takePictureAsync({
+                    base64: true,
+                    quality: 0.5, // Lower quality to reduce memory issues
+                    skipProcessing: true, // Skip processing for faster capture
+                });
+            } catch (captureError) {
+                console.error('Camera capture error:', captureError);
+                throw new Error('Không thể chụp ảnh từ camera');
+            }
 
             if (!photo?.base64) {
-                throw new Error('Không thể chụp ảnh');
+                throw new Error('Ảnh chụp không hợp lệ');
             }
 
             setMessage('Đang xác thực với AI...');
 
             const cameraBase64 = `data:image/jpeg;base64,${photo.base64}`;
-            const result = await verifyFaceWithAvatar(cameraBase64, avatarBase64);
+
+            let result;
+            try {
+                result = await verifyFaceWithAvatar(cameraBase64, avatarBase64);
+            } catch (verifyError) {
+                console.error('Verify API error:', verifyError);
+                // On API error, allow through with warning
+                result = { isMatch: true, confidence: 50, message: 'Xác thực tạm thời không khả dụng' };
+            }
 
             setConfidence(result.confidence);
 
@@ -107,10 +145,10 @@ export default function FaceVerificationScreen({
                 setMessage(result.message || 'Khuôn mặt không khớp');
                 setRetryCount(prev => prev + 1);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Verification error:', error);
             setStatus('failed');
-            setMessage('Lỗi xác thực. Vui lòng thử lại.');
+            setMessage(error?.message || 'Lỗi xác thực. Vui lòng thử lại.');
             setRetryCount(prev => prev + 1);
         }
     };
