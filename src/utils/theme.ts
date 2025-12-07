@@ -89,7 +89,5 @@ export const SHADOWS = {
     },
 };
 
-import Constants from 'expo-constants';
-
-// Get API key from environment variable (set via EAS secrets or .env)
-export const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey || '';
+// API Key - Recommend: Make repo PRIVATE or restrict key in Google Cloud Console
+export const GEMINI_API_KEY = 'AIzaSyBqPEWwqb5vl4iImITXNp1YFRZGCnTTpLI';

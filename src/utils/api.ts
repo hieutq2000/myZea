@@ -152,3 +152,36 @@ export async function checkServerHealth(): Promise<boolean> {
         return false;
     }
 }
+
+// ============ AI PROXY API ============
+
+export interface AIGenerateResponse {
+    text: string;
+    raw?: any;
+}
+
+export async function generateAIContent(
+    prompt: string,
+    images?: string[]
+): Promise<AIGenerateResponse> {
+    return apiRequest<AIGenerateResponse>('/api/ai/generate', {
+        method: 'POST',
+        body: JSON.stringify({ prompt, images }),
+    });
+}
+
+export interface FaceVerifyResponse {
+    isMatch: boolean;
+    confidence: number;
+    message: string;
+}
+
+export async function verifyFaceViaBackend(
+    cameraImage: string,
+    avatarImage: string
+): Promise<FaceVerifyResponse> {
+    return apiRequest<FaceVerifyResponse>('/api/ai/verify-face', {
+        method: 'POST',
+        body: JSON.stringify({ cameraImage, avatarImage }),
+    });
+}
