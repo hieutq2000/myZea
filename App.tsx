@@ -4,8 +4,10 @@ import { ActivityIndicator, View, Text } from 'react-native';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
 import LiveSessionScreen from './src/screens/LiveSessionScreen';
 import UpdateModal from './src/components/UpdateModal';
+import BottomTabBar, { TabType } from './src/components/BottomTabBar';
 import {
   User, ExamResult, LiveMode, Topic, TargetAudience,
   BADGES, LEVEL_THRESHOLDS
@@ -14,7 +16,7 @@ import { getCurrentUser, logout as apiLogout, updateProfile, saveExamResult } fr
 import { COLORS } from './src/utils/theme';
 import { useAppUpdates } from './src/hooks/useAppUpdates';
 
-type ViewType = 'AUTH' | 'HOME' | 'PROFILE' | 'SESSION';
+type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'PROFILE' | 'SESSION';
 
 interface SessionConfig {
   mode: LiveMode;
@@ -190,6 +192,9 @@ export default function App() {
           />
         );
 
+      case 'HISTORY':
+        return <HistoryScreen user={user} />;
+
       case 'HOME':
       default:
         return (
@@ -203,16 +208,38 @@ export default function App() {
     }
   };
 
+  // Map view to tab
+  const getActiveTab = (): TabType => {
+    if (view === 'HOME') return 'HOME';
+    if (view === 'HISTORY') return 'HISTORY';
+    if (view === 'PROFILE') return 'PROFILE';
+    return 'HOME';
+  };
+
+  // Handle tab change
+  const handleTabChange = (tab: TabType) => {
+    setView(tab as ViewType);
+  };
+
+  // Check if should show tab bar (only when logged in and not in session)
+  const shouldShowTabBar = user && view !== 'AUTH' && view !== 'SESSION';
+
   return (
-    <>
+    <View style={{ flex: 1 }}>
       <StatusBar style="dark" />
       {renderScreen()}
+      {shouldShowTabBar && (
+        <BottomTabBar
+          activeTab={getActiveTab()}
+          onTabChange={handleTabChange}
+        />
+      )}
       <UpdateModal
         visible={isUpdateAvailable}
         isDownloading={isDownloading}
         onUpdate={downloadAndApply}
         onClose={dismissUpdate}
       />
-    </>
+    </View>
   );
 }

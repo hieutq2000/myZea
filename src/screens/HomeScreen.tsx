@@ -244,7 +244,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
 
                     <View style={styles.headerInfo}>
                         <TouchableOpacity onPress={handleDebugUpdate}>
-                            <Text style={styles.greeting}>Xin chào (v1.8) 🔐</Text>
+                            <Text style={styles.greeting}>Xin chào (v1.9) 📱</Text>
                             <Text style={[styles.greeting, { fontSize: 10, color: COLORS.primary }]}>Chạm để kiểm tra cập nhật</Text>
                         </TouchableOpacity>
                         <Text style={styles.userName} numberOfLines={1}>{user.name || 'Học viên'}</Text>

@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "1.9",
+        date: "07/12/2024",
+        title: "Thêm thanh Tab điều hướng",
+        changes: [
+            "📱 Thêm Bottom Tab Bar hiện đại",
+            "📊 Thêm màn hình Lịch sử bài thi",
+            "🏠 Điều hướng dễ dàng giữa các trang",
+        ]
+    },
+    {
         version: "1.8",
         date: "07/12/2024",
         title: "Cải tiến màn hình Đăng nhập",
