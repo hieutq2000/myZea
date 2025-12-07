@@ -89,4 +89,7 @@ export const SHADOWS = {
     },
 };
 
-export const GEMINI_API_KEY = 'AIzaSyAcjkuETt4Rn9lZCvqWL5jmrPziNKIFflE';
+import Constants from 'expo-constants';
+
+// Get API key from environment variable (set via EAS secrets or .env)
+export const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey || '';

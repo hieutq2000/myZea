@@ -30,6 +30,7 @@ jobs:
       - name: 🔍 Check Token & Publish
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           EAS_NO_VCS: 1
         run: |
           echo "--- DEBUG INFO ---"
