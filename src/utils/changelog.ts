@@ -10,17 +10,6 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
-        version: "2.4",
-        date: "07/12/2024",
-        title: "Cập nhật Giao diện & Hiệu năng",
-        changes: [
-            "✨ Màn hình hướng dẫn 'AI Dò Bài' mới",
-            "�️ Thêm lời chào AI khi vào luyện tập",
-            "� Sửa lỗi hiển thị nội dung cập nhật",
-            "🎨 Cải thiện UI/UX trải nghiệm người dùng",
-        ]
-    },
-    {
         version: "2.3",
         date: "07/12/2024",
         title: "Đăng nhập Face ID",
