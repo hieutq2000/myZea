@@ -176,10 +176,14 @@ export interface FaceVerifyResponse {
     message: string;
 }
 
-return apiRequest<FaceVerifyResponse>('/api/ai/verify-face', {
-    method: 'POST',
-    body: JSON.stringify({ cameraImage, avatarImage }),
-});
+export async function verifyFaceViaBackend(
+    cameraImage: string,
+    avatarImage: string
+): Promise<FaceVerifyResponse> {
+    return apiRequest<FaceVerifyResponse>('/api/ai/verify-face', {
+        method: 'POST',
+        body: JSON.stringify({ cameraImage, avatarImage }),
+    });
 }
 
 // ============ CHAT API ============
