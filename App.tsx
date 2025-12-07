@@ -26,7 +26,16 @@ interface SessionConfig {
   audience: TargetAudience;
 }
 
-export default function App() {
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import { RootStackParamList } from './src/navigation/types';
+import ChatListScreen from './src/screens/ChatListScreen';
+import ChatDetailScreen from './src/screens/ChatDetailScreen';
+import { initSocket, disconnectSocket } from './src/utils/socket';
+
+const Stack = createStackNavigator<RootStackParamList>();
+
+function AppContent() {
   const { isUpdateAvailable, isDownloading, downloadAndApply, dismissUpdate } = useAppUpdates();
 
   const [user, setUser] = useState<User | null>(null);
@@ -35,6 +44,15 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
 
+  // Socket management
+  useEffect(() => {
+    if (user?.id) {
+      initSocket(user.id);
+    } else {
+      disconnectSocket();
+    }
+  }, [user?.id]);
+
   // Check for existing session on app start
   useEffect(() => {
     checkExistingSession();
@@ -42,7 +60,6 @@ export default function App() {
 
   const checkExistingSession = async () => {
     try {
-      // Try to get user from API (requires server connection)
       const apiUser = await getCurrentUser();
       if (apiUser) {
         setUser(apiUser);
@@ -50,7 +67,6 @@ export default function App() {
       }
     } catch (error) {
       console.error('Session check error:', error);
-      // No offline fallback - user must login
     } finally {
       setLoading(false);
     }
@@ -85,6 +101,7 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await apiLogout();
+      disconnectSocket(); // Disconnect socket on logout
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -137,7 +154,7 @@ export default function App() {
 
       setUser(updatedUser);
 
-      // Save to server (required)
+      // Save to server
       try {
         await saveExamResult(
           result.score as 'ĐẠT' | 'CHƯA ĐẠT',
@@ -230,26 +247,38 @@ export default function App() {
     setView(tab as ViewType);
   };
 
-  // Check if should show tab bar (only when logged in and not in session)
+  // Check if should show tab bar
   const shouldShowTabBar = user && view !== 'AUTH' && view !== 'SESSION';
 
   return (
-    <View style={{ flex: 1 }}>
+    <>
       <StatusBar style="dark" />
-      {renderScreen()}
-      {shouldShowTabBar && (
-        <BottomTabBar
-          activeTab={getActiveTab()}
-          onTabChange={handleTabChange}
-        />
-      )}
 
-      {/* Version check for logged in users (excluding session mode) */}
-      {user && view !== 'SESSION' && (
-        <View style={{ position: 'absolute', bottom: 90, right: 16, zIndex: -1, opacity: 0.5 }}>
-          <Text style={{ fontSize: 10, color: '#9CA3AF' }}>v{getLatestChangelog()?.version}</Text>
-        </View>
-      )}
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Main">
+          {() => (
+            <View style={{ flex: 1 }}>
+              {renderScreen()}
+              {shouldShowTabBar && (
+                <BottomTabBar
+                  activeTab={getActiveTab()}
+                  onTabChange={handleTabChange}
+                />
+              )}
+              {/* Version check for logged in users */}
+              {user && view !== 'SESSION' && (
+                <View style={{ position: 'absolute', bottom: 90, right: 16, zIndex: -1, opacity: 0.5 }}>
+                  <Text style={{ fontSize: 10, color: '#9CA3AF' }}>v{getLatestChangelog()?.version}</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </Stack.Screen>
+
+        {/* Chat Screens */}
+        <Stack.Screen name="ChatList" component={ChatListScreen} />
+        <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
+      </Stack.Navigator>
 
       <UpdateModal
         visible={isUpdateAvailable}
@@ -257,6 +286,14 @@ export default function App() {
         onUpdate={downloadAndApply}
         onClose={dismissUpdate}
       />
-    </View>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <NavigationContainer>
+      <AppContent />
+    </NavigationContainer>
   );
 }
