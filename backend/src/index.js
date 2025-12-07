@@ -691,6 +691,101 @@ Lưu ý: confidence >= 60 là match thành công. Nếu ảnh mờ hoặc khó n
     }
 });
 
+// ============ CHAT API ============
+
+// Get list of conversations
+app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        // Get private conversations with partner info
+        const [rows] = await pool.execute(`
+            SELECT 
+                c.id as conversation_id,
+                u.name,
+                u.avatar,
+                u.id as partner_id,
+                m.content as last_message,
+                m.created_at as last_message_time,
+                (SELECT COUNT(*) FROM messages msg 
+                 WHERE msg.conversation_id = c.id 
+                 AND msg.sender_id != ? 
+                 AND msg.id NOT IN (SELECT message_id FROM message_reads WHERE user_id = ?)
+                ) as unread_count
+            FROM conversations c
+            JOIN conversation_participants cp_me ON cp_me.conversation_id = c.id
+            JOIN conversation_participants cp_other ON cp_other.conversation_id = c.id
+            JOIN users u ON cp_other.user_id = u.id
+            LEFT JOIN messages m ON c.last_message_id = m.id
+            WHERE c.type = 'private' 
+            AND cp_me.user_id = ? 
+            AND cp_other.user_id != ?
+            ORDER BY m.created_at DESC
+        `, [userId, userId, userId, userId]);
+
+        res.json(rows);
+    } catch (error) {
+        console.error('Get conversations error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get chat history with a user
+app.get('/api/chat/history/:partnerId', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const partnerId = req.params.partnerId;
+
+        // Find conversation
+        const [convRows] = await pool.execute(`
+            SELECT c.id 
+            FROM conversations c
+            JOIN conversation_participants cp1 ON c.id = cp1.conversation_id
+            JOIN conversation_participants cp2 ON c.id = cp2.conversation_id
+            WHERE c.type = 'private' 
+            AND cp1.user_id = ? 
+            AND cp2.user_id = ?
+            LIMIT 1
+        `, [userId, partnerId]);
+
+        if (convRows.length === 0) return res.json([]);
+
+        const conversationId = convRows[0].id;
+        const [messages] = await pool.execute(`
+            SELECT id, sender_id, content, created_at, type 
+            FROM messages 
+            WHERE conversation_id = ? 
+            ORDER BY created_at DESC
+            LIMIT 50
+        `, [conversationId]);
+
+        res.json(messages.reverse().map(m => ({
+            _id: m.id,
+            text: m.content,
+            createdAt: m.created_at,
+            user: { _id: m.sender_id }
+        })));
+    } catch (error) {
+        console.error('Get history error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Search users to chat
+app.get('/api/users/search', authenticateToken, async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) return res.json([]);
+
+        const [users] = await pool.execute(
+            'SELECT id, name, avatar FROM users WHERE name LIKE ? AND id != ? LIMIT 10',
+            [`%${q}%`, req.user.id]
+        );
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -717,18 +812,62 @@ io.on('connection', (socket) => {
     });
 
     // Handle sending messages
+    // Handle sending messages
     socket.on('sendMessage', async (data) => {
-        // data: { senderId, receiverId, message, type, conversationId }
+        // data: { senderId, receiverId, message, type = 'text' }
         console.log('Message:', data);
 
-        // Save to DB (logic handled manually or via API call - here assuming API sends socket event)
-        // But typically for best speed, we emit immediately
+        try {
+            let conversationId = null;
 
-        // Emit to receiver
-        io.to(data.receiverId).emit('receiveMessage', data);
+            // Find or create conversation
+            const [convRows] = await pool.execute(`
+                SELECT c.id 
+                FROM conversations c
+                JOIN conversation_participants cp1 ON c.id = cp1.conversation_id
+                JOIN conversation_participants cp2 ON c.id = cp2.conversation_id
+                WHERE c.type = 'private' 
+                AND cp1.user_id = ? 
+                AND cp2.user_id = ?
+                LIMIT 1
+            `, [data.senderId, data.receiverId]);
 
-        // Emit back to sender (confirm)
-        io.to(data.senderId).emit('messageSent', data);
+            if (convRows.length > 0) {
+                conversationId = convRows[0].id;
+            } else {
+                conversationId = uuidv4();
+                await pool.execute('INSERT INTO conversations (id, type) VALUES (?, "private")', [conversationId]);
+                await pool.execute('INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)', [conversationId, data.senderId]);
+                await pool.execute('INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)', [conversationId, data.receiverId]);
+            }
+
+            // Save message
+            const messageId = uuidv4();
+            await pool.execute(
+                'INSERT INTO messages (id, conversation_id, sender_id, content, type) VALUES (?, ?, ?, ?, ?)',
+                [messageId, conversationId, data.senderId, data.message, data.type || 'text']
+            );
+
+            // Update conversation last message
+            await pool.execute('UPDATE conversations SET last_message_id = ? WHERE id = ?', [messageId, conversationId]);
+
+            const fullMessage = {
+                _id: messageId,
+                text: data.message,
+                createdAt: new Date(),
+                user: { _id: data.senderId },
+                conversationId
+            };
+
+            // Emit to receiver
+            io.to(data.receiverId).emit('receiveMessage', fullMessage);
+
+            // Emit back to sender
+            io.to(data.senderId).emit('messageSent', fullMessage);
+
+        } catch (error) {
+            console.error('Save message error:', error);
+        }
     });
 
     // Typing indicators

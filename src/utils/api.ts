@@ -176,12 +176,38 @@ export interface FaceVerifyResponse {
     message: string;
 }
 
-export async function verifyFaceViaBackend(
-    cameraImage: string,
-    avatarImage: string
-): Promise<FaceVerifyResponse> {
-    return apiRequest<FaceVerifyResponse>('/api/ai/verify-face', {
-        method: 'POST',
-        body: JSON.stringify({ cameraImage, avatarImage }),
-    });
+return apiRequest<FaceVerifyResponse>('/api/ai/verify-face', {
+    method: 'POST',
+    body: JSON.stringify({ cameraImage, avatarImage }),
+});
+}
+
+// ============ CHAT API ============
+
+export interface ChatUser {
+    id: string;
+    name: string;
+    avatar?: string;
+}
+
+export interface Conversation {
+    conversation_id: string;
+    partner_id: string;
+    name: string;
+    avatar?: string; // Partner avatar
+    last_message?: string;
+    last_message_time?: string;
+    unread_count?: number;
+}
+
+export async function getConversations(): Promise<Conversation[]> {
+    return apiRequest<Conversation[]>('/api/chat/conversations');
+}
+
+export async function getChatHistory(partnerId: string): Promise<any[]> {
+    return apiRequest<any[]>(`/api/chat/history/${partnerId}`);
+}
+
+export async function searchUsers(query: string): Promise<ChatUser[]> {
+    return apiRequest<ChatUser[]>(`/api/users/search?q=${encodeURIComponent(query)}`);
 }

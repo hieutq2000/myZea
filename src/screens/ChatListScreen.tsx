@@ -12,40 +12,46 @@ import { LinearGradient } from 'expo-linear-gradient';
 const ZALO_BLUE = '#0068FF';
 const ZALO_BG = '#F2F4F8';
 
+import { getConversations, Conversation } from '../utils/api';
+
 export default function ChatListScreen() {
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
     const [conversations, setConversations] = useState<any[]>([]);
     const [searchText, setSearchText] = useState('');
+    const [loading, setLoading] = useState(true);
+
+    const loadConversations = async () => {
+        try {
+            const data = await getConversations();
+            // Map API data to UI model
+            const mapped = data.map((c: Conversation) => ({
+                id: c.conversation_id,
+                partnerId: c.partner_id,
+                name: c.name,
+                lastMessage: c.last_message || 'Bắt đầu cuộc trò chuyện',
+                time: c.last_message_time ? new Date(c.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+                avatar: c.avatar,
+                unread: c.unread_count || 0,
+                isOnline: false // Todo: checking online status
+            }));
+            setConversations(mapped);
+        } catch (error) {
+            console.log('Load conversations error:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        // Mock data
-        setConversations([
-            {
-                id: '1',
-                name: 'Trợ lý AI',
-                lastMessage: 'Bạn cần hỗ trợ gì hôm nay?',
-                time: '10:30',
-                avatar: null,
-                unread: 2,
-                isOnline: true
-            },
-            {
-                id: '2',
-                name: 'Nhóm Học Tập',
-                lastMessage: 'Tuấn: Bài tập tối nay khó quá!',
-                time: '09:15',
-                avatar: null,
-                unread: 0,
-                isGroup: true
-            }
-        ]);
+        loadConversations();
 
         const socket = getSocket();
         if (socket) {
-            // Listen for new messages
-            socket.on('receiveMessage', (msg) => {
-                // Update conversation list logic here
-                console.log('New message in list:', msg);
+            socket.on('receiveMessage', () => {
+                loadConversations(); // Refresh list on new message
+            });
+            socket.on('messageSent', () => {
+                loadConversations(); // Refresh on sent too
             });
         }
     }, []);
@@ -53,7 +59,12 @@ export default function ChatListScreen() {
     const renderItem = ({ item }: { item: any }) => (
         <TouchableOpacity
             style={styles.itemContainer}
-            onPress={() => navigation.navigate('ChatDetail', { conversationId: item.id, userName: item.name })}
+            onPress={() => navigation.navigate('ChatDetail', {
+                conversationId: item.id,
+                partnerId: item.partnerId,
+                userName: item.name,
+                avatar: item.avatar
+            })}
             activeOpacity={0.7}
         >
             <View style={styles.avatarContainer}>

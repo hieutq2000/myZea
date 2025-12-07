@@ -5,6 +5,7 @@ import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
 import { Ionicons, MaterialIcons, Feather, FontAwesome } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
+import { getChatHistory, getCurrentUser } from '../utils/api';
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList, 'ChatDetail'>;
 
@@ -14,34 +15,76 @@ const MY_BUBBLE = '#D7F0FF'; // Light blue bubble for "me"
 const OTHER_BUBBLE = '#FFFFFF'; // White for "other"
 
 export default function ChatDetailScreen() {
+
     const route = useRoute<ChatDetailRouteProp>();
     const navigation = useNavigation();
-    const { conversationId, userName, avatar } = route.params;
+    const { conversationId, partnerId, userName, avatar } = route.params;
     const [messages, setMessages] = useState<any[]>([]);
     const [inputText, setInputText] = useState('');
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const flatListRef = useRef<FlatList>(null);
     const socket = getSocket();
 
     useEffect(() => {
-        // Mock messages
-        setMessages([
-            { id: '1', text: 'Chào bạn, mình có thể giúp gì?', sender: 'other', time: '10:00' },
-            { id: '2', text: 'Mình muốn hỏi về khóa học AI.', sender: 'me', time: '10:01' },
-            { id: '3', text: 'Khóa học bao gồm nội dung gì vậy?', sender: 'me', time: '10:01' },
-            { id: '4', text: 'Chào bạn, khóa học bao gồm các kiến thức nền tảng và nâng cao về AI, đặc biệt là Generative AI nhé!', sender: 'other', time: '10:02' },
-        ]);
+        loadHistory();
+        fetchCurrentUser();
 
         if (socket) {
             socket.on('receiveMessage', (message) => {
-                setMessages(prev => [...prev, message]);
-                scrollToBottom();
+                if (message.user._id === partnerId || message.user._id === currentUserId) {
+                    appendMessage(message);
+                }
+            });
+            socket.on('messageSent', (message) => {
+                // Already added locally, but can confirm status there
+                // For simplicity we just append if not exists or rely on local optmistic update
             });
         }
 
         return () => {
-            if (socket) socket.off('receiveMessage');
+            if (socket) {
+                socket.off('receiveMessage');
+                socket.off('messageSent');
+            }
         };
     }, []);
+
+    const fetchCurrentUser = async () => {
+        const user = await getCurrentUser();
+        if (user) setCurrentUserId(user.id);
+    };
+
+    const loadHistory = async () => {
+        try {
+            const history = await getChatHistory(partnerId);
+            const mapped = history.map((m: any) => ({
+                id: m._id,
+                text: m.text,
+                sender: m.user._id === currentUserId ? 'me' : 'other', // We need currentId to decide, but initially null. We might need to re-map or use id check in render.
+                time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                senderId: m.user._id
+            }));
+            setMessages(mapped);
+            scrollToBottom();
+        } catch (error) {
+            console.log('Load history error:', error);
+        }
+    };
+
+    const appendMessage = (msg: any) => {
+        setMessages(prev => {
+            // Avoid duplicates
+            if (prev.find(m => m.id === msg._id)) return prev;
+            return [...prev, {
+                id: msg._id,
+                text: msg.text,
+                sender: msg.user._id === currentUserId ? 'me' : 'other',
+                time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                senderId: msg.user._id
+            }];
+        });
+        scrollToBottom();
+    };
 
     const scrollToBottom = () => {
         setTimeout(() => {
@@ -49,14 +92,16 @@ export default function ChatDetailScreen() {
         }, 100);
     };
 
-    const sendMessage = () => {
-        if (!inputText.trim()) return;
+    const sendMessage = async () => {
+        if (!inputText.trim() || !currentUserId) return;
 
+        const tempId = Date.now().toString();
         const newMessage = {
-            id: Date.now().toString(),
+            id: tempId,
             text: inputText,
             sender: 'me',
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            senderId: currentUserId
         };
 
         setMessages(prev => [...prev, newMessage]);
@@ -65,8 +110,10 @@ export default function ChatDetailScreen() {
         if (socket) {
             socket.emit('sendMessage', {
                 conversationId,
+                senderId: currentUserId,
+                receiverId: partnerId,
                 message: inputText,
-                // senderId handled by token/session on server
+                type: 'text'
             });
         }
 
@@ -99,7 +146,7 @@ export default function ChatDetailScreen() {
     );
 
     const renderMessageItem = ({ item, index }: { item: any, index: number }) => {
-        const isMe = item.sender === 'me';
+        const isMe = item.sender === 'me' || item.senderId === currentUserId; // Check both for robustness
         const isLast = index === messages.length - 1 || messages[index + 1].sender !== item.sender;
 
         return (

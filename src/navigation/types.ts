@@ -15,6 +15,7 @@ export type RootStackParamList = {
     ChatList: undefined;
     ChatDetail: {
         conversationId: string;
+        partnerId: string;
         userName?: string;
         avatar?: string;
     };

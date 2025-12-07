@@ -48,6 +48,7 @@ export const VOICE_LABELS: Record<AiVoice, { label: string, gender: 'male' | 'fe
 };
 
 export interface User {
+    id: string; // From database
     email: string;
     name: string;
     avatar?: string;
