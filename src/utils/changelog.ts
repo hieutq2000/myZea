@@ -10,7 +10,7 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
-        version: "2.9",
+        version: "2.8",
         date: "08/12/2024",
         title: "Tính năng Chat như Zalo",
         changes: [
@@ -25,7 +25,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         ]
     },
     {
-        version: "2.8",
+        version: "2.7",
         date: "08/12/2024",
         title: "Tối ưu AI & Trải nghiệm",
         changes: [
