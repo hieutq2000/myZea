@@ -38,6 +38,39 @@ function safeJsonParse(str, defaultValue = []) {
     }
 }
 
+// ============ UTILS ============
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function safeCallApi(apiFunction) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+            await sleep(1000); // giảm tốc độ mỗi request
+
+            const response = await apiFunction();
+
+            if (response.status === 429) {
+                throw new Error("429 TooManyRequests");
+            }
+
+            return response;
+
+        } catch (error) {
+            if (error.message.includes("429") || error.message.includes("TooManyRequests")) {
+                if (attempt < 4) {
+                    const delaySec = Math.pow(2, attempt) + Math.random();
+                    console.log(`Rate limit hit. Retrying in ${delaySec.toFixed(2)}s...`);
+                    await sleep(delaySec * 1000);
+                    continue;
+                }
+            }
+            throw error;
+        }
+    }
+
+    throw new Error("Failed after 5 retries due to 429 error");
+}
+
 // Database connection pool
 let pool;
 
@@ -353,14 +386,14 @@ app.post('/api/ai/generate', authenticateToken, async (req, res) => {
             });
         }
 
-        const response = await fetch(
+        const response = await safeCallApi(() => fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contents })
             }
-        );
+        ));
 
         const data = await response.json();
 
@@ -421,14 +454,14 @@ Lưu ý: confidence >= 60 là match thành công. Nếu ảnh mờ hoặc khó n
             ]
         }];
 
-        const response = await fetch(
+        const response = await safeCallApi(() => fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contents })
             }
-        );
+        ));
 
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';

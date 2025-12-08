@@ -1,6 +1,7 @@
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import { GEMINI_API_KEY } from './theme';
+import { safeCallApi } from './aiHelper';
 
 /**
  * Gemini AI Native Voice TTS
@@ -57,7 +58,7 @@ async function tryGeminiTTS(
     try {
         // Use Gemini to generate audio-like response
         // Note: This uses a workaround since direct TTS isn't available via REST
-        const response = await fetch(`${GEMINI_TTS_URL}?key=${GEMINI_API_KEY}`, {
+        const response = await safeCallApi(() => fetch(`${GEMINI_TTS_URL}?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -73,7 +74,7 @@ async function tryGeminiTTS(
                     responseModalities: ['TEXT'], // Will add AUDIO when supported
                 }
             }),
-        });
+        }));
 
         if (!response.ok) {
             console.log('Gemini TTS not available, status:', response.status);

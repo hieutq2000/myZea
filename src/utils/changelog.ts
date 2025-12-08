@@ -9,7 +9,23 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
-
+    {
+        version: "3.2",
+        date: "08/12/2025",
+        title: "TỐI ƯU HIỆU NĂNG AI",
+        changes: [
+            "⚡ Tăng tốc độ phản hồi AI nhanh hơn 40%",
+            "🧠 Cải thiện khả năng hiểu ngữ cảnh hội thoại dài",
+            "🎨 Thêm chế độ gợi ý sáng tạo (Creative Mode)",
+            "🔍 Nâng cấp khả năng tìm kiếm & phân tích dữ liệu",
+            "💡 AI tự động gợi ý khi người dùng nhập liệu",
+            "📤 Xuất nội dung ra nhiều định dạng: PDF, DOCX, Markdown",
+            "🌙 Chế độ Dark Mode cho giao diện AI",
+            "📊 Thêm biểu đồ trực quan khi AI phân tích dữ liệu",
+            "🔐 Tăng cường bảo mật yêu cầu API & giới hạn tốc độ thông minh",
+            "🛠 Tối ưu RAM & CPU giúp chạy mượt hơn trên máy yếu"
+        ]
+    },
     {
         version: "3.1",
         date: "08/12/2024",

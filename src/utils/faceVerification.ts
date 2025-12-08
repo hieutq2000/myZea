@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GEMINI_API_KEY } from './theme';
+import { safeCallApi } from './aiHelper';
 
 // Config cho retry và timeout
 const MAX_RETRIES = 2;
@@ -40,29 +41,26 @@ export async function verifyFaceWithAvatar(
         };
     }
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            console.log(`[FaceVerify] Attempt ${attempt}/${MAX_RETRIES}`);
+    try {
+        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-            const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        // Prepare images for comparison
+        const cameraImage = {
+            inlineData: {
+                data: cameraImageBase64.replace(/^data:image\/\w+;base64,/, ''),
+                mimeType: 'image/jpeg',
+            },
+        };
 
-            // Prepare images for comparison
-            const cameraImage = {
-                inlineData: {
-                    data: cameraImageBase64.replace(/^data:image\/\w+;base64,/, ''),
-                    mimeType: 'image/jpeg',
-                },
-            };
+        const avatarImage = {
+            inlineData: {
+                data: avatarImageBase64.replace(/^data:image\/\w+;base64,/, ''),
+                mimeType: 'image/jpeg',
+            },
+        };
 
-            const avatarImage = {
-                inlineData: {
-                    data: avatarImageBase64.replace(/^data:image\/\w+;base64,/, ''),
-                    mimeType: 'image/jpeg',
-                },
-            };
-
-            const prompt = `
+        const prompt = `
 Bạn là hệ thống xác thực sinh trắc học. So sánh 2 ảnh và xác định có phải CÙNG NGƯỜI không.
 
 Ảnh 1: Camera trực tiếp (thí sinh)
@@ -79,51 +77,46 @@ TRẢ LỜI JSON DUY NHẤT:
 Lưu ý: confidence >= 60 là match thành công. Nếu ảnh mờ hoặc khó nhận diện, cho confidence = 70 và isMatch = true.
 `;
 
-            const resultPromise = model.generateContent([prompt, cameraImage, avatarImage]);
-            const result = await withTimeout(resultPromise, TIMEOUT_MS);
-            const responseText = result.response.text();
+        const result = await safeCallApi(() =>
+            withTimeout(model.generateContent([prompt, cameraImage, avatarImage]), TIMEOUT_MS)
+        );
 
-            console.log('[FaceVerify] AI Response:', responseText.substring(0, 200));
+        const responseText = result.response.text();
 
-            // Parse JSON response
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                const confidence = parsed.confidence || 50;
+        console.log('[FaceVerify] AI Response:', responseText.substring(0, 200));
 
-                return {
-                    isMatch: parsed.isMatch === true || confidence >= 60,
-                    confidence: confidence,
-                    message: parsed.message || 'Xác thực hoàn tất',
-                    details: parsed.details,
-                };
-            }
+        // Parse JSON response
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            const confidence = parsed.confidence || 50;
 
-            // Nếu không parse được JSON, cho qua với warning
-            console.log('[FaceVerify] Could not parse JSON, allowing with warning');
             return {
-                isMatch: true,
-                confidence: 65,
-                message: 'Xác thực hoàn tất (cảnh báo: không rõ ràng)',
+                isMatch: parsed.isMatch === true || confidence >= 60,
+                confidence: confidence,
+                message: parsed.message || 'Xác thực hoàn tất',
+                details: parsed.details,
             };
-
-        } catch (error) {
-            console.error(`[FaceVerify] Error attempt ${attempt}:`, error);
-
-            if (attempt === MAX_RETRIES) {
-                // Sau khi retry hết, cho qua nhưng đánh dấu lỗi
-                console.log('[FaceVerify] Max retries reached, allowing with error flag');
-                return {
-                    isMatch: true,
-                    confidence: 50,
-                    message: 'Xác thực tạm thời không khả dụng',
-                    skipped: true,
-                };
-            }
-
-            // Chờ trước khi retry
-            await new Promise(r => setTimeout(r, 1000));
         }
+
+        // Nếu không parse được JSON, cho qua với warning
+        console.log('[FaceVerify] Could not parse JSON, allowing with warning');
+        return {
+            isMatch: true,
+            confidence: 65,
+            message: 'Xác thực hoàn tất (cảnh báo: không rõ ràng)',
+        };
+
+    } catch (error) {
+        console.error(`[FaceVerify] Error:`, error);
+
+        // Sau khi retry hết hoặc lỗi khác, cho qua nhưng đánh dấu lỗi
+        return {
+            isMatch: true,
+            confidence: 50,
+            message: 'Xác thực tạm thời không khả dụng',
+            skipped: true,
+        };
     }
 
     // Fallback
@@ -184,8 +177,9 @@ TRẢ LỜI JSON DUY NHẤT:
 Mặc định: nếu không chắc chắn, cho isSamePerson = true.
 `;
 
-        const resultPromise = model.generateContent([prompt, currentImage, avatarImage]);
-        const result = await withTimeout(resultPromise, 10000);
+        const result = await safeCallApi(() =>
+            withTimeout(model.generateContent([prompt, currentImage, avatarImage]), 10000)
+        );
         const responseText = result.response.text();
 
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -248,8 +242,9 @@ TRẢ LỜI JSON DUY NHẤT:
 Mặc định: nếu không chắc, cho isLive = true
 `;
 
-        const resultPromise = model.generateContent([prompt, image]);
-        const result = await withTimeout(resultPromise, 10000);
+        const result = await safeCallApi(() =>
+            withTimeout(model.generateContent([prompt, image]), 10000)
+        );
         const responseText = result.response.text();
 
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);

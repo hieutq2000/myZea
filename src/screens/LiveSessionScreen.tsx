@@ -18,6 +18,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, GEMINI_API_KEY } from '../utils/theme';
 import { speakWithGoogleTTS, stopTTS } from '../utils/googleTTS';
 import { periodicFaceCheck } from '../utils/faceVerification';
+import { safeCallApi } from '../utils/aiHelper';
 import FaceVerificationScreen from './FaceVerificationScreen';
 import {
     User, LiveStatus, LiveMode, Topic, TOPIC_LABELS,
@@ -232,34 +233,27 @@ export default function LiveSessionScreen({
             const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
             setTimeout(async () => {
-                let attempt = 0;
-                while (attempt < MAX_RETRIES) {
+                setTimeout(async () => {
                     try {
-                        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-                        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+                        const result = await safeCallApi(async () => {
+                            const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+                            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-                        const systemPrompt = generateSystemPrompt(mode, topic, audience);
-                        const result = await model.generateContent(systemPrompt + '\n\nHãy bắt đầu buổi học với lời chào ngắn gọn và câu hỏi đầu tiên.');
+                            const systemPrompt = generateSystemPrompt(mode, topic, audience);
+                            return model.generateContent(systemPrompt + '\n\nHãy bắt đầu buổi học với lời chào ngắn gọn và câu hỏi đầu tiên.');
+                        });
 
                         const aiResponse = result.response.text();
                         setAiTranscript(aiResponse);
                         addToLog('AI', aiResponse);
                         speakText(aiResponse);
                         setCurrentQuestion(1);
-                        break; // Success
-                    } catch (innerError: any) {
-                        attempt++;
-                        console.error(`AI Init Attempt ${attempt} failed:`, innerError);
-
-                        if (attempt >= MAX_RETRIES) {
-                            setError((innerError as Error).message || 'Không thể kết nối với AI sau nhiều lần thử');
-                            setStatus(LiveStatus.ERROR);
-                        } else {
-                            // Wait 2s, 4s, 8s...
-                            await delay(2000 * attempt);
-                        }
+                    } catch (error) {
+                        console.error("AI Init Error:", error);
+                        setError((error as Error).message || 'Không thể kết nối với AI');
+                        setStatus(LiveStatus.ERROR);
                     }
-                }
+                }, isExamMode ? 3000 : 1000);
             }, isExamMode ? 3000 : 1000);
 
         } catch (e) {
@@ -307,13 +301,8 @@ export default function LiveSessionScreen({
     };
 
     const generateAIResponse = async (userInput: string) => {
-        const MAX_RETRIES = 3;
-        const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-
-        let attempt = 0;
-
-        while (attempt < MAX_RETRIES) {
-            try {
+        try {
+            const result = await safeCallApi(async () => {
                 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
                 const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
@@ -322,40 +311,34 @@ export default function LiveSessionScreen({
                 const context = recentLogs.map(log => `${log.speaker}: ${log.text}`).join('\n');
                 const prompt = `${generateSystemPrompt(mode, topic, audience)}\n\nLịch sử hội thoại (Tóm tắt):\n${context}\n\nUSER: ${userInput}\n\nHãy phản hồi phù hợp.`;
 
-                const result = await model.generateContent(prompt);
-                const aiResponse = result.response.text();
+                return model.generateContent(prompt);
+            });
 
-                setAiTranscript(aiResponse);
-                addToLog('AI', aiResponse);
-                speakText(aiResponse);
+            const aiResponse = result.response.text();
 
-                const upperText = aiResponse.toUpperCase();
-                if (upperText.includes('CÂU HỎI 2') || upperText.includes('CÂU 2')) {
-                    setCurrentQuestion(2);
-                } else if (upperText.includes('CÂU HỎI 3') || upperText.includes('CÂU 3')) {
-                    setCurrentQuestion(3);
-                }
+            setAiTranscript(aiResponse);
+            addToLog('AI', aiResponse);
+            speakText(aiResponse);
 
-                if (upperText.includes('KẾT QUẢ:') || upperText.includes('TỔNG KẾT')) {
-                    const score = upperText.includes('ĐẠT') && !upperText.includes('CHƯA ĐẠT') ? 'ĐẠT' : 'CHƯA ĐẠT';
-                    setCurrentScore(score);
-                    handleEndSession(score);
-                }
-                break; // Success
-            } catch (err: any) {
-                attempt++;
-                console.error(`AI Response Attempt ${attempt} failed:`, err);
+            const upperText = aiResponse.toUpperCase();
+            if (upperText.includes('CÂU HỎI 2') || upperText.includes('CÂU 2')) {
+                setCurrentQuestion(2);
+            } else if (upperText.includes('CÂU HỎI 3') || upperText.includes('CÂU 3')) {
+                setCurrentQuestion(3);
+            }
 
-                if (err.message && (err.message.includes('429') || err.message.includes('quota'))) {
-                    if (attempt >= MAX_RETRIES) {
-                        setError('Hệ thống đang quá tải (Quota). Vui lòng thử lại sau 60s.');
-                    } else {
-                        // Backoff for 429
-                        await delay(2000 * attempt);
-                    }
-                } else {
-                    if (attempt >= MAX_RETRIES) setError('Lỗi khi nhận phản hồi từ AI');
-                }
+            if (upperText.includes('KẾT QUẢ:') || upperText.includes('TỔNG KẾT')) {
+                const score = upperText.includes('ĐẠT') && !upperText.includes('CHƯA ĐẠT') ? 'ĐẠT' : 'CHƯA ĐẠT';
+                setCurrentScore(score);
+                handleEndSession(score);
+            }
+        } catch (err: any) {
+            console.error(`AI Response Error:`, err);
+
+            if (err.message && (err.message.includes('429') || err.message.includes('quota'))) {
+                setError('Hệ thống đang quá tải (Quota). Vui lòng thử lại sau 60s.');
+            } else {
+                setError('Lỗi khi nhận phản hồi từ AI');
             }
         }
     };
