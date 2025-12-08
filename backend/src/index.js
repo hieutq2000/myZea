@@ -934,6 +934,13 @@ io.on('connection', (socket) => {
 
             if (convRows.length > 0) {
                 conversationId = convRows[0].id;
+
+                // IMPORTANT: Unhide conversation for BOTH users when new message is sent
+                // This fixes the bug where deleted conversations don't reappear
+                await pool.execute(
+                    'UPDATE conversation_participants SET is_hidden = 0 WHERE conversation_id = ? AND (user_id = ? OR user_id = ?)',
+                    [conversationId, data.senderId, data.receiverId]
+                );
             } else {
                 conversationId = uuidv4();
                 await pool.execute('INSERT INTO conversations (id, type) VALUES (?, "private")', [conversationId]);

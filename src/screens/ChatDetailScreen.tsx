@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, StatusBar, Image, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Image, Keyboard } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
@@ -22,7 +22,7 @@ export default function ChatDetailScreen() {
     const [messages, setMessages] = useState<any[]>([]);
     const [inputText, setInputText] = useState('');
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
     const flatListRef = useRef<FlatList>(null);
     const socket = getSocket();
 
@@ -30,14 +30,14 @@ export default function ChatDetailScreen() {
         loadHistory();
         fetchCurrentUser();
 
-        // Keyboard listeners for iOS
+        // Keyboard listeners - get keyboard height for precise positioning
         const keyboardWillShow = Keyboard.addListener(
             Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-            () => setIsKeyboardVisible(true)
+            (e) => setKeyboardHeight(e.endCoordinates.height)
         );
         const keyboardWillHide = Keyboard.addListener(
             Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-            () => setIsKeyboardVisible(false)
+            () => setKeyboardHeight(0)
         );
 
         if (socket) {
@@ -209,11 +209,7 @@ export default function ChatDetailScreen() {
             </SafeAreaView>
             {renderHeader()}
 
-            <KeyboardAvoidingView
-                style={styles.keyboardAvoid}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-            >
+            <View style={styles.keyboardAvoid}>
                 <FlatList
                     ref={flatListRef}
                     data={messages}
@@ -229,8 +225,10 @@ export default function ChatDetailScreen() {
 
                 <View style={[
                     styles.inputContainer,
-                    // Add bottom padding for safe area only when keyboard is NOT visible
-                    !isKeyboardVisible && Platform.OS === 'ios' && { paddingBottom: 30 }
+                    // On iOS: add keyboard height as margin, on Android use default
+                    Platform.OS === 'ios'
+                        ? { marginBottom: keyboardHeight > 0 ? keyboardHeight : 30 }
+                        : {}
                 ]}>
                     {/* Sticker/Emoji button - Left side */}
                     <TouchableOpacity style={styles.stickerButton}>
@@ -271,7 +269,7 @@ export default function ChatDetailScreen() {
                         </View>
                     )}
                 </View>
-            </KeyboardAvoidingView>
+            </View>
         </View>
     );
 }
