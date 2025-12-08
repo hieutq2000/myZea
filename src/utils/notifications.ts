@@ -36,8 +36,11 @@ export async function registerForPushNotificationsAsync() {
             console.log('Failed to get push token for push notification!');
             return;
         }
-        // For local notifications we don't strictly need the token, but good practice if moving to push later
-        // token = (await Notifications.getExpoPushTokenAsync()).data;
+        // Get the token that uniquely identifies this device
+        token = (await Notifications.getExpoPushTokenAsync({
+            projectId: "7244ecfc-4a54-4232-a0a3-e17d5039b55c" // Project ID from your app.json/eas.json
+        })).data;
+        console.log('Expo Push Token:', token);
     } else {
         console.log('Must use physical device for Push Notifications');
     }

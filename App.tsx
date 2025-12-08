@@ -26,18 +26,19 @@ interface SessionConfig {
   audience: TargetAudience;
 }
 
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { RootStackParamList } from './src/navigation/types';
 import ChatListScreen from './src/screens/ChatListScreen';
 import ChatDetailScreen from './src/screens/ChatDetailScreen';
 import NewChatScreen from './src/screens/NewChatScreen';
 import { initSocket, disconnectSocket, getSocket } from './src/utils/socket';
+import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync, schedulePushNotification } from './src/utils/notifications';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
-function AppContent() {
+function AppContent({ navigationRef }: { navigationRef: any }) {
   const { isUpdateAvailable, isDownloading, downloadAndApply, dismissUpdate } = useAppUpdates();
 
   const [user, setUser] = useState<User | null>(null);
@@ -46,10 +47,40 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
 
+  const [pushToken, setPushToken] = useState<string | null>(null);
+
   // Setup Notifications
   useEffect(() => {
-    registerForPushNotificationsAsync();
+    registerForPushNotificationsAsync().then(token => {
+      if (token) setPushToken(token);
+    });
+
+    // Handle user tapping on notification
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data && data.conversationId && data.partnerId) {
+        if (navigationRef.isReady()) {
+          navigationRef.navigate('ChatDetail', {
+            conversationId: data.conversationId,
+            partnerId: data.partnerId,
+            userName: response.notification.request.content.title,
+          });
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
+
+  // Update backend with push token when user logs in
+  useEffect(() => {
+    if (user && pushToken) {
+      const { updatePushToken } = require('./src/utils/api');
+      updatePushToken(pushToken).catch((err: any) => console.log('Failed to update push token:', err));
+    }
+  }, [user, pushToken]);
 
   // Socket management
   useEffect(() => {
@@ -323,9 +354,11 @@ function AppContent() {
 }
 
 export default function App() {
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
+
   return (
-    <NavigationContainer>
-      <AppContent />
+    <NavigationContainer ref={navigationRef}>
+      <AppContent navigationRef={navigationRef} />
     </NavigationContainer>
   );
 }

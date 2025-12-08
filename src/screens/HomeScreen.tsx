@@ -303,6 +303,32 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                 {renderModeSelection()}
                 {renderTopicSelection()}
 
+                {/* Test Notification Button */}
+                <TouchableOpacity
+                    style={{
+                        marginHorizontal: SPACING.md,
+                        padding: SPACING.md,
+                        backgroundColor: COLORS.white,
+                        borderRadius: BORDER_RADIUS.lg,
+                        alignItems: 'center',
+                        marginTop: SPACING.md,
+                        marginBottom: SPACING.xl,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        borderStyle: 'dashed'
+                    }}
+                    onPress={async () => {
+                        const { schedulePushNotification } = require('../utils/notifications');
+                        await schedulePushNotification(
+                            "Vinalive AI",
+                            "Đây là thông báo thử nghiệm! 🔔",
+                            { type: 'test' }
+                        );
+                    }}
+                >
+                    <Text style={{ color: COLORS.primary, fontWeight: '600' }}>🔔 Test Thông Báo</Text>
+                </TouchableOpacity>
+
                 <View style={{ height: 40 }} />
             </ScrollView>
         </SafeAreaView>

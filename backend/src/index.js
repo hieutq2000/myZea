@@ -291,6 +291,31 @@ app.put('/api/auth/profile', authenticateToken, async (req, res) => {
     }
 });
 
+// Update push token
+app.post('/api/auth/push-token', authenticateToken, async (req, res) => {
+    try {
+        const { token } = req.body;
+        if (!token) return res.status(400).json({ error: 'Token is required' });
+
+        // Add column if not exists (quick hack for development)
+        try {
+            await pool.execute('ALTER TABLE users ADD COLUMN push_token VARCHAR(255)');
+        } catch (e) {
+            // Column likely exists
+        }
+
+        await pool.execute(
+            'UPDATE users SET push_token = ? WHERE id = ?',
+            [token, req.user.id]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Update push token error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
 // ============ EXAM ROUTES ============
 
 // Save exam result
@@ -950,11 +975,19 @@ io.on('connection', (socket) => {
             // Update conversation last message
             await pool.execute('UPDATE conversations SET last_message_id = ? WHERE id = ?', [messageId, conversationId]);
 
+            // Fetch sender details
+            const [senders] = await pool.execute('SELECT name, avatar FROM users WHERE id = ?', [data.senderId]);
+            const senderInfo = senders[0] || {};
+
             const fullMessage = {
                 _id: messageId,
                 text: data.message,
                 createdAt: new Date(),
-                user: { _id: data.senderId },
+                user: {
+                    _id: data.senderId,
+                    name: senderInfo.name,
+                    avatar: senderInfo.avatar
+                },
                 conversationId
             };
 

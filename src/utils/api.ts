@@ -251,3 +251,10 @@ export async function markConversationAsRead(conversationId: string): Promise<an
     });
 }
 
+// Update Push Token
+export async function updatePushToken(token: string): Promise<void> {
+    return apiRequest('/api/auth/push-token', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+    });
+}
