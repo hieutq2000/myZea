@@ -230,7 +230,7 @@ export default function LiveSessionScreen({
             setTimeout(async () => {
                 try {
                     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-                    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+                    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
                     const systemPrompt = generateSystemPrompt(mode, topic, audience);
                     const result = await model.generateContent(systemPrompt + '\n\nHãy bắt đầu buổi học với lời chào ngắn gọn và câu hỏi đầu tiên.');
@@ -294,7 +294,7 @@ export default function LiveSessionScreen({
     const generateAIResponse = async (userInput: string) => {
         try {
             const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
             const context = sessionLog.map(log => `${log.speaker}: ${log.text}`).join('\n');
             const prompt = `${generateSystemPrompt(mode, topic, audience)}\n\nLịch sử hội thoại:\n${context}\n\nUSER: ${userInput}\n\nHãy phản hồi phù hợp.`;
@@ -318,9 +318,13 @@ export default function LiveSessionScreen({
                 setCurrentScore(score);
                 handleEndSession(score);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('AI Response error:', err);
-            setError('Lỗi khi nhận phản hồi từ AI');
+            if (err.message && (err.message.includes('429') || err.message.includes('quota'))) {
+                setError('Hệ thống đang quá tải. Vui lòng thử lại sau giây lát.');
+            } else {
+                setError('Lỗi khi nhận phản hồi từ AI');
+            }
         }
     };
 
