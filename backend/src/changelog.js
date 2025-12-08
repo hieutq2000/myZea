@@ -4,7 +4,7 @@
 
 const CHANGELOG = [
     {
-        version: "3.0",
+        version: "3.1",
         date: "08/12/2024",
         title: "Tối ưu tính năng AI",
         changes: [
