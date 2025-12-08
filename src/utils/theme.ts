@@ -90,4 +90,6 @@ export const SHADOWS = {
 };
 
 // API Key - Recommend: Make repo PRIVATE or restrict key in Google Cloud Console
-export const GEMINI_API_KEY = 'AIzaSyDOKtnpcLI9LQpB2iQ9EweqLNG8OI14mlw';
+// ĐỂ THAY KEY MỚI: Chỉ cần dán Key API mới của bạn vào trong dấu ngoặc kép bên dưới.
+// Ví dụ: export const GEMINI_API_KEY = 'AIzaSy...KeyCuaBan...';
+export const GEMINI_API_KEY = 'AIzaSyDVWy-j0qVbG3JVjUWGKBTBpYWAAPC3B5I';
