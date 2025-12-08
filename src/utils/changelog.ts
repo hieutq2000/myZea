@@ -9,6 +9,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+    {
+        version: "3.0",
+        date: "08/12/2024",
+        title: "Tối ưu tính năng chats",
+        changes: [
+            "💬 Tối ưu cải tiến một số chức năng của chats",
+            "🔧 Sửa lỗi keyboard animation trên iOS",
+            "✅ Sửa lỗi conversation đã xóa không hiện lại",
+            "✅ Tối uư UI/UX",
+        ]
+    },
     {
         version: "2.9",
         date: "08/12/2024",

@@ -8,9 +8,9 @@ module.exports = {
         userInterfaceStyle: "light",
         newArchEnabled: true,
         splash: {
-            image: "./assets/splash-icon.png",
-            resizeMode: "contain",
-            backgroundColor: "#f97316"
+            image: "./assets/splash.png",
+            resizeMode: "cover",
+            backgroundColor: "#667eea"
         },
         ios: {
             supportsTablet: true,

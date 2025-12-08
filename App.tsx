@@ -171,17 +171,16 @@ function AppContent() {
     setView('HOME');
   };
 
-  // Custom Splash Screen
+  // Custom Splash Screen with version info
   if (showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
 
-  // Loading screen
+  // Loading screen while checking session (same color as splash for smooth transition)
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ marginTop: 16, color: COLORS.textLight }}>Đang kết nối server...</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#667eea' }}>
+        <ActivityIndicator size="large" color="#fff" />
       </View>
     );
   }
