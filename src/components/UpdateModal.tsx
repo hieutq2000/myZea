@@ -10,7 +10,8 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { COLORS, BORDER_RADIUS, SHADOWS } from '../utils/theme';
-import { getLatestChangelog, ChangelogEntry } from '../utils/changelog';
+import { ChangelogEntry } from '../utils/changelog';
+import { API_URL } from '../utils/api';
 
 
 
@@ -27,7 +28,7 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
     const [changelog, setChangelog] = useState<ChangelogEntry | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // Load latest changelog
+    // Load latest changelog from BACKEND API
     useEffect(() => {
         if (visible) {
             loadChangelog();
@@ -36,10 +37,20 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
 
     const loadChangelog = async () => {
         setLoading(true);
-        // OTA update already includes the latest changelog.ts
-        // So we always use local changelog which is always up-to-date
-        const data = getLatestChangelog();
-        setChangelog(data);
+        try {
+            // Fetch from backend API to get the NEW version's changelog
+            // This ensures we show the CORRECT version content during OTA update
+            const response = await fetch(`${API_URL}/api/changelog/latest`);
+            if (response.ok) {
+                const data = await response.json();
+                setChangelog(data);
+            } else {
+                setChangelog(null);
+            }
+        } catch (error) {
+            console.log('Failed to fetch changelog:', error);
+            setChangelog(null);
+        }
         setLoading(false);
     };
 
