@@ -110,49 +110,8 @@ function authenticateToken(req, res, next) {
 
 // ============ CHANGELOG API ============
 
-// Latest changelog - used by app to show update info
-const CHANGELOG = [
-    {
-        version: "2.7",
-        date: "08/12/2024",
-        title: "Tối ưu AI & Trải nghiệm",
-        changes: [
-            "🤖 Chuyển sang AI Model ổn định (1.5 Flash)",
-            "✨ Hiệu ứng nhập liệu (Focus) rõ ràng hơn",
-            "📱 Hiển thị version check cho tài khoản",
-            "🐛 Sửa lỗi AI không hoạt động ổn định",
-        ]
-    },
-    {
-        date: "08/12/2024",
-        title: "Cải tiến màn hình chào & Đăng nhập",
-        changes: [
-            "🎨 Thêm Splash Screen gradient đẹp mắt",
-            "🔐 Cải tiến giao diện đăng nhập",
-            "👆 Face ID icon mới sát nút đăng nhập",
-            "� Thêm link Quên mật khẩu",
-            "📱 Hiển thị version ở góc màn hình",
-        ]
-    },
-    {
-        version: "2.4",
-        date: "08/12/2024",
-        title: "Cải tiến hệ thống",
-        changes: [
-            "Cải tiến một số chức năng của hệ thống",
-        ]
-    },
-    {
-        version: "2.3",
-        date: "07/12/2024",
-        title: "Đăng nhập Face ID",
-        changes: [
-            "🔐 Đăng nhập với Face ID/Touch ID",
-            "📱 Nút Face ID trên màn hình đăng nhập",
-            "🛡️ Xác thực sinh trắc học an toàn",
-        ]
-    },
-];
+// Import changelog from separate file for easier management
+const CHANGELOG = require('./changelog');
 
 app.get('/api/changelog', (req, res) => {
     res.json({
