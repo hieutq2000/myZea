@@ -19,4 +19,5 @@ export type RootStackParamList = {
         userName?: string;
         avatar?: string;
     };
+    NewChat: undefined;
 };

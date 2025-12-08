@@ -31,7 +31,9 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { RootStackParamList } from './src/navigation/types';
 import ChatListScreen from './src/screens/ChatListScreen';
 import ChatDetailScreen from './src/screens/ChatDetailScreen';
-import { initSocket, disconnectSocket } from './src/utils/socket';
+import NewChatScreen from './src/screens/NewChatScreen';
+import { initSocket, disconnectSocket, getSocket } from './src/utils/socket';
+import { registerForPushNotificationsAsync, schedulePushNotification } from './src/utils/notifications';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -44,13 +46,43 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
 
+  // Setup Notifications
+  useEffect(() => {
+    registerForPushNotificationsAsync();
+  }, []);
+
   // Socket management
   useEffect(() => {
+    let socketListener: any = null;
+
     if (user?.id) {
       initSocket(user.id);
+      const socket = getSocket();
+
+      if (socket) {
+        socketListener = async (message: any) => {
+          // Trigger notification if message is from someone else
+          if (message.user && message.user._id !== user.id) {
+            await schedulePushNotification(
+              message.user.name || 'Tin nhắn mới',
+              message.text || 'Đã gửi một hình ảnh',
+              { conversationId: message.conversationId, partnerId: message.user._id }
+            );
+          }
+        };
+
+        socket.on('receiveMessage', socketListener);
+      }
     } else {
       disconnectSocket();
     }
+
+    return () => {
+      const socket = getSocket();
+      if (socket && socketListener) {
+        socket.off('receiveMessage', socketListener);
+      }
+    };
   }, [user?.id]);
 
   // Check for existing session on app start
@@ -277,6 +309,7 @@ function AppContent() {
         {/* Chat Screens */}
         <Stack.Screen name="ChatList" component={ChatListScreen} />
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
+        <Stack.Screen name="NewChat" component={NewChatScreen} />
       </Stack.Navigator>
 
       <UpdateModal

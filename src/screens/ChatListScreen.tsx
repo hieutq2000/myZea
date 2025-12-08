@@ -429,7 +429,10 @@ export default function ChatListScreen() {
                     <TouchableOpacity style={styles.headerIcon}>
                         <Ionicons name="qr-code-outline" size={22} color={DARK_TEXT} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.headerIcon}>
+                    <TouchableOpacity
+                        style={styles.headerIcon}
+                        onPress={() => navigation.navigate('NewChat')}
+                    >
                         <Ionicons name="add-outline" size={26} color={DARK_TEXT} />
                     </TouchableOpacity>
                 </View>

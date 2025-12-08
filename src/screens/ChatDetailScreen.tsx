@@ -5,7 +5,7 @@ import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
 import { Ionicons, Feather, FontAwesome } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
-import { getChatHistory, getCurrentUser } from '../utils/api';
+import { getChatHistory, getCurrentUser, markConversationAsRead } from '../utils/api';
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList, 'ChatDetail'>;
 
@@ -30,25 +30,25 @@ export default function ChatDetailScreen() {
         loadHistory();
         fetchCurrentUser();
 
-        // Keyboard listeners - get keyboard height for precise positioning
-        const keyboardWillShow = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-            (e) => setKeyboardHeight(e.endCoordinates.height)
-        );
-        const keyboardWillHide = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-            () => setKeyboardHeight(0)
-        );
+        const keyboardWillShow = Keyboard.addListener('keyboardWillShow', (e) => {
+            setKeyboardHeight(e.endCoordinates.height);
+        });
+        const keyboardWillHide = Keyboard.addListener('keyboardWillHide', () => {
+            setKeyboardHeight(0);
+        });
 
         if (socket) {
             socket.on('receiveMessage', (message) => {
-                if (message.user._id === partnerId || message.user._id === currentUserId) {
-                    appendMessage(message);
-                }
+                appendMessage(message);
+                markConversationAsRead(conversationId);
             });
             socket.on('messageSent', (message) => {
-                // Already added locally, but can confirm status there
-                // For simplicity we just append if not exists or rely on local optmistic update
+                // Update the temporary message with the actual message from the server
+                setMessages(prev => prev.map(msg => msg.id === message.tempId ? {
+                    ...msg,
+                    id: message._id,
+                    time: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                } : msg));
             });
         }
 
@@ -60,7 +60,7 @@ export default function ChatDetailScreen() {
                 socket.off('messageSent');
             }
         };
-    }, []);
+    }, [conversationId, partnerId, currentUserId, socket]); // Added dependencies for useEffect
 
     const fetchCurrentUser = async () => {
         const user = await getCurrentUser();
@@ -73,7 +73,7 @@ export default function ChatDetailScreen() {
             const mapped = history.map((m: any) => ({
                 id: m._id,
                 text: m.text,
-                sender: m.user._id === currentUserId ? 'me' : 'other', // We need currentId to decide, but initially null. We might need to re-map or use id check in render.
+                sender: m.user._id === currentUserId ? 'me' : 'other',
                 time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 senderId: m.user._id
             }));
@@ -86,7 +86,6 @@ export default function ChatDetailScreen() {
 
     const appendMessage = (msg: any) => {
         setMessages(prev => {
-            // Avoid duplicates
             if (prev.find(m => m.id === msg._id)) return prev;
             return [...prev, {
                 id: msg._id,
@@ -126,7 +125,8 @@ export default function ChatDetailScreen() {
                 senderId: currentUserId,
                 receiverId: partnerId,
                 message: inputText,
-                type: 'text'
+                type: 'text',
+                tempId: tempId // Pass temporary ID for optimistic UI update
             });
         }
 
@@ -168,8 +168,12 @@ export default function ChatDetailScreen() {
     );
 
     const renderMessageItem = ({ item, index }: { item: any, index: number }) => {
-        const isMe = item.sender === 'me' || item.senderId === currentUserId; // Check both for robustness
-        const isLast = index === messages.length - 1 || messages[index + 1].sender !== item.sender;
+        // Use senderId for robust comparison, enabling dynamic updates when currentUserId loads
+        const isMe = item.sender === 'me' || (currentUserId && item.senderId === currentUserId);
+
+        // Check if this is the last message in a consecutive group from the same sender
+        const nextMessage = messages[index + 1];
+        const isLast = index === messages.length - 1 || (nextMessage && nextMessage.senderId !== item.senderId);
 
         return (
             <View style={[
@@ -179,15 +183,13 @@ export default function ChatDetailScreen() {
             ]}>
                 {!isMe && (
                     <View style={styles.avatarContainer}>
-                        {isLast ? (
-                            avatar ? (
-                                <Image source={{ uri: avatar }} style={styles.avatarSmall} />
-                            ) : (
-                                <View style={[styles.avatarSmall, { backgroundColor: '#A0AEC0', alignItems: 'center', justifyContent: 'center' }]}>
-                                    <Text style={{ color: 'white', fontSize: 10 }}>{userName?.[0]}</Text>
-                                </View>
-                            )
-                        ) : <View style={{ width: 28 }} />}
+                        {avatar ? (
+                            <Image source={{ uri: avatar }} style={styles.avatarSmall} />
+                        ) : (
+                            <View style={[styles.avatarSmall, { backgroundColor: '#A0AEC0', alignItems: 'center', justifyContent: 'center' }]}>
+                                <Text style={{ color: 'white', fontSize: 10 }}>{userName?.[0]?.toUpperCase()}</Text>
+                            </View>
+                        )}
                     </View>
                 )}
 
@@ -275,8 +277,13 @@ export default function ChatDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: ZALO_BG },
-    safeTop: { backgroundColor: ZALO_BLUE },
+    container: {
+        flex: 1,
+        backgroundColor: ZALO_BG,
+    },
+    safeTop: {
+        backgroundColor: ZALO_BLUE,
+    },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
