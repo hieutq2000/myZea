@@ -10,6 +10,16 @@ const CHANGELOG = [
         changes: [
             "💬 Vinalive AI liên tục cập nhật để cải tiến",
             "🔧 Sửa lỗi AI Không hoạt động ổn định",
+
+        ]
+    },
+    {
+        version: "3.0",
+        date: "08/12/2024",
+        title: "Tối ưu tính năng AI",
+        changes: [
+            "💬 Vinalive AI liên tục cập nhật để cải tiến",
+            "🔧 Sửa lỗi AI Không hoạt động ổn định",
             "✅ Tối ưu hiệu năng AI",
         ]
     },
