@@ -8,6 +8,7 @@ import {
     Dimensions,
     ScrollView,
     ActivityIndicator,
+    Image,
 } from 'react-native';
 import { COLORS, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { ChangelogEntry } from '../utils/changelog';
@@ -64,8 +65,12 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
             <View style={styles.overlay}>
                 <View style={styles.container}>
                     {/* Icon */}
-                    <View style={styles.iconContainer}>
-                        <Text style={styles.iconEmoji}>📢</Text>
+                    <View style={styles.imageContainer}>
+                        <Image
+                            source={require('../../assets/megaphone.png')}
+                            style={styles.image}
+                            resizeMode="contain"
+                        />
                     </View>
 
                     {/* Title */}
@@ -107,16 +112,11 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
                         disabled={isDownloading}
                     >
                         <Text style={styles.updateButtonText}>
-                            {isDownloading ? '⏳ Đang tải xuống...' : '🚀 Cập nhật ngay'}
+                            {isDownloading ? 'Đang tải xuống...' : 'Cập nhật'}
                         </Text>
                     </TouchableOpacity>
 
-                    {/* Skip Button */}
-                    {!isDownloading && (
-                        <TouchableOpacity style={styles.skipButton} onPress={onClose}>
-                            <Text style={styles.skipButtonText}>Để sau</Text>
-                        </TouchableOpacity>
-                    )}
+
                 </View>
             </View>
         </Modal>
@@ -140,17 +140,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         ...SHADOWS.lg,
     },
-    iconContainer: {
-        width: 80,
+    imageContainer: {
+        width: 100,
         height: 80,
-        borderRadius: 40,
-        backgroundColor: '#FFF7ED',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 16,
     },
-    iconEmoji: {
-        fontSize: 40,
+    image: {
+        width: '100%',
+        height: '100%',
     },
     title: {
         fontSize: 20,

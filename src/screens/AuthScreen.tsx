@@ -87,8 +87,34 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             });
 
             if (result.success) {
-                // Biometric authentication successful, proceed with login
-                handleSubmit();
+                // Biometric authentication successful
+                setLoading(true);
+                setError(null);
+
+                try {
+                    // Check server connection
+                    const isServerOnline = await checkServerHealth();
+                    if (!isServerOnline) {
+                        throw new Error('Không thể kết nối đến server.');
+                    }
+
+                    // Retrieve saved credentials directly
+                    const savedEmail = await AsyncStorage.getItem('savedEmail');
+                    const savedPassword = await AsyncStorage.getItem('savedPassword');
+
+                    if (savedEmail && savedPassword) {
+                        const response = await login(savedEmail, savedPassword);
+                        onLogin(response.user);
+                    } else {
+                        setError('Không tìm thấy thông tin đăng nhập đã lưu');
+                    }
+                } catch (err) {
+                    const errorMessage = (err as Error).message;
+                    setError(errorMessage);
+                    Alert.alert('Lỗi đăng nhập', errorMessage);
+                } finally {
+                    setLoading(false);
+                }
             } else if (result.error === 'user_cancel') {
                 // User cancelled, do nothing
             } else {
@@ -111,14 +137,28 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     };
 
     const handleSubmit = async () => {
-        if (!email || !password) {
-            setError('Vui lòng nhập email và mật khẩu');
+        // 1. Validate empty fields
+        if (!email.trim() || !password) {
+            setError('Vui lòng nhập đầy đủ email và mật khẩu');
+            return;
+        }
+
+        // 2. Validate Email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+            setError('Email không hợp lệ (ví dụ: email@domain.com)');
+            return;
+        }
+
+        // 3. Validate Password length
+        if (password.length < 6) {
+            setError('Mật khẩu phải có ít nhất 6 ký tự');
             return;
         }
 
         if (view === AuthView.REGISTER) {
-            if (!name) {
-                setError('Vui lòng nhập họ tên');
+            if (!name.trim()) {
+                setError('Vui lòng nhập họ và tên');
                 return;
             }
             if (password !== confirmPassword) {
@@ -199,6 +239,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                             value={name}
                             onChangeText={setName}
                             placeholder="Nguyễn Văn A"
+                            icon="user"
                         />
                     )}
 
@@ -209,6 +250,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         keyboardType="email-address"
                         autoCapitalize="none"
                         placeholder="email@example.com"
+                        icon="user"
                     />
 
                     <FloatingLabelInput
@@ -217,6 +259,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         onChangeText={setPassword}
                         isPassword
                         placeholder="••••••••"
+                        icon="lock"
                     />
 
                     {view === AuthView.REGISTER && (
@@ -227,6 +270,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                                 onChangeText={setConfirmPassword}
                                 isPassword
                                 placeholder="••••••••"
+                                icon="lock"
                             />
 
                             <TouchableOpacity
@@ -304,6 +348,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         onPress={() => {
                             setView(view === AuthView.LOGIN ? AuthView.REGISTER : AuthView.LOGIN);
                             setError(null);
+                            // Clear form data when switching views
+                            setEmail('');
+                            setPassword('');
+                            setName('');
+                            setConfirmPassword('');
+                            setAgreeToTerms(false);
                         }}
                     >
                         <Text style={styles.switchText}>

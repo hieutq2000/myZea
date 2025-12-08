@@ -7,6 +7,7 @@ interface FloatingLabelInputProps extends TextInputProps {
     label: string;
     error?: string | null;
     isPassword?: boolean;
+    icon?: keyof typeof Feather.glyphMap;
 }
 
 const FloatingLabelInput = ({
@@ -14,6 +15,7 @@ const FloatingLabelInput = ({
     value,
     error,
     isPassword,
+    icon,
     style,
     ...props
 }: FloatingLabelInputProps) => {
@@ -31,9 +33,14 @@ const FloatingLabelInput = ({
         }).start();
     }, [isFocused, value]);
 
+    const labelStartLeft = icon ? 48 : 10;
+
     const labelStyle = {
         position: 'absolute' as 'absolute',
-        left: 10,
+        left: animatedValue.interpolate({
+            inputRange: [0, 1],
+            outputRange: [labelStartLeft, 10], // Moves from right-of-icon to left-aligned on border
+        }),
         top: animatedValue.interpolate({
             inputRange: [0, 1],
             outputRange: [16, -10], // Moves from center-ish to top border
@@ -67,8 +74,17 @@ const FloatingLabelInput = ({
                 styles.inputContainer,
                 { borderColor: containerBorderColor }
             ]}>
+                {icon && (
+                    <View style={styles.leftIconContainer}>
+                        <Feather
+                            name={icon}
+                            size={20}
+                            color={isFocused ? COLORS.primary : COLORS.textMuted}
+                        />
+                    </View>
+                )}
                 <TextInput
-                    style={styles.input}
+                    style={[styles.input, { paddingLeft: icon ? 48 : SPACING.md }]}
                     value={value}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
@@ -107,15 +123,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1.5,
         borderRadius: BORDER_RADIUS.lg,
-        backgroundColor: 'transparent', // Transparent to show background if needed, but label needs matching bg
+        backgroundColor: 'transparent',
         height: 56,
+        position: 'relative',
+    },
+    leftIconContainer: {
+        position: 'absolute',
+        left: 16,
+        zIndex: 1,
     },
     input: {
         flex: 1,
-        paddingHorizontal: SPACING.md,
         height: '100%',
         fontSize: 16,
         color: COLORS.text,
+        paddingRight: SPACING.md,
     },
     eyeIcon: {
         padding: SPACING.md,
