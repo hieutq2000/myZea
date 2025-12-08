@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, StatusBar, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, StatusBar, Image, Keyboard } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
-import { Ionicons, MaterialIcons, Feather, FontAwesome } from '@expo/vector-icons';
+import { Ionicons, Feather, FontAwesome } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
 import { getChatHistory, getCurrentUser } from '../utils/api';
 
@@ -22,12 +22,23 @@ export default function ChatDetailScreen() {
     const [messages, setMessages] = useState<any[]>([]);
     const [inputText, setInputText] = useState('');
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
     const flatListRef = useRef<FlatList>(null);
     const socket = getSocket();
 
     useEffect(() => {
         loadHistory();
         fetchCurrentUser();
+
+        // Keyboard listeners for iOS
+        const keyboardWillShow = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            () => setIsKeyboardVisible(true)
+        );
+        const keyboardWillHide = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => setIsKeyboardVisible(false)
+        );
 
         if (socket) {
             socket.on('receiveMessage', (message) => {
@@ -42,6 +53,8 @@ export default function ChatDetailScreen() {
         }
 
         return () => {
+            keyboardWillShow.remove();
+            keyboardWillHide.remove();
             if (socket) {
                 socket.off('receiveMessage');
                 socket.off('messageSent');
@@ -190,14 +203,16 @@ export default function ChatDetailScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={ZALO_BLUE} />
+        <View style={styles.container}>
+            <SafeAreaView style={styles.safeTop}>
+                <StatusBar barStyle="light-content" backgroundColor={ZALO_BLUE} />
+            </SafeAreaView>
             {renderHeader()}
 
             <KeyboardAvoidingView
                 style={styles.keyboardAvoid}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
                 <FlatList
                     ref={flatListRef}
@@ -208,19 +223,21 @@ export default function ChatDetailScreen() {
                     style={styles.listStyle}
                     onContentSizeChange={() => scrollToBottom()}
                     onLayout={() => scrollToBottom()}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="interactive"
                 />
 
-                <View style={styles.inputContainer}>
-                    <TouchableOpacity style={styles.attachButton}>
-                        <MaterialIcons name="image" size={26} color="#6B7280" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.attachButton}>
-                        <MaterialIcons name="mic" size={26} color="#6B7280" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.attachButton}>
-                        <MaterialIcons name="more-horiz" size={26} color="#6B7280" />
+                <View style={[
+                    styles.inputContainer,
+                    // Add bottom padding for safe area only when keyboard is NOT visible
+                    !isKeyboardVisible && Platform.OS === 'ios' && { paddingBottom: 30 }
+                ]}>
+                    {/* Sticker/Emoji button - Left side */}
+                    <TouchableOpacity style={styles.stickerButton}>
+                        <FontAwesome name="smile-o" size={26} color={ZALO_BLUE} />
                     </TouchableOpacity>
 
+                    {/* Text Input - Center */}
                     <View style={styles.inputWrapper}>
                         <TextInput
                             style={styles.input}
@@ -233,28 +250,35 @@ export default function ChatDetailScreen() {
                                 setTimeout(() => scrollToBottom(), 300);
                             }}
                         />
-                        <TouchableOpacity style={styles.emojiButton}>
-                            <FontAwesome name="smile-o" size={24} color="#6B7280" />
-                        </TouchableOpacity>
                     </View>
 
+                    {/* Right side buttons */}
                     {inputText.trim() ? (
                         <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
-                            <Ionicons name="send" size={20} color={ZALO_BLUE} />
+                            <Ionicons name="send" size={24} color={ZALO_BLUE} />
                         </TouchableOpacity>
                     ) : (
-                        <TouchableOpacity style={styles.sendButton}>
-                            <Ionicons name="thumbs-up-outline" size={24} color={ZALO_BLUE} />
-                        </TouchableOpacity>
+                        <View style={styles.rightButtons}>
+                            <TouchableOpacity style={styles.actionButton}>
+                                <Feather name="more-horizontal" size={24} color="#6B7280" />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionButton}>
+                                <Ionicons name="mic-outline" size={24} color="#6B7280" />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionButton}>
+                                <Ionicons name="image-outline" size={24} color="#6B7280" />
+                            </TouchableOpacity>
+                        </View>
                     )}
                 </View>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: ZALO_BG },
+    safeTop: { backgroundColor: ZALO_BLUE },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -305,27 +329,41 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'white',
-        paddingVertical: 8,
+        paddingVertical: 10,
         paddingHorizontal: 8,
         borderTopWidth: 1,
         borderTopColor: '#E5E7EB',
     },
-    attachButton: { padding: 6 },
+    stickerButton: {
+        padding: 8,
+        marginRight: 4,
+    },
     inputWrapper: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'white',
-        borderRadius: 20,
-        marginHorizontal: 4,
-        paddingHorizontal: 12,
+        backgroundColor: '#F3F4F6',
+        borderRadius: 22,
+        marginHorizontal: 6,
+        paddingHorizontal: 14,
+        minHeight: 44,
     },
     input: {
         flex: 1,
         fontSize: 16,
         maxHeight: 100,
-        paddingVertical: 8,
+        paddingVertical: 10,
+        color: '#1F2937',
     },
-    emojiButton: { padding: 4 },
-    sendButton: { padding: 8, marginLeft: 4 },
+    rightButtons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    actionButton: {
+        padding: 8,
+    },
+    sendButton: {
+        padding: 8,
+        marginLeft: 4,
+    },
 });
