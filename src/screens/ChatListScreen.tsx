@@ -2,8 +2,9 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import {
     View, Text, FlatList, TouchableOpacity, StyleSheet,
     TextInput, StatusBar, SafeAreaView, Platform, ActivityIndicator,
-    RefreshControl, Alert, Image
+    RefreshControl, Alert, Image, Animated
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -244,58 +245,148 @@ export default function ChatListScreen() {
         ]);
     };
 
+    // Render right swipe actions (Mute, Delete)
+    const renderRightActions = (item: any) => {
+        return (
+            <View style={styles.swipeActionsRight}>
+                <TouchableOpacity
+                    style={[styles.swipeAction, styles.muteAction]}
+                    onPress={() => handleMute(item.id)}
+                >
+                    <Ionicons
+                        name={item.isMuted ? "notifications" : "notifications-off"}
+                        size={22}
+                        color="#fff"
+                    />
+                    <Text style={styles.swipeActionText}>
+                        {item.isMuted ? 'Bật' : 'Tắt'}
+                    </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.swipeAction, styles.deleteAction]}
+                    onPress={() => handleDelete(item.id)}
+                >
+                    <Ionicons name="trash-outline" size={22} color="#fff" />
+                    <Text style={styles.swipeActionText}>Xóa</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    };
+
+    // Render left swipe actions (Pin)
+    const renderLeftActions = (item: any) => {
+        return (
+            <View style={styles.swipeActionsLeft}>
+                <TouchableOpacity
+                    style={[styles.swipeAction, styles.pinAction]}
+                    onPress={() => handlePin(item.id)}
+                >
+                    <Ionicons
+                        name={item.isPinned ? "pin-outline" : "pin"}
+                        size={22}
+                        color="#fff"
+                    />
+                    <Text style={styles.swipeActionText}>
+                        {item.isPinned ? 'Bỏ ghim' : 'Ghim'}
+                    </Text>
+                </TouchableOpacity>
+            </View>
+        );
+    };
+
+    // Handle pin
+    const handlePin = async (conversationId: string) => {
+        const conv = conversations.find(c => c.id === conversationId);
+        if (!conv) return;
+
+        const newPinState = !conv.isPinned;
+        setConversations(prev => {
+            const updated = prev.map(c =>
+                c.id === conversationId ? { ...c, isPinned: newPinState } : c
+            );
+            updated.sort((a, b) => {
+                if (a.isPinned && !b.isPinned) return -1;
+                if (!a.isPinned && b.isPinned) return 1;
+                return 0;
+            });
+            return updated;
+        });
+
+        try {
+            await pinConversation(conversationId, newPinState);
+        } catch (error) {
+            loadConversations();
+        }
+    };
+
     const renderItem = ({ item }: { item: any }) => {
         const isTyping = typingUsers[item.id];
 
         return (
-            <TouchableOpacity
-                style={styles.itemContainer}
-                onPress={() => navigation.navigate('ChatDetail', {
-                    conversationId: item.id,
-                    partnerId: item.partnerId,
-                    userName: item.name,
-                    avatar: item.avatar
-                })}
-                activeOpacity={0.7}
+            <Swipeable
+                renderRightActions={() => renderRightActions(item)}
+                renderLeftActions={() => renderLeftActions(item)}
+                overshootRight={false}
+                overshootLeft={false}
+                friction={2}
             >
-                {/* Avatar */}
-                <View style={styles.avatarContainer}>
-                    {item.avatar ? (
-                        <Image source={{ uri: item.avatar }} style={styles.avatar} />
-                    ) : (
-                        <LinearGradient
-                            colors={['#667eea', '#764ba2']}
-                            style={styles.avatar}
-                        >
-                            <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase()}</Text>
-                        </LinearGradient>
-                    )}
-                    {item.isOnline && <View style={styles.onlineDot} />}
-                </View>
-
-                {/* Content */}
-                <View style={styles.contentContainer}>
-                    <View style={styles.headerRow}>
-                        <Text style={[styles.name, item.unread > 0 && styles.nameUnread]} numberOfLines={1}>
-                            {item.name}
-                        </Text>
-                        <Text style={styles.time}>{item.time}</Text>
-                    </View>
-
-                    <View style={styles.messageRow}>
-                        {isTyping ? (
-                            <Text style={styles.typingText} numberOfLines={1}>Đang nhập...</Text>
+                <TouchableOpacity
+                    style={[styles.itemContainer, item.isPinned && styles.pinnedItem]}
+                    onPress={() => navigation.navigate('ChatDetail', {
+                        conversationId: item.id,
+                        partnerId: item.partnerId,
+                        userName: item.name,
+                        avatar: item.avatar
+                    })}
+                    activeOpacity={0.7}
+                >
+                    {/* Avatar */}
+                    <View style={styles.avatarContainer}>
+                        {item.avatar ? (
+                            <Image source={{ uri: item.avatar }} style={styles.avatar} />
                         ) : (
-                            <Text style={[styles.lastMessage, item.unread > 0 && styles.lastMessageUnread]} numberOfLines={1}>
-                                {formatLastMessage(item)}
-                            </Text>
+                            <LinearGradient
+                                colors={['#667eea', '#764ba2']}
+                                style={styles.avatar}
+                            >
+                                <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase()}</Text>
+                            </LinearGradient>
                         )}
-                        {item.isMuted && (
-                            <Ionicons name="notifications-off" size={14} color={DARK_TEXT_SECONDARY} style={{ marginLeft: 4 }} />
-                        )}
+                        {item.isOnline && <View style={styles.onlineDot} />}
                     </View>
-                </View>
-            </TouchableOpacity>
+
+                    {/* Content */}
+                    <View style={styles.contentContainer}>
+                        <View style={styles.headerRow}>
+                            {item.isPinned && (
+                                <Ionicons name="pin" size={14} color={ZALO_BLUE} style={{ marginRight: 4 }} />
+                            )}
+                            <Text style={[styles.name, item.unread > 0 && styles.nameUnread]} numberOfLines={1}>
+                                {item.name}
+                            </Text>
+                            <Text style={styles.time}>{item.time}</Text>
+                        </View>
+
+                        <View style={styles.messageRow}>
+                            {isTyping ? (
+                                <Text style={styles.typingText} numberOfLines={1}>Đang nhập...</Text>
+                            ) : (
+                                <Text style={[styles.lastMessage, item.unread > 0 && styles.lastMessageUnread]} numberOfLines={1}>
+                                    {formatLastMessage(item)}
+                                </Text>
+                            )}
+                            {item.isMuted && (
+                                <Ionicons name="notifications-off" size={14} color={DARK_TEXT_SECONDARY} style={{ marginLeft: 4 }} />
+                            )}
+                            {item.unread > 0 && (
+                                <View style={styles.unreadBadge}>
+                                    <Text style={styles.unreadText}>{item.unread > 99 ? '99+' : item.unread}</Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            </Swipeable>
         );
     };
 
@@ -585,5 +676,53 @@ const styles = StyleSheet.create({
         color: DARK_TEXT_SECONDARY,
         marginTop: 16,
         textAlign: 'center',
+    },
+
+    // Swipe Actions
+    swipeActionsRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    swipeActionsLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    swipeAction: {
+        width: 75,
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    muteAction: {
+        backgroundColor: '#FF9500',
+    },
+    deleteAction: {
+        backgroundColor: '#FF3B30',
+    },
+    pinAction: {
+        backgroundColor: ZALO_BLUE,
+    },
+    swipeActionText: {
+        color: '#fff',
+        fontSize: 12,
+        marginTop: 4,
+    },
+    pinnedItem: {
+        backgroundColor: '#1F1F1F',
+    },
+    unreadBadge: {
+        backgroundColor: '#FF3B30',
+        borderRadius: 10,
+        minWidth: 20,
+        height: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 8,
+        paddingHorizontal: 6,
+    },
+    unreadText: {
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: 'bold',
     },
 });

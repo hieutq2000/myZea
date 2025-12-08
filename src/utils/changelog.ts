@@ -27,12 +27,16 @@ export const CHANGELOG: ChangelogEntry[] = [
     {
         version: "2.7",
         date: "08/12/2024",
-        title: "Tối ưu AI & Trải nghiệm",
+        title: "Cập nhật chức năng chats - Tối ưu trải nghiệm",
         changes: [
-            "🤖 Chuyển sang AI Model ổn định (1.5 Flash)",
-            "✨ Hiệu ứng nhập liệu (Focus) rõ ràng hơn",
-            "📱 Hiển thị version check cho tài khoản",
-            "🐛 Sửa lỗi AI không hoạt động ổn định",
+            "💬 Danh sách tin nhắn với Dark Mode",
+            "📌 Vuốt để Ghim/Tắt thông báo/Xóa",
+            "🟢 Hiển thị trạng thái Online",
+            "⌨️ Hiển thị 'Đang nhập...'",
+            "🔔 Tabs: Tất cả / Chưa đọc / Tắt thông báo",
+            "🔍 Tìm kiếm cuộc trò chuyện",
+            "⏰ Format thời gian theo kiểu Zalo",
+            "📝 Hiển thị 'Bạn:' cho tin nhắn của mình",
         ]
     },
     {
