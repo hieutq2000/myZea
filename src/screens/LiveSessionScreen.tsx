@@ -236,7 +236,7 @@ export default function LiveSessionScreen({
                 while (attempt < MAX_RETRIES) {
                     try {
                         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-                        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+                        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
                         const systemPrompt = generateSystemPrompt(mode, topic, audience);
                         const result = await model.generateContent(systemPrompt + '\n\nHãy bắt đầu buổi học với lời chào ngắn gọn và câu hỏi đầu tiên.');
@@ -315,7 +315,7 @@ export default function LiveSessionScreen({
         while (attempt < MAX_RETRIES) {
             try {
                 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-                const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+                const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
                 // Optimization: Limit context to last 10 messages to save Tokens and speed up response
                 const recentLogs = sessionLog.slice(-10);

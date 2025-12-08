@@ -11,7 +11,7 @@ let currentSound: Audio.Sound | null = null;
 let isSpeaking = false;
 
 // Gemini TTS endpoint
-const GEMINI_TTS_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
+const GEMINI_TTS_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 /**
  * Generate speech using Gemini AI's native voice
