@@ -45,7 +45,7 @@ export async function verifyFaceWithAvatar(
             console.log(`[FaceVerify] Attempt ${attempt}/${MAX_RETRIES}`);
 
             const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
             // Prepare images for comparison
             const cameraImage = {
@@ -158,7 +158,7 @@ export async function periodicFaceCheck(
 
     try {
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
         const currentImage = {
             inlineData: {
@@ -230,7 +230,7 @@ export async function detectLiveness(
 
     try {
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
         const image = {
             inlineData: {
