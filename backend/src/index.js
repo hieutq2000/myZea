@@ -997,6 +997,32 @@ io.on('connection', (socket) => {
             // Emit back to sender
             io.to(data.senderId).emit('messageSent', fullMessage);
 
+            // --- SEND PUSH NOTIFICATION ---
+            try {
+                const { Expo } = require('expo-server-sdk');
+                const expo = new Expo();
+
+                const [receivers] = await pool.execute('SELECT push_token FROM users WHERE id = ?', [data.receiverId]);
+                const pushToken = receivers[0]?.push_token;
+
+                if (pushToken && Expo.isExpoPushToken(pushToken)) {
+                    await expo.sendPushNotificationsAsync([{
+                        to: pushToken,
+                        sound: 'default',
+                        title: senderInfo.name || 'Tin nhắn mới',
+                        body: data.message || 'Đã gửi một tin nhắn',
+                        data: {
+                            conversationId,
+                            partnerId: data.senderId,
+                            url: `vinalive://chat/${conversationId}` // Deep link scheme if supported
+                        },
+                    }]);
+                    console.log('✅ Push notification sent to', data.receiverId);
+                }
+            } catch (pushError) {
+                console.error('⚠️ Push notification failed:', pushError);
+            }
+
         } catch (error) {
             console.error('Save message error:', error);
         }
