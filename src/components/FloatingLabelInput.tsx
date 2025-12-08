@@ -10,7 +10,7 @@ interface FloatingLabelInputProps extends TextInputProps {
     icon?: keyof typeof Feather.glyphMap;
 }
 
-const FloatingLabelInput = ({
+const FloatingLabelInput = React.memo(({
     label,
     value,
     error,
@@ -28,7 +28,7 @@ const FloatingLabelInput = ({
     useEffect(() => {
         Animated.timing(animatedValue, {
             toValue: (isFocused || value) ? 1 : 0,
-            duration: 200,
+            duration: 150, // Faster animation for snappier feel
             useNativeDriver: false,
         }).start();
     }, [isFocused, value]);
@@ -43,7 +43,7 @@ const FloatingLabelInput = ({
         }),
         top: animatedValue.interpolate({
             inputRange: [0, 1],
-            outputRange: [16, -10], // Moves from center-ish to top border
+            outputRange: [18, -2], // Adjusted to -2 to vertically center on the border (y=6)
         }),
         fontSize: animatedValue.interpolate({
             inputRange: [0, 1],
@@ -54,8 +54,8 @@ const FloatingLabelInput = ({
             outputRange: [COLORS.textLight, COLORS.primary],
         }),
         zIndex: 1,
-        backgroundColor: COLORS.white, // Covers the border to create the "gap"
-        paddingHorizontal: 4,
+        backgroundColor: COLORS.white,
+        paddingHorizontal: 8,
     };
 
     const containerBorderColor = error
@@ -86,8 +86,14 @@ const FloatingLabelInput = ({
                 <TextInput
                     style={[styles.input, { paddingLeft: icon ? 48 : SPACING.md }]}
                     value={value}
-                    onFocus={() => setIsFocused(true)}
-                    onBlur={() => setIsFocused(false)}
+                    onFocus={(e) => {
+                        setIsFocused(true);
+                        props.onFocus && props.onFocus(e);
+                    }}
+                    onBlur={(e) => {
+                        setIsFocused(false);
+                        props.onBlur && props.onBlur(e);
+                    }}
                     secureTextEntry={isPassword && !showPassword}
                     placeholder=""
                     placeholderTextColor={isFocused ? COLORS.textMuted : 'transparent'}
@@ -111,7 +117,7 @@ const FloatingLabelInput = ({
             {error && <Text style={styles.errorText}>{error}</Text>}
         </View>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {
