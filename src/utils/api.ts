@@ -198,10 +198,15 @@ export interface Conversation {
     conversation_id: string;
     partner_id: string;
     name: string;
-    avatar?: string; // Partner avatar
+    avatar?: string;
     last_message?: string;
     last_message_time?: string;
+    last_message_sender_id?: string;
     unread_count?: number;
+    status?: 'online' | 'offline';
+    last_seen?: string;
+    is_pinned?: boolean;
+    is_muted?: boolean;
 }
 
 export async function getConversations(): Promise<Conversation[]> {
@@ -215,3 +220,34 @@ export async function getChatHistory(partnerId: string): Promise<any[]> {
 export async function searchUsers(query: string): Promise<ChatUser[]> {
     return apiRequest<ChatUser[]>(`/api/users/search?q=${encodeURIComponent(query)}`);
 }
+
+// Pin/Unpin a conversation
+export async function pinConversation(conversationId: string, pin: boolean): Promise<any> {
+    return apiRequest('/api/chat/conversations/' + conversationId + '/pin', {
+        method: 'POST',
+        body: JSON.stringify({ pin }),
+    });
+}
+
+// Mute/Unmute a conversation  
+export async function muteConversation(conversationId: string, mute: boolean): Promise<any> {
+    return apiRequest('/api/chat/conversations/' + conversationId + '/mute', {
+        method: 'POST',
+        body: JSON.stringify({ mute }),
+    });
+}
+
+// Delete (hide) a conversation
+export async function deleteConversation(conversationId: string): Promise<any> {
+    return apiRequest('/api/chat/conversations/' + conversationId, {
+        method: 'DELETE',
+    });
+}
+
+// Mark conversation as read
+export async function markConversationAsRead(conversationId: string): Promise<any> {
+    return apiRequest('/api/chat/conversations/' + conversationId + '/read', {
+        method: 'POST',
+    });
+}
+

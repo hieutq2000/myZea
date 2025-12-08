@@ -697,7 +697,7 @@ Lưu ý: confidence >= 60 là match thành công. Nếu ảnh mờ hoặc khó n
 app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
-        // Get private conversations with partner info
+        // Get private conversations with partner info, pin/mute status
         const [rows] = await pool.execute(`
             SELECT 
                 c.id as conversation_id,
@@ -706,6 +706,11 @@ app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
                 u.id as partner_id,
                 m.content as last_message,
                 m.created_at as last_message_time,
+                m.sender_id as last_message_sender_id,
+                u.last_seen,
+                u.status,
+                cp_me.is_pinned,
+                cp_me.is_muted,
                 (SELECT COUNT(*) FROM messages msg 
                  WHERE msg.conversation_id = c.id 
                  AND msg.sender_id != ? 
@@ -719,7 +724,8 @@ app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
             WHERE c.type = 'private' 
             AND cp_me.user_id = ? 
             AND cp_other.user_id != ?
-            ORDER BY m.created_at DESC
+            AND (cp_me.is_hidden IS NULL OR cp_me.is_hidden = 0)
+            ORDER BY cp_me.is_pinned DESC, m.created_at DESC
         `, [userId, userId, userId, userId]);
 
         res.json(rows);
@@ -782,6 +788,100 @@ app.get('/api/users/search', authenticateToken, async (req, res) => {
         );
         res.json(users);
     } catch (error) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Pin/Unpin conversation
+app.post('/api/chat/conversations/:id/pin', authenticateToken, async (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        const userId = req.user.id;
+        const { pin } = req.body; // true = pin, false = unpin
+
+        // Check if there's already a pin record
+        const [existing] = await pool.execute(
+            'SELECT * FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
+            [conversationId, userId]
+        );
+
+        if (existing.length > 0) {
+            await pool.execute(
+                'UPDATE conversation_participants SET is_pinned = ? WHERE conversation_id = ? AND user_id = ?',
+                [pin ? 1 : 0, conversationId, userId]
+            );
+        }
+
+        res.json({ success: true, pinned: pin });
+    } catch (error) {
+        console.error('Pin conversation error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Mute/Unmute conversation
+app.post('/api/chat/conversations/:id/mute', authenticateToken, async (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        const userId = req.user.id;
+        const { mute } = req.body;
+
+        await pool.execute(
+            'UPDATE conversation_participants SET is_muted = ? WHERE conversation_id = ? AND user_id = ?',
+            [mute ? 1 : 0, conversationId, userId]
+        );
+
+        res.json({ success: true, muted: mute });
+    } catch (error) {
+        console.error('Mute conversation error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Delete (hide) conversation for current user
+app.delete('/api/chat/conversations/:id', authenticateToken, async (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        const userId = req.user.id;
+
+        // Soft delete: mark as hidden for this user
+        await pool.execute(
+            'UPDATE conversation_participants SET is_hidden = 1 WHERE conversation_id = ? AND user_id = ?',
+            [conversationId, userId]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Delete conversation error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Mark conversation as read
+app.post('/api/chat/conversations/:id/read', authenticateToken, async (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        const userId = req.user.id;
+
+        // Get all unread messages in this conversation
+        const [unreadMessages] = await pool.execute(`
+            SELECT id FROM messages 
+            WHERE conversation_id = ? 
+            AND sender_id != ?
+            AND id NOT IN (SELECT message_id FROM message_reads WHERE user_id = ?)
+        `, [conversationId, userId, userId]);
+
+        // Mark them all as read
+        for (const msg of unreadMessages) {
+            await pool.execute(
+                'INSERT IGNORE INTO message_reads (message_id, user_id, read_at) VALUES (?, ?, NOW())',
+                [msg.id, userId]
+            );
+        }
+
+        res.json({ success: true, markedCount: unreadMessages.length });
+    } catch (error) {
+        console.error('Mark read error:', error);
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
