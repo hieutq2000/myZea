@@ -228,17 +228,23 @@ export default function LiveSessionScreen({
 
             // Wait for face detection before starting
             setTimeout(async () => {
-                const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-                const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+                try {
+                    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+                    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-                const systemPrompt = generateSystemPrompt(mode, topic, audience);
-                const result = await model.generateContent(systemPrompt + '\n\nHãy bắt đầu buổi học với lời chào ngắn gọn và câu hỏi đầu tiên.');
+                    const systemPrompt = generateSystemPrompt(mode, topic, audience);
+                    const result = await model.generateContent(systemPrompt + '\n\nHãy bắt đầu buổi học với lời chào ngắn gọn và câu hỏi đầu tiên.');
 
-                const aiResponse = result.response.text();
-                setAiTranscript(aiResponse);
-                addToLog('AI', aiResponse);
-                speakText(aiResponse);
-                setCurrentQuestion(1);
+                    const aiResponse = result.response.text();
+                    setAiTranscript(aiResponse);
+                    addToLog('AI', aiResponse);
+                    speakText(aiResponse);
+                    setCurrentQuestion(1);
+                } catch (innerError) {
+                    console.error('Error in startSession timeout:', innerError);
+                    setError((innerError as Error).message || 'Không thể kết nối với AI');
+                    setStatus(LiveStatus.ERROR);
+                }
             }, isExamMode ? 3000 : 1000);
 
         } catch (e) {
