@@ -194,19 +194,22 @@ export default function ChatDetailScreen() {
             <StatusBar barStyle="light-content" backgroundColor={ZALO_BLUE} />
             {renderHeader()}
 
-            <FlatList
-                ref={flatListRef}
-                data={messages}
-                keyExtractor={item => item.id}
-                renderItem={renderMessageItem}
-                contentContainerStyle={styles.listContent}
-                style={styles.listStyle}
-            />
-
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                style={styles.keyboardAvoid}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
+                <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    keyExtractor={item => item.id}
+                    renderItem={renderMessageItem}
+                    contentContainerStyle={styles.listContent}
+                    style={styles.listStyle}
+                    onContentSizeChange={() => scrollToBottom()}
+                    onLayout={() => scrollToBottom()}
+                />
+
                 <View style={styles.inputContainer}>
                     <TouchableOpacity style={styles.attachButton}>
                         <MaterialIcons name="image" size={26} color="#6B7280" />
@@ -226,6 +229,9 @@ export default function ChatDetailScreen() {
                             placeholder="Tin nhắn"
                             placeholderTextColor="#9CA3AF"
                             multiline
+                            onFocus={() => {
+                                setTimeout(() => scrollToBottom(), 300);
+                            }}
                         />
                         <TouchableOpacity style={styles.emojiButton}>
                             <FontAwesome name="smile-o" size={24} color="#6B7280" />
@@ -269,6 +275,7 @@ const styles = StyleSheet.create({
     headerRight: { flexDirection: 'row', width: 100, justifyContent: 'space-between' },
     headerIcon: { padding: 4 },
 
+    keyboardAvoid: { flex: 1 },
     listStyle: { flex: 1 },
     listContent: { padding: 12, paddingBottom: 10 },
 

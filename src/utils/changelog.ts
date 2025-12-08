@@ -10,14 +10,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
-        version: "2.7",
+        version: "2.9",
+        date: "08/12/2024",
+        title: "Tính năng Chat như Zalo",
+        changes: [
+            "💬 Danh sách tin nhắn với Dark Mode",
+            "📌 Vuốt để Ghim/Tắt thông báo/Xóa",
+            "🟢 Hiển thị trạng thái Online",
+            "⌨️ Hiển thị 'Đang nhập...'",
+            "🔔 Tabs: Tất cả / Chưa đọc / Tắt thông báo",
+            "🔍 Tìm kiếm cuộc trò chuyện",
+            "⏰ Format thời gian theo kiểu Zalo",
+            "📝 Hiển thị 'Bạn:' cho tin nhắn của mình",
+        ]
+    },
+    {
+        version: "2.8",
         date: "08/12/2024",
         title: "Tối ưu AI & Trải nghiệm",
         changes: [
             "🤖 Chuyển sang AI Model ổn định (1.5 Flash)",
             "✨ Hiệu ứng nhập liệu (Focus) rõ ràng hơn",
             "📱 Hiển thị version check cho tài khoản",
-            "� Sửa lỗi AI không hoạt động ổn định",
+            "🐛 Sửa lỗi AI không hoạt động ổn định",
         ]
     },
     {
@@ -48,7 +63,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         date: "07/12/2024",
         title: "Cải tiến trang Hồ sơ",
         changes: [
-            "�🗑️ Bỏ phần chọn giọng AI",
+            "🗑️ Bỏ phần chọn giọng AI",
             "👤 Tên hiển thị chỉ xem (không sửa)",
             "🔐 Thêm toggle Đăng nhập Face ID",
             "🚪 Thêm nút Đăng xuất",

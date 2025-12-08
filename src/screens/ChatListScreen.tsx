@@ -2,18 +2,26 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import {
     View, Text, FlatList, TouchableOpacity, StyleSheet,
     TextInput, StatusBar, SafeAreaView, Platform, ActivityIndicator,
-    RefreshControl, Alert
+    RefreshControl, Alert, Image
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
 import { getConversations, Conversation, getCurrentUser, pinConversation, muteConversation, deleteConversation } from '../utils/api';
-import SwipeableConversationItem from '../components/Chat/SwipeableConversationItem';
+import { LinearGradient } from 'expo-linear-gradient';
 
-// Zalo Colors
+// Dark Theme Colors (like Zalo Dark Mode)
+const DARK_BG = '#1A1A1A';
+const DARK_HEADER = '#1A1A1A';
+const DARK_CARD = '#262626';
+const DARK_TEXT = '#FFFFFF';
+const DARK_TEXT_SECONDARY = '#8E8E93';
 const ZALO_BLUE = '#0068FF';
+const ONLINE_GREEN = '#34C759';
+
+type TabType = 'all' | 'unread' | 'muted';
 
 export default function ChatListScreen() {
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -24,12 +32,9 @@ export default function ChatListScreen() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
     const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
+    const [activeTab, setActiveTab] = useState<TabType>('all');
 
-    // Refs for swipeable items
-    const swipeableRefs = useRef<{ [key: string]: any }>({});
-    const currentOpenSwipeable = useRef<string | null>(null);
-
-    // Format time like Zalo: HH:mm for today, "Th X" for this week, DD/MM for older
+    // Format time like Zalo
     const formatMessageTime = useCallback((dateString: string | null | undefined): string => {
         if (!dateString) return '';
 
@@ -78,13 +83,6 @@ export default function ChatListScreen() {
                 isMuted: !!c.is_muted,
             }));
 
-            // Sort: pinned first, then by time
-            mapped.sort((a: any, b: any) => {
-                if (a.isPinned && !b.isPinned) return -1;
-                if (!a.isPinned && b.isPinned) return 1;
-                return 0;
-            });
-
             setConversations(mapped);
         } catch (error) {
             console.log('Load conversations error:', error);
@@ -98,7 +96,6 @@ export default function ChatListScreen() {
         loadConversations().then(() => setRefreshing(false));
     }, []);
 
-    // Load current user ID
     useEffect(() => {
         const fetchUser = async () => {
             const user = await getCurrentUser();
@@ -107,7 +104,6 @@ export default function ChatListScreen() {
         fetchUser();
     }, []);
 
-    // Load conversations and setup socket listeners
     useEffect(() => {
         loadConversations();
 
@@ -169,32 +165,55 @@ export default function ChatListScreen() {
         }, [])
     );
 
-    // Filter conversations by search
+    // Filter conversations by search and tab
     const filteredConversations = useMemo(() => {
-        if (!searchText.trim()) return conversations;
-        const query = searchText.toLowerCase();
-        return conversations.filter(conv =>
-            conv.name?.toLowerCase().includes(query) ||
-            conv.lastMessage?.toLowerCase().includes(query)
-        );
-    }, [conversations, searchText]);
+        let result = conversations;
 
-    // Close other swipeables when one opens
-    const handleSwipeableWillOpen = (itemId: string) => {
-        if (currentOpenSwipeable.current && currentOpenSwipeable.current !== itemId) {
-            swipeableRefs.current[currentOpenSwipeable.current]?.close();
+        // Filter by tab
+        if (activeTab === 'unread') {
+            result = result.filter(conv => conv.unread > 0);
+        } else if (activeTab === 'muted') {
+            result = result.filter(conv => conv.isMuted);
         }
-        currentOpenSwipeable.current = itemId;
+
+        // Filter by search
+        if (searchText.trim()) {
+            const query = searchText.toLowerCase();
+            result = result.filter(conv =>
+                conv.name?.toLowerCase().includes(query) ||
+                conv.lastMessage?.toLowerCase().includes(query)
+            );
+        }
+
+        // Sort: pinned first
+        result.sort((a, b) => {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return 0;
+        });
+
+        return result;
+    }, [conversations, searchText, activeTab]);
+
+    // Format last message
+    const formatLastMessage = (item: any): string => {
+        if (!item.lastMessage) return 'Bắt đầu cuộc trò chuyện';
+
+        // Check for sticker
+        if (item.lastMessage.includes('sticker') || item.lastMessage.startsWith('{')) {
+            return '🎭 STICKER';
+        }
+
+        const isFromMe = item.lastMessageSenderId === currentUserId;
+        const prefix = isFromMe ? 'Bạn: ' : '';
+        return `${prefix}${item.lastMessage}`;
     };
 
-    // Handlers for swipe actions
     const handleMute = async (conversationId: string) => {
         const conv = conversations.find(c => c.id === conversationId);
         if (!conv) return;
 
         const newMuteState = !conv.isMuted;
-
-        // Optimistic update
         setConversations(prev => prev.map(c =>
             c.id === conversationId ? { ...c, isMuted: newMuteState } : c
         ));
@@ -202,112 +221,145 @@ export default function ChatListScreen() {
         try {
             await muteConversation(conversationId, newMuteState);
         } catch (error) {
-            // Rollback on error
             setConversations(prev => prev.map(c =>
                 c.id === conversationId ? { ...c, isMuted: !newMuteState } : c
             ));
-            Alert.alert('Lỗi', 'Không thể cập nhật trạng thái thông báo');
         }
     };
 
     const handleDelete = async (conversationId: string) => {
-        Alert.alert(
-            'Xóa cuộc trò chuyện',
-            'Bạn có chắc chắn muốn xóa cuộc trò chuyện này?',
-            [
-                { text: 'Hủy', style: 'cancel' },
-                {
-                    text: 'Xóa',
-                    style: 'destructive',
-                    onPress: async () => {
-                        // Optimistic update
-                        setConversations(prev => prev.filter(conv => conv.id !== conversationId));
-
-                        try {
-                            await deleteConversation(conversationId);
-                        } catch (error) {
-                            // Reload on error
-                            loadConversations();
-                            Alert.alert('Lỗi', 'Không thể xóa cuộc trò chuyện');
-                        }
+        Alert.alert('Xóa cuộc trò chuyện', 'Bạn có chắc chắn muốn xóa?', [
+            { text: 'Hủy', style: 'cancel' },
+            {
+                text: 'Xóa', style: 'destructive',
+                onPress: async () => {
+                    setConversations(prev => prev.filter(conv => conv.id !== conversationId));
+                    try {
+                        await deleteConversation(conversationId);
+                    } catch (error) {
+                        loadConversations();
                     }
-                },
-            ]
+                }
+            },
+        ]);
+    };
+
+    const renderItem = ({ item }: { item: any }) => {
+        const isTyping = typingUsers[item.id];
+
+        return (
+            <TouchableOpacity
+                style={styles.itemContainer}
+                onPress={() => navigation.navigate('ChatDetail', {
+                    conversationId: item.id,
+                    partnerId: item.partnerId,
+                    userName: item.name,
+                    avatar: item.avatar
+                })}
+                activeOpacity={0.7}
+            >
+                {/* Avatar */}
+                <View style={styles.avatarContainer}>
+                    {item.avatar ? (
+                        <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                    ) : (
+                        <LinearGradient
+                            colors={['#667eea', '#764ba2']}
+                            style={styles.avatar}
+                        >
+                            <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase()}</Text>
+                        </LinearGradient>
+                    )}
+                    {item.isOnline && <View style={styles.onlineDot} />}
+                </View>
+
+                {/* Content */}
+                <View style={styles.contentContainer}>
+                    <View style={styles.headerRow}>
+                        <Text style={[styles.name, item.unread > 0 && styles.nameUnread]} numberOfLines={1}>
+                            {item.name}
+                        </Text>
+                        <Text style={styles.time}>{item.time}</Text>
+                    </View>
+
+                    <View style={styles.messageRow}>
+                        {isTyping ? (
+                            <Text style={styles.typingText} numberOfLines={1}>Đang nhập...</Text>
+                        ) : (
+                            <Text style={[styles.lastMessage, item.unread > 0 && styles.lastMessageUnread]} numberOfLines={1}>
+                                {formatLastMessage(item)}
+                            </Text>
+                        )}
+                        {item.isMuted && (
+                            <Ionicons name="notifications-off" size={14} color={DARK_TEXT_SECONDARY} style={{ marginLeft: 4 }} />
+                        )}
+                    </View>
+                </View>
+            </TouchableOpacity>
         );
     };
 
-    const handlePin = async (conversationId: string) => {
-        const conv = conversations.find(c => c.id === conversationId);
-        if (!conv) return;
-
-        const newPinState = !conv.isPinned;
-
-        // Optimistic update with re-sort
-        setConversations(prev => {
-            const updated = prev.map(c =>
-                c.id === conversationId ? { ...c, isPinned: newPinState } : c
-            );
-            updated.sort((a, b) => {
-                if (a.isPinned && !b.isPinned) return -1;
-                if (!a.isPinned && b.isPinned) return 1;
-                return 0;
-            });
-            return updated;
-        });
-
-        try {
-            await pinConversation(conversationId, newPinState);
-        } catch (error) {
-            // Reload on error
-            loadConversations();
-            Alert.alert('Lỗi', 'Không thể ghim cuộc trò chuyện');
-        }
-    };
-
-    const renderItem = ({ item }: { item: any }) => (
-        <SwipeableConversationItem
-            ref={(ref: any) => { swipeableRefs.current[item.id] = ref; }}
-            conversation={item}
-            currentUserId={currentUserId || undefined}
-            isTyping={typingUsers[item.id]}
-            onPress={() => navigation.navigate('ChatDetail', {
-                conversationId: item.id,
-                partnerId: item.partnerId,
-                userName: item.name,
-                avatar: item.avatar
-            })}
-            onMute={handleMute}
-            onDelete={handleDelete}
-            onPin={handlePin}
-            onSwipeableWillOpen={() => handleSwipeableWillOpen(item.id)}
-        />
+    const renderTabs = () => (
+        <View style={styles.tabContainer}>
+            <TouchableOpacity
+                style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+                onPress={() => setActiveTab('all')}
+            >
+                <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>Tất cả</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                style={[styles.tab, activeTab === 'unread' && styles.tabActive]}
+                onPress={() => setActiveTab('unread')}
+            >
+                <Text style={[styles.tabText, activeTab === 'unread' && styles.tabTextActive]}>Chưa đọc</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                style={[styles.tab, activeTab === 'muted' && styles.tabActive]}
+                onPress={() => setActiveTab('muted')}
+            >
+                <Text style={[styles.tabText, activeTab === 'muted' && styles.tabTextActive]}>Tắt thông báo</Text>
+            </TouchableOpacity>
+        </View>
     );
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={ZALO_BLUE} />
+            <StatusBar barStyle="light-content" backgroundColor={DARK_HEADER} />
 
             {/* Header */}
             <View style={styles.header}>
-                <View style={styles.headerTop}>
+                <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <Ionicons name="arrow-back" size={24} color="white" />
+                        <Ionicons name="arrow-back" size={24} color={DARK_TEXT} />
                     </TouchableOpacity>
-                    <View style={styles.searchBar}>
-                        <Ionicons name="search" size={20} color="white" style={{ opacity: 0.7 }} />
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder="Tìm kiếm"
-                            placeholderTextColor="rgba(255,255,255,0.7)"
-                            value={searchText}
-                            onChangeText={setSearchText}
-                        />
-                    </View>
-                    <TouchableOpacity style={styles.addButton}>
-                        <Ionicons name="add" size={28} color="white" />
+                    <Text style={styles.headerTitle}>Chats</Text>
+                </View>
+                <View style={styles.headerRight}>
+                    <TouchableOpacity style={styles.headerIcon}>
+                        <Ionicons name="qr-code-outline" size={22} color={DARK_TEXT} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.headerIcon}>
+                        <Ionicons name="add-outline" size={26} color={DARK_TEXT} />
                     </TouchableOpacity>
                 </View>
             </View>
+
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+                <View style={styles.searchBar}>
+                    <Ionicons name="search" size={18} color={DARK_TEXT_SECONDARY} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Tìm kiếm"
+                        placeholderTextColor={DARK_TEXT_SECONDARY}
+                        value={searchText}
+                        onChangeText={setSearchText}
+                    />
+                </View>
+            </View>
+
+            {/* Tabs */}
+            {renderTabs()}
 
             {/* Content */}
             {loading ? (
@@ -317,18 +369,12 @@ export default function ChatListScreen() {
                 </View>
             ) : filteredConversations.length === 0 ? (
                 <View style={styles.emptyContainer}>
-                    <MaterialIcons name="chat-bubble-outline" size={80} color="#E5E7EB" />
+                    <MaterialIcons name="chat-bubble-outline" size={80} color={DARK_TEXT_SECONDARY} />
                     <Text style={styles.emptyTitle}>
-                        {searchText ? 'Không tìm thấy kết quả' : 'Chưa có cuộc trò chuyện nào'}
+                        {activeTab === 'unread' ? 'Không có tin nhắn chưa đọc' :
+                            activeTab === 'muted' ? 'Không có cuộc trò chuyện nào bị tắt thông báo' :
+                                searchText ? 'Không tìm thấy kết quả' : 'Chưa có cuộc trò chuyện nào'}
                     </Text>
-                    <Text style={styles.emptySubtitle}>
-                        {searchText ? 'Thử từ khóa khác' : 'Hãy bắt đầu kết nối với mọi người ngay thôi!'}
-                    </Text>
-                    {!searchText && (
-                        <TouchableOpacity style={styles.startChatBtn}>
-                            <Text style={styles.startChatText}>Tìm bạn bè</Text>
-                        </TouchableOpacity>
-                    )}
                 </View>
             ) : (
                 <FlatList
@@ -336,9 +382,13 @@ export default function ChatListScreen() {
                     renderItem={renderItem}
                     keyExtractor={item => item.id}
                     contentContainerStyle={styles.listContent}
-                    ItemSeparatorComponent={() => <View style={styles.separator} />}
                     refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[ZALO_BLUE]} />
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            colors={[ZALO_BLUE]}
+                            tintColor={ZALO_BLUE}
+                        />
                     }
                 />
             )}
@@ -347,42 +397,173 @@ export default function ChatListScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: 'white' },
-    header: {
-        backgroundColor: ZALO_BLUE,
-        paddingTop: Platform.OS === 'android' ? 40 : 0,
-        paddingBottom: 12,
-        paddingHorizontal: 16,
-    },
-    headerTop: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        height: 44,
-    },
-    backButton: { marginRight: 12 },
-    searchBar: {
+    container: {
         flex: 1,
+        backgroundColor: DARK_BG
+    },
+
+    // Header
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        borderRadius: 8,
-        paddingHorizontal: 10,
+        justifyContent: 'space-between',
+        paddingTop: Platform.OS === 'android' ? 40 : 0,
+        paddingHorizontal: 16,
+        paddingBottom: 8,
+        backgroundColor: DARK_HEADER,
+    },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    backButton: {
+        marginRight: 8
+    },
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: DARK_TEXT,
+    },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    headerIcon: {
+        padding: 8,
+        marginLeft: 8,
+    },
+
+    // Search
+    searchContainer: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        backgroundColor: DARK_HEADER,
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: DARK_CARD,
+        borderRadius: 10,
+        paddingHorizontal: 12,
         height: 36,
     },
     searchInput: {
         flex: 1,
         marginLeft: 8,
-        color: 'white',
+        color: DARK_TEXT,
         fontSize: 15,
-        height: '100%',
     },
-    addButton: { marginLeft: 12 },
-    listContent: { paddingBottom: 20 },
-    separator: {
-        height: 0.5,
-        backgroundColor: '#E5E7EB',
-        marginLeft: 84,
+
+    // Tabs
+    tabContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: DARK_HEADER,
+        gap: 8,
     },
+    tab: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: DARK_CARD,
+    },
+    tabActive: {
+        backgroundColor: '#2C5F9E',
+    },
+    tabText: {
+        color: DARK_TEXT_SECONDARY,
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    tabTextActive: {
+        color: DARK_TEXT,
+    },
+
+    // List
+    listContent: {
+        paddingBottom: 20
+    },
+
+    // Conversation Item
+    itemContainer: {
+        flexDirection: 'row',
+        padding: 16,
+        paddingVertical: 12,
+        alignItems: 'center',
+        backgroundColor: DARK_BG,
+    },
+    avatarContainer: {
+        position: 'relative',
+        marginRight: 12
+    },
+    avatar: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarText: {
+        color: 'white',
+        fontSize: 20,
+        fontWeight: 'bold'
+    },
+    onlineDot: {
+        position: 'absolute',
+        bottom: 2,
+        right: 2,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        backgroundColor: ONLINE_GREEN,
+        borderWidth: 2,
+        borderColor: DARK_BG,
+    },
+    contentContainer: {
+        flex: 1
+    },
+    headerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4
+    },
+    name: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: DARK_TEXT,
+        flex: 1,
+        marginRight: 8
+    },
+    nameUnread: {
+        fontWeight: '600'
+    },
+    time: {
+        fontSize: 12,
+        color: DARK_TEXT_SECONDARY
+    },
+    messageRow: {
+        flexDirection: 'row',
+        alignItems: 'center'
+    },
+    lastMessage: {
+        fontSize: 14,
+        color: DARK_TEXT_SECONDARY,
+        flex: 1
+    },
+    lastMessageUnread: {
+        color: DARK_TEXT,
+        fontWeight: '500'
+    },
+    typingText: {
+        fontSize: 14,
+        color: ZALO_BLUE,
+        fontStyle: 'italic',
+        flex: 1
+    },
+
+    // States
     centerContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -390,7 +571,7 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         marginTop: 12,
-        color: '#6B7280',
+        color: DARK_TEXT_SECONDARY,
         fontSize: 14,
     },
     emptyContainer: {
@@ -398,32 +579,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 40,
-        paddingBottom: 100,
     },
     emptyTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#374151',
+        fontSize: 16,
+        color: DARK_TEXT_SECONDARY,
         marginTop: 16,
         textAlign: 'center',
-    },
-    emptySubtitle: {
-        fontSize: 14,
-        color: '#9CA3AF',
-        marginTop: 8,
-        textAlign: 'center',
-        lineHeight: 20,
-        marginBottom: 24,
-    },
-    startChatBtn: {
-        backgroundColor: '#E5F3FF',
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 20,
-    },
-    startChatText: {
-        color: ZALO_BLUE,
-        fontWeight: '600',
-        fontSize: 15,
     },
 });
