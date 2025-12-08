@@ -19,6 +19,7 @@ import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { login, register, checkServerHealth } from '../utils/api';
 import { User, AuthView } from '../types';
 import { getLatestChangelog } from '../utils/changelog';
+import FloatingLabelInput from '../components/FloatingLabelInput';
 
 interface AuthScreenProps {
     onLogin: (user: User) => void;
@@ -28,15 +29,15 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [view, setView] = useState<AuthView>(AuthView.LOGIN);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [name, setName] = useState('');
+    const [agreeToTerms, setAgreeToTerms] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [showPassword, setShowPassword] = useState(false);
 
     const [faceIdEnabled, setFaceIdEnabled] = useState(false);
     const [hasBiometrics, setHasBiometrics] = useState(false);
     const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
-    const [focusedField, setFocusedField] = useState<'EMAIL' | 'PASSWORD' | 'NAME' | null>(null);
 
     // Load saved credentials and Face ID setting on mount
     useEffect(() => {
@@ -115,9 +116,19 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             return;
         }
 
-        if (view === AuthView.REGISTER && !name) {
-            setError('Vui lòng nhập họ tên');
-            return;
+        if (view === AuthView.REGISTER) {
+            if (!name) {
+                setError('Vui lòng nhập họ tên');
+                return;
+            }
+            if (password !== confirmPassword) {
+                setError('Mật khẩu nhập lại không khớp');
+                return;
+            }
+            if (!agreeToTerms) {
+                setError('Bạn cần đồng ý với điều khoản sử dụng');
+                return;
+            }
         }
 
         setLoading(true);
@@ -183,64 +194,58 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     )}
 
                     {view === AuthView.REGISTER && (
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Họ và tên</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Nguyễn Văn A"
-                                value={name}
-                                onChangeText={setName}
-                                placeholderTextColor={COLORS.textMuted}
-                            />
-                        </View>
+                        <FloatingLabelInput
+                            label="Họ và tên"
+                            value={name}
+                            onChangeText={setName}
+                            placeholder="Nguyễn Văn A"
+                        />
                     )}
 
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Email</Text>
-                        <TextInput
-                            style={[
-                                styles.input,
-                                focusedField === 'EMAIL' && styles.inputFocused
-                            ]}
-                            placeholder="email@example.com"
-                            value={email}
-                            onChangeText={setEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            placeholderTextColor={COLORS.textMuted}
-                            onFocus={() => setFocusedField('EMAIL')}
-                            onBlur={() => setFocusedField(null)}
-                        />
-                    </View>
+                    <FloatingLabelInput
+                        label="Email"
+                        value={email}
+                        onChangeText={setEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        placeholder="email@example.com"
+                    />
 
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Mật khẩu</Text>
-                        <View style={[
-                            styles.passwordContainer,
-                            focusedField === 'PASSWORD' && styles.inputFocused
-                        ]}>
-                            <TextInput
-                                style={styles.passwordInput}
+                    <FloatingLabelInput
+                        label="Mật khẩu"
+                        value={password}
+                        onChangeText={setPassword}
+                        isPassword
+                        placeholder="••••••••"
+                    />
+
+                    {view === AuthView.REGISTER && (
+                        <>
+                            <FloatingLabelInput
+                                label="Nhập lại mật khẩu"
+                                value={confirmPassword}
+                                onChangeText={setConfirmPassword}
+                                isPassword
                                 placeholder="••••••••"
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry={!showPassword}
-                                placeholderTextColor={COLORS.textMuted}
-                                onFocus={() => setFocusedField('PASSWORD')}
-                                onBlur={() => setFocusedField(null)}
                             />
+
                             <TouchableOpacity
-                                style={styles.eyeButton}
-                                onPress={() => setShowPassword(!showPassword)}
+                                style={styles.termsContainer}
+                                onPress={() => setAgreeToTerms(!agreeToTerms)}
+                                activeOpacity={0.8}
                             >
-                                <Feather
-                                    name={showPassword ? 'eye' : 'eye-off'}
-                                    size={20}
-                                    color={COLORS.textMuted}
-                                />
+                                <View style={[
+                                    styles.checkbox,
+                                    agreeToTerms && styles.checkboxChecked
+                                ]}>
+                                    {agreeToTerms && <Feather name="check" size={14} color={COLORS.white} />}
+                                </View>
+                                <Text style={styles.termsText}>
+                                    Tôi đồng ý với <Text style={styles.linkText}>Điều khoản sử dụng</Text> và <Text style={styles.linkText}>Chính sách bảo mật</Text>
+                                </Text>
                             </TouchableOpacity>
-                        </View>
-                    </View>
+                        </>
+                    )}
 
                     {/* Login Button Row with Face ID */}
                     <View style={styles.loginRow}>
@@ -377,26 +382,6 @@ const styles = StyleSheet.create({
     inputGroup: {
         marginBottom: SPACING.md,
     },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: COLORS.textLight,
-        marginBottom: SPACING.xs,
-    },
-    input: {
-        backgroundColor: COLORS.backgroundDark,
-        borderRadius: BORDER_RADIUS.lg,
-        padding: SPACING.md,
-        fontSize: 16,
-        color: COLORS.text,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    inputFocused: {
-        borderColor: COLORS.primary,
-        borderWidth: 2,
-        backgroundColor: COLORS.white,
-    },
     gradientButton: {
         paddingVertical: SPACING.md,
         alignItems: 'center',
@@ -416,23 +401,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '500',
     },
-    passwordContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: COLORS.backgroundDark,
-        borderRadius: BORDER_RADIUS.lg,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    passwordInput: {
-        flex: 1,
-        padding: SPACING.md,
-        fontSize: 16,
-        color: COLORS.text,
-    },
-    eyeButton: {
-        padding: SPACING.md,
-    },
+
     loginRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -480,5 +449,35 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: COLORS.textMuted,
         fontWeight: '500',
+    },
+    termsContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginTop: SPACING.md,
+        marginHorizontal: SPACING.xs,
+    },
+    checkbox: {
+        width: 20,
+        height: 20,
+        borderRadius: 4,
+        borderWidth: 2,
+        borderColor: COLORS.primary,
+        marginRight: SPACING.sm,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 2,
+    },
+    checkboxChecked: {
+        backgroundColor: COLORS.primary,
+    },
+    termsText: {
+        flex: 1,
+        fontSize: 14,
+        color: COLORS.textLight,
+        lineHeight: 20,
+    },
+    linkText: {
+        color: COLORS.primary,
+        fontWeight: 'bold',
     },
 });
