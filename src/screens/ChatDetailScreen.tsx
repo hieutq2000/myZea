@@ -126,6 +126,15 @@ export default function ChatDetailScreen() {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
+                <View style={styles.headerAvatarContainer}>
+                    {avatar ? (
+                        <Image source={{ uri: avatar }} style={styles.headerAvatar} />
+                    ) : (
+                        <View style={[styles.headerAvatar, { backgroundColor: '#A0AEC0', alignItems: 'center', justifyContent: 'center' }]}>
+                            <Text style={{ color: 'white', fontSize: 14 }}>{userName?.[0]}</Text>
+                        </View>
+                    )}
+                </View>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle} numberOfLines={1}>{userName}</Text>
                     <Text style={styles.headerSubtitle}>Vừa mới truy cập</Text>
@@ -251,7 +260,9 @@ const styles = StyleSheet.create({
         paddingBottom: 10,
     },
     headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    backButton: { padding: 4, marginRight: 8 },
+    backButton: { padding: 4, marginRight: 4 },
+    headerAvatarContainer: { marginRight: 10 },
+    headerAvatar: { width: 36, height: 36, borderRadius: 18 },
     headerInfo: { flex: 1 },
     headerTitle: { color: 'white', fontSize: 17, fontWeight: '600' },
     headerSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
@@ -269,25 +280,16 @@ const styles = StyleSheet.create({
     avatarSmall: { width: 28, height: 28, borderRadius: 14 },
 
     messageBubble: {
-        maxWidth: '75%',
+        maxWidth: '80%',
         padding: 10,
         paddingHorizontal: 12,
         borderRadius: 12,
-        elevation: 1,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 1,
     },
     bubbleMe: {
         backgroundColor: MY_BUBBLE,
-        borderWidth: 0.5,
-        borderColor: '#C6E5FF',
     },
     bubbleOther: {
         backgroundColor: OTHER_BUBBLE,
-        borderWidth: 0.5,
-        borderColor: '#E5E7EB',
     },
     messageText: { fontSize: 16, lineHeight: 22 },
     messageTime: { fontSize: 10, color: '#9CA3AF', marginTop: 4, alignSelf: 'flex-end' },

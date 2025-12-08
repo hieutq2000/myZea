@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, TextInput, StatusBar, SafeAreaView, Platform } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, TextInput, StatusBar, SafeAreaView, Platform, ActivityIndicator, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -19,6 +19,12 @@ export default function ChatListScreen() {
     const [conversations, setConversations] = useState<any[]>([]);
     const [searchText, setSearchText] = useState('');
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = React.useCallback(() => {
+        setRefreshing(true);
+        loadConversations().then(() => setRefreshing(false));
+    }, []);
 
     const loadConversations = async () => {
         try {
@@ -128,21 +134,41 @@ export default function ChatListScreen() {
                         <Ionicons name="add" size={28} color="white" />
                     </TouchableOpacity>
                 </View>
-
-                {/* Tabs (Optional for later) */}
-                {/* <View style={styles.tabs}>
-                    <Text style={styles.activeTab}>Tất cả</Text>
-                    <Text style={styles.inactiveTab}>Khách hàng</Text>
-                </View> */}
             </View>
 
-            <FlatList
-                data={conversations}
-                renderItem={renderItem}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.listContent}
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
-            />
+            {loading ? (
+                <View style={styles.centerContainer}>
+                    <ActivityIndicator size="large" color={ZALO_BLUE} />
+                    <Text style={styles.loadingText}>Đang tải tin nhắn...</Text>
+                </View>
+            ) : conversations.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                    <MaterialIcons name="chat-bubble-outline" size={80} color="#E5E7EB" />
+                    <Text style={styles.emptyTitle}>Chưa có cuộc trò chuyện nào</Text>
+                    <Text style={styles.emptySubtitle}>Hãy bắt đầu kết nối với mọi người ngay thôi!</Text>
+
+                    <TouchableOpacity
+                        style={styles.startChatBtn}
+                        onPress={() => {
+                            // Todo: Open contact list or search
+                            // For now, demo create chat with AI
+                        }}
+                    >
+                        <Text style={styles.startChatText}>Tìm bạn bè</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <FlatList
+                    data={conversations}
+                    renderItem={renderItem}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={styles.listContent}
+                    ItemSeparatorComponent={() => <View style={styles.separator} />}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[ZALO_BLUE]} />
+                    }
+                />
+            )}
         </SafeAreaView>
     );
 }
@@ -226,5 +252,48 @@ const styles = StyleSheet.create({
         height: 1,
         backgroundColor: '#F3F4F6',
         marginLeft: 88, // Indent separator
+    },
+    centerContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 12,
+        color: '#6B7280',
+        fontSize: 14,
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 40,
+        paddingBottom: 100,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#374151',
+        marginTop: 16,
+        textAlign: 'center',
+    },
+    emptySubtitle: {
+        fontSize: 14,
+        color: '#9CA3AF',
+        marginTop: 8,
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 24,
+    },
+    startChatBtn: {
+        backgroundColor: '#E5F3FF',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 20,
+    },
+    startChatText: {
+        color: ZALO_BLUE,
+        fontWeight: '600',
+        fontSize: 15,
     },
 });

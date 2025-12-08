@@ -222,7 +222,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
 
                     <View style={styles.headerInfo}>
                         <View>
-                            <Text style={styles.greeting}>Xin chào (v2.7) 🔐</Text>
+                            <Text style={styles.greeting}>Xin chào </Text>
                             <Text style={[styles.greeting, { fontSize: 10, color: COLORS.primary }]}>Học tập hiệu quả mỗi ngày!</Text>
                         </View>
                         <Text style={styles.userName} numberOfLines={1}>{user.name || 'Học viên'}</Text>
