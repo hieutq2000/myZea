@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar } from 'react-native';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { ActivityIndicator, View, Text, Alert } from 'react-native';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -9,6 +10,7 @@ import LiveSessionScreen from './src/screens/LiveSessionScreen';
 import SplashScreen from './src/screens/SplashScreen';
 import UpdateModal from './src/components/UpdateModal';
 import PlaceScreen from './src/screens/PlaceScreen';
+import PostDetailScreen from './src/screens/PostDetailScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import IncomingCallModal from './src/components/IncomingCallModal';
 import BottomTabBar, { TabType } from './src/components/BottomTabBar';
@@ -428,9 +430,15 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   // Check if should show tab bar
   const shouldShowTabBar = user && view !== 'AUTH' && view !== 'SESSION';
 
+  const { colors, isDark } = useTheme();
+
   return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
 
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main">
@@ -468,6 +476,29 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         <Stack.Screen name="Settings">
           {(props) => <SettingsScreen {...props} onLogout={handleLogout} />}
         </Stack.Screen>
+
+        <Stack.Screen
+          name="PostDetail"
+          component={PostDetailScreen}
+          options={{
+            headerShown: false,
+            // Enable slide animation from right
+            cardStyleInterpolator: ({ current, layouts }) => {
+              return {
+                cardStyle: {
+                  transform: [
+                    {
+                      translateX: current.progress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [layouts.screen.width, 0],
+                      }),
+                    },
+                  ],
+                },
+              };
+            },
+          }}
+        />
       </Stack.Navigator>
 
       <UpdateModal
@@ -493,8 +524,10 @@ export default function App() {
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <AppContent navigationRef={navigationRef} />
-    </NavigationContainer>
+    <ThemeProvider>
+      <NavigationContainer ref={navigationRef}>
+        <AppContent navigationRef={navigationRef} />
+      </NavigationContainer>
+    </ThemeProvider>
   );
 }

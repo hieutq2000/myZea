@@ -11,6 +11,7 @@ export type RootStackParamList = {
     History: undefined;
     Profile: undefined;
     Settings: undefined;
+    PostDetail: { postId: string };
 
     // Chat Screens
     ChatList: undefined;

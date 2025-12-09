@@ -1075,32 +1075,84 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 p.content, 
                 p.image_url as image, 
                 p.created_at as createdAt,
+                p.original_post_id,
                 u.id as author_id,
                 u.name as author_name,
                 u.avatar as author_avatar,
+                -- Stats
                 (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes,
-                (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ?) as isLiked
+                (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) as comments,
+                (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ?) as isLiked,
+                -- Original Post Info (Self Join)
+                op.id as op_id,
+                op.content as op_content,
+                op.image_url as op_image,
+                op.created_at as op_createdAt,
+                opu.id as op_author_id,
+                opu.name as op_author_name,
+                opu.avatar as op_author_avatar
             FROM posts p
             JOIN users u ON p.user_id = u.id
+            LEFT JOIN posts op ON p.original_post_id = op.id
+            LEFT JOIN users opu ON op.user_id = opu.id
             ORDER BY p.created_at DESC
             LIMIT 50
         `, [userId]);
 
-        const formattedPosts = posts.map(p => ({
-            id: p.id,
-            author: {
-                id: p.author_id,
-                name: p.author_name,
-                avatar: p.author_avatar
-            },
-            content: p.content,
-            image: p.image,
-            createdAt: p.createdAt,
-            likes: p.likes,
-            isLiked: p.isLiked > 0,
-            comments: 0, // Placeholder
-            shares: 0 // Placeholder
-        }));
+        const formattedPosts = posts.map(p => {
+            // Parse images locally for main post
+            let images = [];
+            if (p.image) {
+                try {
+                    const parsed = JSON.parse(p.image);
+                    images = Array.isArray(parsed) ? parsed : [p.image];
+                } catch { images = [p.image]; }
+            }
+
+            // Parse images locally for original post (if exists)
+            let opImages = [];
+            let originalPost = null;
+
+            if (p.op_id) {
+                if (p.op_image) {
+                    try {
+                        const parsedOp = JSON.parse(p.op_image);
+                        opImages = Array.isArray(parsedOp) ? parsedOp : [p.op_image];
+                    } catch { opImages = [p.op_image]; }
+                }
+
+                originalPost = {
+                    id: p.op_id,
+                    author: {
+                        id: p.op_author_id,
+                        name: p.op_author_name,
+                        avatar: p.op_author_avatar
+                    },
+                    content: p.op_content,
+                    image: opImages.length > 0 ? opImages[0] : null,
+                    images: opImages,
+                    createdAt: p.op_createdAt
+                };
+            }
+
+            return {
+                id: p.id,
+                author: {
+                    id: p.author_id,
+                    name: p.author_name,
+                    avatar: p.author_avatar
+                },
+                content: p.content,
+                image: images.length > 0 ? images[0] : null,
+                images: images,
+                originalPost: originalPost, // Attached Shared Post
+                createdAt: p.createdAt,
+                likes: p.likes,
+                isLiked: p.isLiked > 0,
+                comments: p.comments,
+                shares: 0
+            };
+        });
 
         res.json(formattedPosts);
     } catch (error) {
@@ -1112,23 +1164,40 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
 // Create post
 app.post('/api/place/posts', authenticateToken, async (req, res) => {
     try {
-        const { content, imageUrl } = req.body;
+        const { content, imageUrl, images, originalPostId } = req.body;
 
-        if (!content && !imageUrl) {
+        const hasContent = !!content && content.trim().length > 0;
+        const hasImages = (images && images.length > 0) || !!imageUrl;
+        const isShare = !!originalPostId;
+
+        // If sharing, content can be empty. If not sharing, requires content or images
+        if (!isShare && !hasContent && !hasImages) {
             return res.status(400).json({ error: 'Nội dung không được để trống' });
         }
 
         const postId = uuidv4();
         const userId = req.user.id;
 
+        let imageToSave = null;
+        if (images && Array.isArray(images) && images.length > 0) {
+            imageToSave = JSON.stringify(images);
+        } else if (imageUrl) {
+            imageToSave = imageUrl;
+        }
+
         await pool.execute(
-            'INSERT INTO posts (id, user_id, content, image_url) VALUES (?, ?, ?, ?)',
-            [postId, userId, content, imageUrl || null]
+            'INSERT INTO posts (id, user_id, content, image_url, original_post_id) VALUES (?, ?, ?, ?, ?)',
+            [postId, userId, content, imageToSave, originalPostId || null]
         );
 
-        // Fetch user info to return complete post object
+        // Fetch user info to return complete post object (Simplified for speed)
         const [users] = await pool.execute('SELECT name, avatar FROM users WHERE id = ?', [userId]);
         const user = users[0];
+
+        // Return logic is simplified here, assuming frontend will reload or we build partial object
+        // For 'originalPost', we aren't fetching it here to keep it fast, Frontend usually knows what it just shared.
+
+        const returnedImages = images && images.length > 0 ? images : (imageUrl ? [imageUrl] : []);
 
         const newPost = {
             id: postId,
@@ -1138,7 +1207,9 @@ app.post('/api/place/posts', authenticateToken, async (req, res) => {
                 avatar: user.avatar
             },
             content,
-            image: imageUrl,
+            image: returnedImages[0] || null,
+            images: returnedImages,
+            originalPostId: originalPostId, // signal to frontend
             createdAt: new Date().toISOString(),
             likes: 0,
             isLiked: false,
@@ -1186,6 +1257,81 @@ app.post('/api/place/posts/:id/like', authenticateToken, async (req, res) => {
         res.json({ success: true, isLiked });
     } catch (error) {
         console.error('Toggle like error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get comments
+app.get('/api/place/posts/:id/comments', authenticateToken, async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const [comments] = await pool.execute(`
+            SELECT 
+                c.id, 
+                c.content, 
+                c.created_at as createdAt,
+                u.id as userId,
+                u.name as userName,
+                u.avatar as userAvatar
+            FROM post_comments c
+            JOIN users u ON c.user_id = u.id
+            WHERE c.post_id = ?
+            ORDER BY c.created_at ASC
+        `, [postId]);
+
+        const formattedComments = comments.map(c => ({
+            id: c.id,
+            content: c.content,
+            createdAt: c.createdAt,
+            user: {
+                id: c.userId,
+                name: c.userName,
+                avatar: c.userAvatar
+            }
+        }));
+
+        res.json(formattedComments);
+    } catch (error) {
+        console.error('Get comments error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Create comment
+app.post('/api/place/posts/:id/comments', authenticateToken, async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const userId = req.user.id;
+        const { content } = req.body;
+
+        if (!content) {
+            return res.status(400).json({ error: 'Nội dung bình luận không được để trống' });
+        }
+
+        const commentId = uuidv4();
+        await pool.execute(
+            'INSERT INTO post_comments (id, post_id, user_id, content) VALUES (?, ?, ?, ?)',
+            [commentId, postId, userId, content]
+        );
+
+        // Fetch user info
+        const [users] = await pool.execute('SELECT name, avatar FROM users WHERE id = ?', [userId]);
+        const user = users[0];
+
+        const newComment = {
+            id: commentId,
+            content,
+            createdAt: new Date().toISOString(),
+            user: {
+                id: userId,
+                name: user.name,
+                avatar: user.avatar
+            }
+        };
+
+        res.json(newComment);
+    } catch (error) {
+        console.error('Create comment error:', error);
         res.status(500).json({ error: 'Lỗi server' });
     }
 });

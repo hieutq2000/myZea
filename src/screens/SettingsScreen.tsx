@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
 
 interface SettingsScreenProps {
     onLogout: () => void;
@@ -23,6 +24,7 @@ interface SettingsScreenProps {
 
 export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+    const { theme, setTheme, colors, isDark } = useTheme();
 
     const handleLogout = () => {
         Alert.alert(
@@ -41,7 +43,7 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
 
             {/* Header */}
             <LinearGradient
-                colors={['#ffebd9', '#e0f8ff']}
+                colors={colors.headerGradient}
                 start={{ x: 0, y: 0.5 }}
                 end={{ x: 1, y: 0.5 }}
                 style={styles.header}
@@ -49,62 +51,103 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
                 <SafeAreaView>
                     <View style={styles.headerContent}>
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                            <Ionicons name="chevron-back" size={28} color="#000" />
+                            <Ionicons name="chevron-back" size={28} color={isDark ? '#FFF' : '#000'} />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Cài đặt</Text>
+                        <Text style={[styles.headerTitle, { color: isDark ? '#FFF' : '#000' }]}>Cài đặt</Text>
                     </View>
                 </SafeAreaView>
             </LinearGradient>
 
-            <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }}>
+            <ScrollView style={[styles.content, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 40 }}>
+
+                {/* Theme Selection */}
+                <View style={[styles.sectionTitleContainer, { paddingHorizontal: 4 }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Giao diện</Text>
+                </View>
+
+                <View style={[styles.card, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#000' }]}>
+                    <TouchableOpacity
+                        style={[styles.cardRow, { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 12 }]}
+                        onPress={() => setTheme('light')}
+                    >
+                        <View style={styles.iconLabel}>
+                            <Ionicons name="sunny-outline" size={22} color={colors.text} style={styles.cardIcon} />
+                            <Text style={[styles.cardTitle, { color: colors.text }]}>Chế độ Sáng</Text>
+                        </View>
+                        {theme === 'light' && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.cardRow, { borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 12 }]}
+                        onPress={() => setTheme('dark')}
+                    >
+                        <View style={styles.iconLabel}>
+                            <Ionicons name="moon-outline" size={22} color={colors.text} style={styles.cardIcon} />
+                            <Text style={[styles.cardTitle, { color: colors.text }]}>Chế độ Tối</Text>
+                        </View>
+                        {theme === 'dark' && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.cardRow, { paddingTop: 12 }]}
+                        onPress={() => setTheme('system')}
+                    >
+                        <View style={styles.iconLabel}>
+                            <Ionicons name="phone-portrait-outline" size={22} color={colors.text} style={styles.cardIcon} />
+                            <Text style={[styles.cardTitle, { color: colors.text }]}>Theo hệ thống</Text>
+                        </View>
+                        {theme === 'system' && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
+                    </TouchableOpacity>
+                </View>
+
                 {/* Language Setting */}
-                <TouchableOpacity style={styles.card}>
+                <TouchableOpacity style={[styles.card, { marginTop: 20, backgroundColor: colors.card }]}>
                     <View style={styles.cardRow}>
                         <View style={styles.iconLabel}>
-                            <Ionicons name="text-outline" size={22} color="#666" style={styles.cardIcon} />
-                            <Text style={styles.cardTitle}>Cài đặt ngôn ngữ</Text>
+                            <Ionicons name="text-outline" size={22} color={colors.text} style={styles.cardIcon} />
+                            <Text style={[styles.cardTitle, { color: colors.text }]}>Cài đặt ngôn ngữ</Text>
                         </View>
                         <View style={styles.rightContent}>
-                            <Text style={styles.valueText}>Ngôn ngữ thiết bị</Text>
-                            <Ionicons name="chevron-forward" size={20} color="#999" />
+                            <Text style={[styles.valueText, { color: colors.textSecondary }]}>Tiếng Việt</Text>
+                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                         </View>
                     </View>
                 </TouchableOpacity>
 
                 {/* Feedback */}
-                <TouchableOpacity style={[styles.card, { marginTop: 12 }]}>
+                <TouchableOpacity style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]}>
                     <View style={styles.cardRow}>
                         <View style={styles.iconLabel}>
-                            <Ionicons name="chatbox-ellipses-outline" size={22} color="#666" style={styles.cardIcon} />
-                            <Text style={styles.cardTitle}>Gửi phản hồi</Text>
+                            <Ionicons name="chatbox-ellipses-outline" size={22} color={colors.text} style={styles.cardIcon} />
+                            <Text style={[styles.cardTitle, { color: colors.text }]}>Gửi phản hồi</Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={20} color="#999" />
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                     </View>
                 </TouchableOpacity>
 
-                <Text style={styles.supportText}>
+                <Text style={[styles.supportText, { color: colors.textSecondary }]}>
                     Gửi phản hồi tới Quản trị hệ thống để <Text style={{ fontWeight: 'bold' }}>báo cáo sự cố</Text> hoặc góp ý cải tiến tính năng. Việc hỗ trợ xử lý sự cố sẽ được hiệu quả hơn. <Text style={{ fontWeight: 'bold' }}>Góp ý</Text> sẽ được ghi nhận để giúp Bạn có một phần mềm ngày càng tốt và hữu dụng hơn.
                 </Text>
 
                 {/* About Section */}
-                <View style={styles.aboutContainer}>
-                    <Text style={styles.aboutTitle}>Giới thiệu về myZyea Next</Text>
+                <View style={[styles.aboutContainer, { backgroundColor: colors.card }]}>
+                    <Text style={[styles.aboutTitle, { color: colors.text }]}>Giới thiệu về myZyea Next</Text>
 
-                    <Text style={styles.aboutText}>
+                    <Text style={[styles.aboutText, { color: colors.text }]}>
                         <Text style={{ fontWeight: 'bold' }}>myZyea Next</Text> là một <Text style={{ fontWeight: 'bold' }}>SuperApp</Text> được thiết kế đặc biệt dành cho các doanh nghiệp vừa và lớn, giúp doanh nghiệp nâng cao trải nghiệm nhân viên với 5 giá trị cốt lõi: <Text style={{ fontStyle: 'italic' }}>Communication, Performance Management, Rewards, Personal Development</Text> và <Text style={{ fontStyle: 'italic' }}>Belonging</Text>, qua đó nâng cao năng suất làm việc, chất lượng công việc, xây dựng văn hóa doanh nghiệp và tăng cường sự gắn kết giữa các thành viên công ty.
                     </Text>
 
-                    <Text style={[styles.aboutText, { marginTop: 12 }]}>
+                    <Text style={[styles.aboutText, { marginTop: 12, color: colors.text }]}>
                         Hiện tại, phiên bản SuperApp <Text style={{ fontWeight: 'bold' }}>myZyea Next</Text> mà các Bạn đang sử dụng là phiên bản dành riêng cho Tập đoàn Zyea, gồm tính năng chính: <Text style={{ fontStyle: 'italic' }}>Tin tức, Việc của tôi, Payslip, Reward, Discipline, My Gold, Zyea Care, To-do Notes, QR Code, Learning, Survey...</Text> Các tính năng của <Text style={{ fontWeight: 'bold' }}>myZyea Next</Text> sẽ được tiếp tục cập nhật trong thời gian tới.
                     </Text>
 
-                    <Text style={[styles.aboutText, { marginTop: 12 }]}>
+                    <Text style={[styles.aboutText, { marginTop: 12, color: colors.text }]}>
                         Để SuperApp <Text style={{ fontWeight: 'bold' }}>myZyea Next</Text> sớm hoàn thiện, đội ngũ phát triển <Text style={{ fontWeight: 'bold' }}>myZyea Next</Text> mong Bạn sử dụng, trải nghiệm, góp ý, xây dựng để cùng đưa SuperApp <Text style={{ fontWeight: 'bold' }}>myZyea Next</Text> tiến nhanh, hoàn thành sứ mệnh là 1 Sản phẩm công nghệ lõi, 1 Massive Product của Zyea.
                     </Text>
                 </View>
 
                 {/* Logout Button */}
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                <TouchableOpacity style={[styles.logoutButton, { backgroundColor: colors.card }]} onPress={handleLogout}>
                     <Ionicons name="log-out-outline" size={24} color="#EF4444" />
                     <Text style={styles.logoutText}>Đăng xuất</Text>
                 </TouchableOpacity>
@@ -227,5 +270,14 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 16,
         marginLeft: 8,
+    },
+    sectionTitleContainer: {
+        marginBottom: 8,
+        marginTop: 4,
+    },
+    sectionTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
     },
 });

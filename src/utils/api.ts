@@ -296,15 +296,28 @@ export async function uploadImage(imageUri: string): Promise<string> {
 
 // ============ PLACE API ============
 
+export interface Comment {
+    id: string;
+    content: string;
+    createdAt: string;
+    user: {
+        id: string;
+        name: string;
+        avatar?: string;
+    };
+}
+
 export interface Post {
     id: string;
     author: {
         id: string;
         name: string;
-        avatar: string;
+        avatar?: string;
     };
     content: string;
     image?: string;
+    images?: string[]; // New: Multiple images support
+    originalPost?: Post; // New: Shared Post Support
     createdAt: string;
     likes: number;
     isLiked: boolean;
@@ -316,15 +329,28 @@ export async function getPosts(): Promise<Post[]> {
     return apiRequest<Post[]>('/api/place/posts');
 }
 
-export async function createPost(content: string, imageUrl?: string): Promise<Post> {
+export async function createPost(content: string, imageUrl?: string, images?: string[], originalPostId?: string): Promise<Post> {
     return apiRequest<Post>('/api/place/posts', {
         method: 'POST',
-        body: JSON.stringify({ content, imageUrl }),
+        body: JSON.stringify({ content, imageUrl, images, originalPostId }),
     });
 }
 
-export async function toggleLikePost(postId: string): Promise<{ success: boolean; isLiked: boolean }> {
-    return apiRequest<{ success: boolean; isLiked: boolean }>(`/api/place/posts/${postId}/like`, {
+export async function toggleLikePost(postId: string): Promise<{ liked: boolean }> {
+    return apiRequest<{ liked: boolean }>(`/api/place/posts/${postId}/like`, {
         method: 'POST',
     });
 }
+
+export async function getComments(postId: string): Promise<Comment[]> {
+    return apiRequest<Comment[]>(`/api/place/posts/${postId}/comments`);
+}
+
+export async function createComment(postId: string, content: string): Promise<Comment> {
+    return apiRequest<Comment>(`/api/place/posts/${postId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+    });
+}
+
+

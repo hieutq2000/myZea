@@ -12,15 +12,16 @@ import {
     TextInput,
     Alert,
     ActivityIndicator,
-    Dimensions,
-    RefreshControl,
-    ScrollView,
-    Platform
+    Platform,
+    Share // Share system import
 } from 'react-native';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getPosts, createPost, toggleLikePost, Post, uploadImage } from '../utils/api';
 import { launchImageLibrary } from '../utils/imagePicker';
+import { useNavigation } from '@react-navigation/native';
+import FacebookImageViewer from '../components/FacebookImageViewer';
+import PhotoGrid from '../components/PhotoGrid';
 
 const { width } = Dimensions.get('window');
 
@@ -34,7 +35,18 @@ const formatTime = (dateString: string) => {
     if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
     return date.toLocaleDateString('vi-VN');
     return date.toLocaleDateString('vi-VN');
+    return date.toLocaleDateString('vi-VN');
 };
+
+const REACTIONS = [
+    { id: 'like', icon: 'https://media.giphy.com/media/l4pTfx2qLszoacZRS/giphy.gif', label: 'Thích', color: '#1877F2' },
+    { id: 'love', icon: 'https://media.giphy.com/media/26AHIbtfGwc723iq4/giphy.gif', label: 'Yêu thích', color: '#F63459' },
+    { id: 'care', icon: 'https://media.giphy.com/media/1HpM3Zt6n8M8vXN6/giphy.gif', label: 'Thương thương', color: '#F7B928' }, // Approximate
+    { id: 'haha', icon: 'https://media.giphy.com/media/f9EmLg7q3f3Q2f3Q2/giphy.gif', label: 'Haha', color: '#F7B928' }, // Approximate
+    { id: 'wow', icon: 'https://media.giphy.com/media/3o7TKr3nzbh5WgCFxe/giphy.gif', label: 'Wow', color: '#F7B928' },
+    { id: 'sad', icon: 'https://media.giphy.com/media/l2Jhr7o2c0V2M/giphy.gif', label: 'Buồn', color: '#F7B928' },
+    { id: 'angry', icon: 'https://media.giphy.com/media/3o9bJX4O9ShW1L/giphy.gif', label: 'Phẫn nộ', color: '#E4605E' },
+];
 
 const TextWithSeeMore = ({ text }: { text: string }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -47,16 +59,14 @@ const TextWithSeeMore = ({ text }: { text: string }) => {
     }
 
     return (
-        <View>
+        <TouchableOpacity activeOpacity={0.8} onPress={() => setIsExpanded(!isExpanded)}>
             <Text style={styles.postText}>
-                {isExpanded ? text : `${text.substring(0, maxLength)}... `}
-                {!isExpanded && (
-                    <Text onPress={() => setIsExpanded(true)} style={styles.seeMoreText}>
-                        Xem thêm
-                    </Text>
-                )}
+                {isExpanded ? text : `${text.substring(0, maxLength)}...`}
             </Text>
-        </View>
+            <Text style={[styles.seeMoreText, { marginTop: 4 }]}>
+                {isExpanded ? 'Thu gọn' : 'Xem thêm'}
+            </Text>
+        </TouchableOpacity>
     );
 };
 
@@ -64,14 +74,27 @@ interface PlaceScreenProps {
     user: any;
 }
 
+interface LocalPostState {
+    [postId: string]: string; // reactionId
+}
+
 export default function PlaceScreen({ user }: PlaceScreenProps) {
+    const navigation = useNavigation<any>();
     const [posts, setPosts] = useState<Post[]>([]);
+    const [isImageViewerVisible, setIsImageViewerVisible] = useState(false);
+    const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isPostModalVisible, setPostModalVisible] = useState(false);
     const [newPostContent, setNewPostContent] = useState('');
-    const [newPostImage, setNewPostImage] = useState<string | null>(null);
+    const [newPostImages, setNewPostImages] = useState<string[]>([]);
     const [isPosting, setIsPosting] = useState(false);
+    const [activeReactionPostId, setActiveReactionPostId] = useState<string | null>(null);
+    const [localReactions, setLocalReactions] = useState<LocalPostState>({});
+    // Share State
+    const [isShareModalVisible, setShareModalVisible] = useState(false);
+    const [postToShare, setPostToShare] = useState<Post | null>(null);
 
     useEffect(() => {
         loadPosts();
@@ -96,27 +119,31 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
     };
 
     const handlePickImage = async () => {
-        const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
-        if (!result.didCancel && !result.error && result.assets && result.assets[0]) {
-            setNewPostImage(result.assets[0].uri);
+        // Allow selecting up to 10 images
+        const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8, selectionLimit: 10 });
+        if (!result.didCancel && !result.error && result.assets) {
+            const uris = result.assets.map((a: any) => a.uri);
+            setNewPostImages(prev => [...prev, ...uris]);
         } else if (result.error) {
             Alert.alert('Lỗi', 'Không thể chọn ảnh');
         }
     };
 
     const handleCreatePost = async () => {
-        if (!newPostContent.trim() && !newPostImage) return;
+        if (!newPostContent.trim() && newPostImages.length === 0) return;
         setIsPosting(true);
         try {
-            let imageUrl = null;
-            if (newPostImage) {
-                imageUrl = await uploadImage(newPostImage);
+            const uploadedUrls: string[] = [];
+            // Upload all images sequentially (or Promise.all)
+            for (const imgUri of newPostImages) {
+                const url = await uploadImage(imgUri);
+                uploadedUrls.push(url);
             }
 
-            const newPost = await createPost(newPostContent, imageUrl || undefined);
+            const newPost = await createPost(newPostContent, undefined, uploadedUrls);
             setPosts([newPost, ...posts]);
             setNewPostContent('');
-            setNewPostImage(null);
+            setNewPostImages([]);
             setPostModalVisible(false);
         } catch (error) {
             console.error('Create post error:', error);
@@ -126,24 +153,45 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
         }
     };
 
-    const handleLike = async (postId: string) => {
-        // Optimistic UI update
+    const handleReaction = async (postId: string, reactionId: string = 'like') => {
+        setActiveReactionPostId(null);
+
+        // Optimistic Update
+        const currentReaction = localReactions[postId];
+        const isUnlike = currentReaction === reactionId; // If clicking same, toggle off
+
+        setLocalReactions(prev => {
+            const newState = { ...prev };
+            if (isUnlike) delete newState[postId];
+            else newState[postId] = reactionId;
+            return newState;
+        });
+
+        // Update Post UI State (Like count, isLiked bool)
         setPosts(prev => prev.map(p => {
             if (p.id === postId) {
-                return {
-                    ...p,
-                    likes: p.isLiked ? p.likes - 1 : p.likes + 1,
-                    isLiked: !p.isLiked
-                };
+                const wasLiked = !!currentReaction;
+                let newLikes = p.likes;
+                if (!wasLiked && !isUnlike) newLikes++; // None -> Like
+                if (wasLiked && isUnlike) newLikes--;   // Like -> None
+
+                return { ...p, likes: newLikes, isLiked: !isUnlike };
             }
             return p;
         }));
 
         try {
+            // Backend only understands "Like" toggle for now
             await toggleLikePost(postId);
         } catch (error) {
-            console.error('Like error', error);
+            console.error('Reaction error', error);
         }
+    };
+
+    const openImageViewer = (post: Post, index: number) => {
+        setSelectedPost(post);
+        setSelectedImageIndex(index);
+        setIsImageViewerVisible(true);
     };
 
     const renderHeaderAndComposer = () => (
@@ -225,13 +273,39 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
             </View>
 
             {/* Post Image */}
-            {item.image && (
-                <Image source={{ uri: item.image }} style={styles.postImage} resizeMode="cover" />
+            {/* Post Images Grid OR Shared Post Content */}
+            {item.originalPost ? (
+                // SHARED POST VIEW
+                <View style={styles.sharedContainer}>
+                    <View style={styles.sharedHeader}>
+                        <Image
+                            source={{ uri: item.originalPost.author.avatar || `https://ui-avatars.com/api/?name=${item.originalPost.author.name}` }}
+                            style={styles.sharedAvatar}
+                        />
+                        <View>
+                            <Text style={styles.sharedAuthor}>{item.originalPost.author.name}</Text>
+                            <Text style={styles.sharedTime}>{formatTime(item.originalPost.createdAt)}</Text>
+                        </View>
+                    </View>
+                    {item.originalPost.content ? <Text style={styles.sharedContent}>{item.originalPost.content}</Text> : null}
+                    {/* Reuse Grid for shared images */}
+                    <PhotoGrid
+                        images={item.originalPost.images && item.originalPost.images.length > 0 ? item.originalPost.images : (item.originalPost.image ? [item.originalPost.image] : [])}
+                        onPressImage={(index) => openImageViewer(item.originalPost!, index)}
+                    />
+                </View>
+            ) : (
+                // NORMAL POST VIEW
+                <PhotoGrid
+                    images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
+                    onPressImage={(index) => openImageViewer(item, index)}
+                />
             )}
 
             {/* Post Stats */}
             <View style={styles.postStats}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {/* Left Side: Like Icon + Count */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                     {item.likes > 0 && (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <View style={{ backgroundColor: '#1877F2', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginRight: 6 }}>
@@ -240,47 +314,77 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
                             <Text style={styles.reactionCount}>{item.likes}</Text>
                         </View>
                     )}
-                    {item.likes === 0 && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            {/* Placeholder or empty if no likes yet, but user wants 'like icon' typically or nothing. 
-                                 If 0 likes, usually just shows nothing or '0'. User image shows '1' like. 
-                                 Let's show the icon anyway if 0, or just nothing? 
-                                 The requested logic: "hiển thị số like và số người xem". 
-                                 If like is 0, usually we don't show the count 0 next to icon in FB style, but let's keep it clean.
-                             */}
-                        </View>
-                    )}
                 </View>
 
-                <View style={{ flexDirection: 'row' }}>
+                {/* Right Side: Comments + Views */}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     {item.comments > 0 && (
                         <Text style={styles.statsText}>{item.comments} bình luận</Text>
                     )}
                     {item.comments > 0 && <Text style={styles.statsText}> • </Text>}
-                    {/* Simulated View Count based on likes/comments to be consistent without backend support yet */}
                     <Text style={styles.statsText}>{item.likes * 12 + 50 + item.comments * 5} người đã xem</Text>
                 </View>
             </View>
 
             {/* Post Actions */}
             <View style={styles.actionContainer}>
+                {/* Reaction Popup Dock */}
+                {activeReactionPostId === item.id && (
+                    <View style={styles.reactionDock}>
+                        {REACTIONS.map((reaction) => (
+                            <TouchableOpacity
+                                key={reaction.id}
+                                onPress={() => handleReaction(item.id, reaction.id)}
+                            >
+                                <Image
+                                    source={{ uri: reaction.icon }}
+                                    style={styles.reactionIconAnim}
+                                    resizeMode="contain"
+                                />
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+
                 <TouchableOpacity
                     style={styles.actionButton}
-                    onPress={() => handleLike(item.id)}
+                    onPress={() => handleReaction(item.id, 'like')}
+                    onLongPress={() => setActiveReactionPostId(item.id)}
+                    delayLongPress={300}
                 >
-                    <FontAwesome name={item.isLiked ? "thumbs-up" : "thumbs-o-up"} size={18} color={item.isLiked ? "#1877F2" : "#666"} />
-                    <Text style={[styles.actionText, item.isLiked && { color: '#1877F2', fontWeight: 'bold' }]}>Thích</Text>
+                    {localReactions[item.id] ? (
+                        // Show selected reaction
+                        <>
+                            <Image
+                                source={{ uri: REACTIONS.find(r => r.id === localReactions[item.id])?.icon }}
+                                style={{ width: 22, height: 22, marginRight: 6 }}
+                                resizeMode="contain"
+                            />
+                            <Text style={[styles.actionText, { color: REACTIONS.find(r => r.id === localReactions[item.id])?.color || '#1877F2', fontWeight: 'bold' }]}>
+                                {REACTIONS.find(r => r.id === localReactions[item.id])?.label}
+                            </Text>
+                        </>
+                    ) : (
+                        // Default Gray Like
+                        <>
+                            <FontAwesome name="thumbs-o-up" size={18} color="#666" />
+                            <Text style={styles.actionText}>Thích</Text>
+                        </>
+                    )}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => navigation.navigate('PostDetail', { postId: item.id, post: item })}
+                >
                     <FontAwesome name="comment-o" size={18} color="#666" />
                     <Text style={styles.actionText}>Bình luận</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity style={styles.actionButton} onPress={() => handleShare(item)}>
                     <FontAwesome name="share-square-o" size={18} color="#666" />
                     <Text style={styles.actionText}>Chia sẻ</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </View >
     );
 
     return (
@@ -315,6 +419,7 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
 
             {/* Create Post Modal */}
             <Modal
+                // ... existing modal content
                 visible={isPostModalVisible}
                 animationType="slide"
                 transparent={true}
@@ -352,16 +457,20 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
                                 value={newPostContent}
                                 onChangeText={setNewPostContent}
                             />
-                            {newPostImage && (
-                                <View style={styles.previewContainer}>
-                                    <Image source={{ uri: newPostImage }} style={styles.previewImage} resizeMode="cover" />
-                                    <TouchableOpacity
-                                        style={styles.removeImageBtn}
-                                        onPress={() => setNewPostImage(null)}
-                                    >
-                                        <Ionicons name="close" size={20} color="white" />
-                                    </TouchableOpacity>
-                                </View>
+                            {newPostImages.length > 0 && (
+                                <ScrollView horizontal style={styles.previewContainer} contentContainerStyle={{ paddingRight: 10, alignItems: 'center' }}>
+                                    {newPostImages.map((uri, index) => (
+                                        <View key={index} style={{ marginRight: 10, position: 'relative' }}>
+                                            <Image source={{ uri }} style={styles.previewImage} resizeMode="cover" />
+                                            <TouchableOpacity
+                                                style={styles.removeImageBtn}
+                                                onPress={() => setNewPostImages(prev => prev.filter((_, i) => i !== index))}
+                                            >
+                                                <Ionicons name="close" size={16} color="white" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </ScrollView>
                             )}
                         </View>
 
@@ -379,6 +488,75 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
                     </View>
                 </View>
             </Modal>
+
+            {/* Facebook Image Viewer */}
+            {selectedPost && (
+                <FacebookImageViewer
+                    visible={isImageViewerVisible}
+                    images={selectedPost.images && selectedPost.images.length > 0 ? selectedPost.images : (selectedPost.image ? [selectedPost.image] : [])}
+                    imageIndex={selectedImageIndex}
+                    onClose={() => setIsImageViewerVisible(false)}
+                    post={selectedPost}
+                    onLike={() => handleReaction(selectedPost.id, 'like')}
+                    onComment={() => {
+                        setIsImageViewerVisible(false); // Close viewer to navigate
+                        navigation.navigate('PostDetail', { postId: selectedPost.id, post: selectedPost });
+                    }}
+                />
+            )}
+
+            {/* Share Options Modal (Bottom Sheet Style) */}
+            <Modal
+                visible={isShareModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShareModalVisible(false)}
+            >
+                <TouchableOpacity
+                    style={styles.shareOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShareModalVisible(false)}
+                >
+                    <View style={styles.shareSheet}>
+                        <View style={styles.shareIndicator} />
+                        <Text style={styles.shareTitle}>Chia sẻ bài viết này</Text>
+
+                        <TouchableOpacity style={styles.shareOption} onPress={onShareNow}>
+                            <View style={[styles.shareIconParams, { backgroundColor: '#E7F3FF' }]}>
+                                <MaterialIcons name="share" size={24} color="#1877F2" />
+                            </View>
+                            <View>
+                                <Text style={styles.shareOptionTitle}>Chia sẻ ngay</Text>
+                                <Text style={styles.shareOptionSub}>Đăng ngay lên dòng thời gian của bạn</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.shareOption} onPress={onShareExternal}>
+                            <View style={[styles.shareIconParams, { backgroundColor: '#F0F2F5' }]}>
+                                <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+                            </View>
+                            <View>
+                                <Text style={styles.shareOptionTitle}>Tùy chọn khác...</Text>
+                                <Text style={styles.shareOptionSub}>Gửi qua Zalo, Messenger, v.v.</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+            {selectedPost && (
+                <FacebookImageViewer
+                    visible={isImageViewerVisible}
+                    images={selectedPost.images && selectedPost.images.length > 0 ? selectedPost.images : (selectedPost.image ? [selectedPost.image] : [])}
+                    imageIndex={selectedImageIndex}
+                    onClose={() => setIsImageViewerVisible(false)}
+                    post={selectedPost}
+                    onLike={() => handleReaction(selectedPost.id, 'like')}
+                    onComment={() => {
+                        setIsImageViewerVisible(false); // Close viewer to navigate
+                        navigation.navigate('PostDetail', { postId: selectedPost.id, post: selectedPost });
+                    }}
+                />
+            )}
         </View>
     );
 }
@@ -675,4 +853,27 @@ const styles = StyleSheet.create({
         color: '#333',
         fontWeight: '500',
     },
+    reactionDock: {
+        position: 'absolute',
+        top: -50,
+        left: 10,
+        backgroundColor: 'white',
+        borderRadius: 30,
+        flexDirection: 'row',
+        padding: 6,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 5,
+        zIndex: 100
+    },
+    reactionIcon: {
+        marginHorizontal: 5,
+    },
+    reactionIconAnim: {
+        width: 40,
+        height: 40,
+        marginHorizontal: 4,
+    }
 });
