@@ -13,11 +13,13 @@ import {
     Alert,
     ActivityIndicator,
     Dimensions,
-    RefreshControl
+    RefreshControl,
+    ScrollView
 } from 'react-native';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getPosts, createPost, toggleLikePost, Post } from '../utils/api';
+import { getPosts, createPost, toggleLikePost, Post, uploadImage } from '../utils/api';
+import { launchImageLibrary } from '../utils/imagePicker';
 
 const { width } = Dimensions.get('window');
 
@@ -42,6 +44,7 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isPostModalVisible, setPostModalVisible] = useState(false);
     const [newPostContent, setNewPostContent] = useState('');
+    const [newPostImage, setNewPostImage] = useState<string | null>(null);
     const [isPosting, setIsPosting] = useState(false);
 
     useEffect(() => {
@@ -66,16 +69,32 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
         loadPosts();
     };
 
+    const handlePickImage = async () => {
+        const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
+        if (!result.didCancel && !result.error && result.assets && result.assets[0]) {
+            setNewPostImage(result.assets[0].uri);
+        } else if (result.error) {
+            Alert.alert('Lỗi', 'Không thể chọn ảnh');
+        }
+    };
+
     const handleCreatePost = async () => {
-        if (!newPostContent.trim()) return;
+        if (!newPostContent.trim() && !newPostImage) return;
         setIsPosting(true);
         try {
-            const newPost = await createPost(newPostContent);
+            let imageUrl = null;
+            if (newPostImage) {
+                imageUrl = await uploadImage(newPostImage);
+            }
+
+            const newPost = await createPost(newPostContent, imageUrl || undefined);
             setPosts([newPost, ...posts]);
             setNewPostContent('');
+            setNewPostImage(null);
             setPostModalVisible(false);
         } catch (error) {
-            Alert.alert('Lỗi', 'Không thể đăng bài viết');
+            console.error('Create post error:', error);
+            Alert.alert('Lỗi', 'Không thể đăng bài viết. Vui lòng thử lại.');
         } finally {
             setIsPosting(false);
         }
@@ -530,5 +549,39 @@ const styles = StyleSheet.create({
         color: '#333',
         minHeight: 100,
         textAlignVertical: 'top',
+    },
+    previewContainer: {
+        marginTop: 12,
+        position: 'relative',
+    },
+    previewImage: {
+        width: '100%',
+        height: 200,
+        borderRadius: 8,
+    },
+    removeImageBtn: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: 12,
+        padding: 4,
+    },
+    modalFooter: {
+        flexDirection: 'row',
+        padding: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#eee',
+    },
+    footerButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 20,
+        padding: 8,
+    },
+    footerButtonText: {
+        marginLeft: 8,
+        color: '#333',
+        fontWeight: '500',
     },
 });

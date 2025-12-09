@@ -266,6 +266,34 @@ export async function updatePushToken(token: string): Promise<void> {
     });
 }
 
+// Upload generic image
+export async function uploadImage(imageUri: string): Promise<string> {
+    const token = await getToken();
+    const formData = new FormData();
+    const fileName = imageUri.split('/').pop() || 'image.jpg';
+
+    formData.append('image', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: fileName,
+    } as any);
+
+    const response = await fetch(`${API_URL}/api/upload/image`, {
+        method: 'POST',
+        headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+    });
+
+    if (!response.ok) {
+        throw new Error('Upload failed');
+    }
+
+    const data = await response.json();
+    return data.url;
+}
+
 // ============ PLACE API ============
 
 export interface Post {
