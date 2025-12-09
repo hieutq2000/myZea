@@ -41,14 +41,31 @@ const formatTime = (dateString: string) => {
     return date.toLocaleDateString('vi-VN');
 };
 
+// Helper function to get avatar URI (handles base64 and URL)
+const getAvatarUri = (avatar: string | undefined, name: string = 'User'): string => {
+    if (!avatar) {
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+    }
+    // If already a URL, return as-is
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar;
+    }
+    // If already has data prefix, return as-is
+    if (avatar.startsWith('data:image/')) {
+        return avatar;
+    }
+    // Otherwise, assume it's base64 and add prefix
+    return `data:image/jpeg;base64,${avatar}`;
+};
+
 const REACTIONS = [
-    { id: 'like', icon: 'https://media.giphy.com/media/l4pTfx2qLszoacZRS/giphy.gif', label: 'Thích', color: '#1877F2' },
-    { id: 'love', icon: 'https://media.giphy.com/media/26AHIbtfGwc723iq4/giphy.gif', label: 'Yêu thích', color: '#F63459' },
-    { id: 'care', icon: 'https://media.giphy.com/media/1HpM3Zt6n8M8vXN6/giphy.gif', label: 'Thương thương', color: '#F7B928' }, // Approximate
-    { id: 'haha', icon: 'https://media.giphy.com/media/f9EmLg7q3f3Q2f3Q2/giphy.gif', label: 'Haha', color: '#F7B928' }, // Approximate
-    { id: 'wow', icon: 'https://media.giphy.com/media/3o7TKr3nzbh5WgCFxe/giphy.gif', label: 'Wow', color: '#F7B928' },
-    { id: 'sad', icon: 'https://media.giphy.com/media/l2Jhr7o2c0V2M/giphy.gif', label: 'Buồn', color: '#F7B928' },
-    { id: 'angry', icon: 'https://media.giphy.com/media/3o9bJX4O9ShW1L/giphy.gif', label: 'Phẫn nộ', color: '#E4605E' },
+    { id: 'like', emoji: '👍', bgColor: '#1877F2', label: 'Thích', color: '#1877F2' },
+    { id: 'love', emoji: '❤️', bgColor: '#F33E58', label: 'Yêu thích', color: '#F33E58' },
+    { id: 'care', emoji: '🥰', bgColor: '#F7B928', label: 'Thương thương', color: '#F7B928' },
+    { id: 'haha', emoji: '😆', bgColor: '#F7B928', label: 'Haha', color: '#F7B928' },
+    { id: 'wow', emoji: '😮', bgColor: '#F7B928', label: 'Wow', color: '#F7B928' },
+    { id: 'sad', emoji: '😢', bgColor: '#F7B928', label: 'Buồn', color: '#F7B928' },
+    { id: 'angry', emoji: '😠', bgColor: '#E9710F', label: 'Phẫn nộ', color: '#E9710F' },
 ];
 
 const TextWithSeeMore = ({ text }: { text: string }) => {
@@ -367,19 +384,16 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
 
             {/* Post Actions */}
             <View style={styles.actionContainer}>
-                {/* Reaction Popup Dock */}
+                {/* Reaction Popup Dock - only show when long pressed */}
                 {activeReactionPostId === item.id && (
                     <View style={styles.reactionDock}>
                         {REACTIONS.map((reaction) => (
                             <TouchableOpacity
                                 key={reaction.id}
                                 onPress={() => handleReaction(item.id, reaction.id)}
+                                style={styles.reactionButton}
                             >
-                                <Image
-                                    source={{ uri: reaction.icon }}
-                                    style={styles.reactionIconAnim}
-                                    resizeMode="contain"
-                                />
+                                <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>
@@ -392,13 +406,11 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
                     delayLongPress={300}
                 >
                     {localReactions[item.id] ? (
-                        // Show selected reaction
+                        // Show selected reaction with emoji
                         <>
-                            <Image
-                                source={{ uri: REACTIONS.find(r => r.id === localReactions[item.id])?.icon }}
-                                style={{ width: 22, height: 22, marginRight: 6 }}
-                                resizeMode="contain"
-                            />
+                            <Text style={{ fontSize: 20, marginRight: 6 }}>
+                                {REACTIONS.find(r => r.id === localReactions[item.id])?.emoji}
+                            </Text>
                             <Text style={[styles.actionText, { color: REACTIONS.find(r => r.id === localReactions[item.id])?.color || '#1877F2', fontWeight: 'bold' }]}>
                                 {REACTIONS.find(r => r.id === localReactions[item.id])?.label}
                             </Text>
@@ -894,26 +906,32 @@ const styles = StyleSheet.create({
     },
     reactionDock: {
         position: 'absolute',
-        top: -50,
+        bottom: 50,
         left: 10,
+        right: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
         backgroundColor: 'white',
         borderRadius: 30,
-        flexDirection: 'row',
-        padding: 6,
-        shadowColor: "#000",
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 5,
-        zIndex: 100
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 8,
+        zIndex: 100,
     },
-    reactionIcon: {
-        marginHorizontal: 5,
+    reactionButton: {
+        padding: 4,
     },
-    reactionIconAnim: {
+    reactionEmoji: {
+        fontSize: 28,
+    },
+    reactionIconImage: {
         width: 40,
         height: 40,
-        marginHorizontal: 4,
     },
     // Shared Post Styles
     sharedContainer: {
