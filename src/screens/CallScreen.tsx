@@ -27,8 +27,8 @@ type CallScreenRouteProp = RouteProp<RootStackParamList, 'Call'>;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Agora App ID from https://console.agora.io
-const AGORA_APP_ID = 'd3eb86aa867f4fa2b049b15b24978fba';
+// Agora App ID from https://console.agora.io (Testing Mode - no token required)
+const AGORA_APP_ID = 'f1c136b8ee414b18b2881df02f8da179';
 
 export default function CallScreen() {
     const route = useRoute<CallScreenRouteProp>();
