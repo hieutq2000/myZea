@@ -391,7 +391,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                 {renderTopicSelection()}
 
                 <View style={{ height: 40 }} />
-            </ScrollView>
+            </Animated.ScrollView>
         </View>
     );
 }
