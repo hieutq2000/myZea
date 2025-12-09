@@ -382,8 +382,9 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         backgroundColor: COLORS.background,
-        zIndex: 10, // Content MUST be above Header
+        zIndex: 10,
         elevation: 10,
+        overflow: 'visible', // Prevent clipping of negative margin content
     },
     headerCircle1: {
         position: 'absolute',

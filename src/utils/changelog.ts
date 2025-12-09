@@ -12,7 +12,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     {
         version: "3.7",
         date: "09/12/2025",
-        title: "TỐI ƯU HIỆU NĂNG UI/UX",
+        title: "CẬP NHẬT TỐI ƯU HIỆU NĂNG UI/UX",
         changes: [
             "Cải tiến hiệu năng và ổn định hệ thống",
             "Cải thiện UI/UX và nâng cao chất lượng trải nghiệm"
