@@ -214,6 +214,12 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
         extrapolate: 'clamp',
     });
 
+    const headerOpacity = scrollY.interpolate({
+        inputRange: [0, HEADER_SCROLL_DISTANCE * 0.8, HEADER_SCROLL_DISTANCE],
+        outputRange: [0, 0, 1],
+        extrapolate: 'clamp',
+    });
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -240,7 +246,23 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
             </Animated.View>
 
             {/* Layer 2: Header UI Content (Fixed ON TOP of everything) */}
-            <SafeAreaView style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }} pointerEvents="box-none">
+            <SafeAreaView style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }}>
+                {/* Cross-fading Background Layer to cover scrolled content */}
+                <Animated.View style={{
+                    ...StyleSheet.absoluteFillObject,
+                    opacity: headerOpacity,
+                    backgroundColor: '#EA580C', // Solid color to hide content
+                    borderBottomWidth: 1,
+                    borderBottomColor: 'rgba(255,255,255,0.1)'
+                }}>
+                    <LinearGradient
+                        colors={['#EA580C', '#FB923C']}
+                        style={{ flex: 1 }}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0.5 }}
+                    />
+                </Animated.View>
+
                 <View style={styles.headerContent}>
                     <View style={styles.headerLeft}>
                         {user.avatar ? (
