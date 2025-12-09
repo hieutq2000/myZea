@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
     // New Styles for  Design
     headerGradient: {
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) : 0, // Removed +10
-        paddingBottom: 50, // Reduced from 80
+        paddingBottom: 30, // Reduced further to 30 to shorten header
     },
     headerCircle1: {
         position: 'absolute',

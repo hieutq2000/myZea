@@ -10,6 +10,10 @@ import {
     ScrollView,
     ActivityIndicator,
     Alert,
+    Image,
+    Dimensions,
+    StatusBar,
+    SafeAreaView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -27,6 +31,7 @@ interface AuthScreenProps {
 
 export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [view, setView] = useState<AuthView>(AuthView.LOGIN);
+    const [showLoginForm, setShowLoginForm] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -205,6 +210,72 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         }
     };
 
+    const renderWelcome = () => (
+        <View style={styles.welcomeContainer}>
+            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+            {/* Top Orange Section */}
+            <View style={styles.topSection}>
+                <LinearGradient
+                    colors={['#FB923C', '#EA580C']}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                />
+                <View style={styles.wCircle1} />
+                <View style={styles.wCircle2} />
+
+                <SafeAreaView style={{ flex: 1 }}>
+                    <View style={styles.headerTextContainer}>
+                        <Text style={styles.wBrandTitle}>Gene FPT</Text>
+                        <Text style={styles.wSlogan}>
+                            Foster a dynamic, innovative workforce committed to excellence
+                        </Text>
+                    </View>
+                </SafeAreaView>
+
+                {/* Team Image Overlapping */}
+                <View style={styles.teamImageContainer}>
+                    <Image
+                        source={{ uri: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&q=80' }}
+                        style={styles.teamImage}
+                        resizeMode="cover"
+                    />
+                </View>
+            </View>
+
+            {/* Bottom Black Section */}
+            <View style={styles.bottomSection}>
+                {/* Curve Effect */}
+                <View style={styles.curveOverlay} />
+
+                <View style={styles.bottomContent}>
+                    <View style={styles.wLogoRow}>
+                        {/* <Text style={styles.wLogoIcon}>🎓</Text> */}
+                        {/* Use FPT/Zyea Logo here, text for now */}
+                        <Text style={[styles.wLogoText, { color: '#F97316' }]}>FPT</Text>
+                        {/* Or Image Logo */}
+                    </View>
+
+                    <Text style={styles.wWelcomeText}>Chào mừng bạn !</Text>
+                    <Text style={styles.wInstructionText}>Vui lòng nhập email để đăng nhập Zyea Chat</Text>
+
+                    <TouchableOpacity
+                        style={styles.wLoginButton}
+                        onPress={() => setShowLoginForm(true)}
+                        activeOpacity={0.9}
+                    >
+                        <Text style={styles.wLoginButtonText}>Đăng nhập</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </View>
+    );
+
+    if (!showLoginForm) {
+        return renderWelcome();
+    }
+
     return (
         <KeyboardAvoidingView
             style={styles.container}
@@ -214,6 +285,13 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
             >
+                <TouchableOpacity
+                    style={{ position: 'absolute', top: 50, left: 20, zIndex: 10, padding: 8 }}
+                    onPress={() => setShowLoginForm(false)}
+                >
+                    <Feather name="arrow-left" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+
                 {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.logo}>🎓</Text>
@@ -528,6 +606,125 @@ const styles = StyleSheet.create({
     },
     linkText: {
         color: COLORS.primary,
+        fontWeight: 'bold',
+    },
+    // Welcome Screen Styles
+    welcomeContainer: {
+        flex: 1,
+        backgroundColor: '#111', // Very dark bg
+    },
+    topSection: {
+        height: Dimensions.get('window').height * 0.65, // 65% height
+        position: 'relative',
+        zIndex: 1,
+    },
+    wCircle1: {
+        position: 'absolute',
+        top: -50,
+        right: -50,
+        width: 300,
+        height: 300,
+        borderRadius: 150,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+    wCircle2: {
+        position: 'absolute',
+        top: 100,
+        left: -50,
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+    },
+    headerTextContainer: {
+        paddingHorizontal: 24,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 20 : 60,
+        alignItems: 'center',
+    },
+    wBrandTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 8,
+        letterSpacing: 1,
+    },
+    wSlogan: {
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.9)',
+        textAlign: 'center',
+        paddingHorizontal: 40,
+        lineHeight: 18,
+    },
+    teamImageContainer: {
+        position: 'absolute',
+        bottom: 40, // Push up slightly from the very bottom cut
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 2,
+    },
+    teamImage: {
+        width: Dimensions.get('window').width * 0.9,
+        height: 240,
+        // No specific border radius here, assuming image is cut out or rectangular card
+        // Based on design, it looks like a group of people cut out transparently OR a card.
+        // Let's make it a slight card or transparent if possible.
+        // If placeholder square, give it radius.
+        borderRadius: 20,
+    },
+    bottomSection: {
+        flex: 1,
+        backgroundColor: '#111',
+        justifyContent: 'flex-end',
+        paddingBottom: 40,
+        paddingHorizontal: 24,
+        marginTop: -60, // Pull up to overlap with curve logic
+        paddingTop: 80, // Space for content
+    },
+    curveOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 100,
+        backgroundColor: '#111',
+        borderTopLeftRadius: 100, // Curve effect
+        transform: [{ translateY: -40 }], // Move up to cut into orange
+        zIndex: 0,
+    },
+    bottomContent: {
+        zIndex: 2,
+    },
+    wLogoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    wLogoText: {
+        fontSize: 32,
+        fontWeight: '900',
+        fontStyle: 'italic',
+    },
+    wWelcomeText: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 8,
+    },
+    wInstructionText: {
+        fontSize: 14,
+        color: '#999',
+        marginBottom: 32,
+    },
+    wLoginButton: {
+        backgroundColor: '#fff',
+        paddingVertical: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+    },
+    wLoginButtonText: {
+        color: '#000',
+        fontSize: 16,
         fontWeight: 'bold',
     },
 });
