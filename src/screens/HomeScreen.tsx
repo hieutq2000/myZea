@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -10,6 +10,7 @@ import {
     StatusBar,
     Alert,
     Platform,
+    Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -28,6 +29,8 @@ interface HomeScreenProps {
 }
 
 export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSession, onViewTasks }: HomeScreenProps) {
+    const scrollY = useRef(new Animated.Value(0)).current;
+
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
     const [selectedMode, setSelectedMode] = useState<LiveMode | null>(null);
     const [targetAudience, setTargetAudience] = useState<TargetAudience>(TargetAudience.GENERAL);
@@ -201,70 +204,94 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
         );
     };
 
+    const HEADER_MAX_HEIGHT = 180;
+    const HEADER_MIN_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 60 : 90;
+    const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
+
+    const headerHeight = scrollY.interpolate({
+        inputRange: [0, HEADER_SCROLL_DISTANCE],
+        outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+        extrapolate: 'clamp',
+    });
+
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#EA580C" />
+            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-            {/* Header Wrapper to control zIndex */}
-            <View style={{ zIndex: 0, elevation: 0 }}>
+            {/* Layer 0: Animated Header Background (Collapses on Scroll) */}
+            <Animated.View style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: headerHeight,
+                overflow: 'hidden',
+                zIndex: 0,
+            }}>
                 <LinearGradient
-                    colors={['#EA580C', '#FB923C']} // Orange gradient
-                    style={styles.headerGradient}
+                    colors={['#EA580C', '#FB923C']}
+                    style={{ flex: 1 }}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0.5 }}
                 >
-                    {/* Decorative Circles Overlay */}
                     <View style={styles.headerCircle1} />
                     <View style={styles.headerCircle2} />
-
-                    <SafeAreaView>
-                        <View style={styles.headerContent}>
-                            <View style={styles.headerLeft}>
-                                {user.avatar ? (
-                                    <Image source={{ uri: user.avatar }} style={styles.headerAvatar} />
-                                ) : (
-                                    <View style={styles.headerAvatarPlaceholder}>
-                                        <Text style={styles.headerAvatarText}>{user.name?.charAt(0) || 'H'}</Text>
-                                    </View>
-                                )}
-                                <View style={{ marginLeft: 12 }}>
-                                    <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '500' }}>Xin chào,</Text>
-                                    <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
-                                        {user.name || 'Người dùng'}
-                                    </Text>
-                                </View>
-                            </View>
-                            <View style={styles.headerRight}>
-                                <TouchableOpacity style={styles.headerIconBtn}>
-                                    <MaterialIcons name="qr-code-scanner" size={24} color="white" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.headerIconBtn}
-                                    onPress={() => {
-                                        Alert.alert('Thông báo', 'Bạn có 99+ thông báo mới');
-                                    }}
-                                >
-                                    <Ionicons name="notifications-outline" size={24} color="white" />
-                                    <View style={styles.headerBadge}>
-                                        <Text style={styles.headerBadgeText}>99+</Text>
-                                    </View>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.headerIconBtn} onPress={onOpenProfile}>
-                                    <Ionicons name="settings-outline" size={24} color="white" />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </SafeAreaView>
                 </LinearGradient>
-            </View>
+            </Animated.View>
 
-            <ScrollView
+            {/* Layer 2: Header UI Content (Fixed ON TOP of everything) */}
+            <SafeAreaView style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }} pointerEvents="box-none">
+                <View style={styles.headerContent}>
+                    <View style={styles.headerLeft}>
+                        {user.avatar ? (
+                            <Image source={{ uri: user.avatar }} style={styles.headerAvatar} />
+                        ) : (
+                            <View style={styles.headerAvatarPlaceholder}>
+                                <Text style={styles.headerAvatarText}>{user.name?.charAt(0) || 'H'}</Text>
+                            </View>
+                        )}
+                        <View style={{ marginLeft: 12 }}>
+                            <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '500' }}>Xin chào,</Text>
+                            <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
+                                {user.name || 'Người dùng'}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.headerRight}>
+                        <TouchableOpacity style={styles.headerIconBtn}>
+                            <MaterialIcons name="qr-code-scanner" size={24} color="white" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerIconBtn}
+                            onPress={() => {
+                                Alert.alert('Thông báo', 'Bạn có 99+ thông báo mới');
+                            }}
+                        >
+                            <Ionicons name="notifications-outline" size={24} color="white" />
+                            <View style={styles.headerBadge}>
+                                <Text style={styles.headerBadgeText}>99+</Text>
+                            </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.headerIconBtn} onPress={onOpenProfile}>
+                            <Ionicons name="settings-outline" size={24} color="white" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </SafeAreaView>
+
+            {/* Layer 1: ScrollView Content (Scrollable, sits between BG and UI) */}
+            <Animated.ScrollView
                 style={styles.content}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
+                scrollEventThrottle={16}
+                onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                    { useNativeDriver: false }
+                )}
+                contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, paddingBottom: 160 }}
             >
-                {/* 1. Quick Menu */}
-                <View style={styles.quickMenuCard}>
+                {/* 1. Quick Menu (Moved up to overlap) */}
+                <View style={[styles.quickMenuCard, { marginTop: -40 }]}>
                     <View style={styles.quickMenuItem}>
                         <View style={[styles.quickMenuIcon, { backgroundColor: '#FFEDD5' }]}>
                             <Ionicons name="trophy" size={24} color="#F97316" />
