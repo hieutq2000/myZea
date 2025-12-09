@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
-        backgroundColor: COLORS.background,
+        backgroundColor: 'transparent', // Transparent to show Header Background
         zIndex: 10,
         elevation: 10,
         overflow: 'visible', // Prevent clipping of negative margin content
