@@ -251,6 +251,13 @@ export async function markConversationAsRead(conversationId: string): Promise<an
     });
 }
 
+// Xóa tin nhắn (phía tôi)
+export async function deleteMessage(messageId: string): Promise<any> {
+    return apiRequest(`/api/chat/messages/${messageId}`, {
+        method: 'DELETE',
+    });
+}
+
 // Update Push Token
 export async function updatePushToken(token: string): Promise<void> {
     return apiRequest('/api/auth/push-token', {

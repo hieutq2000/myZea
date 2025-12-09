@@ -5,7 +5,7 @@ import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
 import { Ionicons, Feather, FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
-import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL } from '../utils/api';
+import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage } from '../utils/api';
 import { launchImageLibrary, launchCamera } from '../utils/imagePicker';
 import EmojiPicker from '../components/EmojiPicker';
 
@@ -290,6 +290,32 @@ export default function ChatDetailScreen() {
         </View>
     );
 
+
+
+    const handleDeleteMessage = (messageId: string) => {
+        Alert.alert(
+            'Xóa tin nhắn',
+            'Tin nhắn này sẽ chỉ bị xóa ở phía bạn. Người nhận vẫn sẽ nhìn thấy.',
+            [
+                { text: 'Hủy', style: 'cancel' },
+                {
+                    text: 'Xóa ở phía tôi',
+                    style: 'destructive',
+                    onPress: async () => {
+                        // Optimistic UI update
+                        setMessages(prev => prev.filter(m => m.id !== messageId));
+                        try {
+                            await deleteMessage(messageId);
+                        } catch (error) {
+                            console.error('Delete message error', error);
+                            // Optionally restore message if failed, but for now we keep it simple
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const renderMessageItem = ({ item, index }: { item: any, index: number }) => {
         const isMe = item.sender === 'me' || (currentUserId && item.senderId === currentUserId);
         const nextMessage = messages[index + 1];
@@ -318,6 +344,8 @@ export default function ChatDetailScreen() {
                     <TouchableOpacity
                         style={[styles.imageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
                         onPress={() => setSelectedImage(item.imageUrl)}
+                        onLongPress={() => handleDeleteMessage(item.id)}
+                        delayLongPress={500}
                     >
                         <Image
                             source={{ uri: item.imageUrl }}
@@ -327,10 +355,15 @@ export default function ChatDetailScreen() {
                         <Text style={styles.messageTime}>{item.time}</Text>
                     </TouchableOpacity>
                 ) : (
-                    <View style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+                    <TouchableOpacity
+                        style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
+                        onLongPress={() => handleDeleteMessage(item.id)}
+                        delayLongPress={500}
+                        activeOpacity={0.8}
+                    >
                         <Text style={[styles.messageText, { color: '#000' }]}>{item.text}</Text>
                         <Text style={styles.messageTime}>{item.time}</Text>
-                    </View>
+                    </TouchableOpacity>
                 )}
             </View>
         );
@@ -360,19 +393,15 @@ export default function ChatDetailScreen() {
                 <View style={[
                     styles.inputContainer,
                     Platform.OS === 'ios'
-                        ? { marginBottom: showEmojiPicker ? 0 : (keyboardHeight > 0 ? keyboardHeight : 30) }
+                        ? { marginBottom: showEmojiPicker ? 0 : (keyboardHeight > 0 ? keyboardHeight : 20) }
                         : {}
                 ]}>
-                    {/* Emoji button */}
-                    <TouchableOpacity style={styles.stickerButton} onPress={toggleEmojiPicker}>
-                        <FontAwesome
-                            name={showEmojiPicker ? "keyboard-o" : "smile-o"}
-                            size={26}
-                            color={showEmojiPicker ? ZALO_BLUE : '#6B7280'}
-                        />
+                    {/* Attachment Button (Left) */}
+                    <TouchableOpacity style={styles.leftButton} onPress={() => setShowMediaPicker(true)}>
+                        <Ionicons name="attach" size={28} color="#6B7280" />
                     </TouchableOpacity>
 
-                    {/* Text Input */}
+                    {/* Text Input Wrapper (Center) */}
                     <View style={styles.inputWrapper}>
                         <TextInput
                             ref={inputRef}
@@ -387,22 +416,25 @@ export default function ChatDetailScreen() {
                                 setTimeout(() => scrollToBottom(), 300);
                             }}
                         />
+                        {/* Sticker Button (Inside Input) */}
+                        <TouchableOpacity style={styles.stickerInnerButton} onPress={toggleEmojiPicker}>
+                            <MaterialIcons
+                                name={showEmojiPicker ? "keyboard" : "sentiment-satisfied-alt"}
+                                size={24}
+                                color="#6B7280"
+                            />
+                        </TouchableOpacity>
                     </View>
 
-                    {/* Right side buttons */}
+                    {/* Mic or Send Button (Right) */}
                     {inputText.trim() ? (
-                        <TouchableOpacity style={styles.sendButton} onPress={() => sendMessage()}>
+                        <TouchableOpacity style={styles.rightButton} onPress={() => sendMessage()}>
                             <Ionicons name="send" size={24} color={ZALO_BLUE} />
                         </TouchableOpacity>
                     ) : (
-                        <View style={styles.rightButtons}>
-                            <TouchableOpacity style={styles.actionButton} onPress={() => setShowMediaPicker(true)}>
-                                <Feather name="more-horizontal" size={24} color="#6B7280" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionButton} onPress={handlePickImage}>
-                                <Ionicons name="image-outline" size={24} color="#6B7280" />
-                            </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity style={styles.rightButton} onPress={() => Alert.alert('Thông báo', 'Tính năng ghi âm đang phát triển')}>
+                            <Ionicons name="mic-outline" size={28} color="#6B7280" />
+                        </TouchableOpacity>
                     )}
                 </View>
 
@@ -550,45 +582,44 @@ const styles = StyleSheet.create({
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'transparent',
-        paddingVertical: 10,
-        paddingHorizontal: 8,
-        borderTopWidth: 0,
-        borderTopColor: 'transparent',
+        backgroundColor: 'white',
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
     },
-    stickerButton: {
+    leftButton: {
         padding: 8,
-        marginRight: 4,
+        marginRight: 8,
     },
     inputWrapper: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#F3F4F6',
-        borderRadius: 22,
-        marginHorizontal: 6,
-        paddingHorizontal: 14,
-        minHeight: 44,
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        minHeight: 40,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
     },
     input: {
         flex: 1,
         fontSize: 16,
         maxHeight: 100,
-        paddingVertical: 10,
+        paddingVertical: 8,
         color: '#1F2937',
+        marginRight: 4,
     },
-    rightButtons: {
-        flexDirection: 'row',
+    stickerInnerButton: {
+        padding: 4,
+    },
+    rightButton: {
+        padding: 8,
+        marginLeft: 8,
+        justifyContent: 'center',
         alignItems: 'center',
     },
-    actionButton: {
-        padding: 8,
-    },
-    sendButton: {
-        padding: 8,
-        marginLeft: 4,
-    },
-
     uploadingOverlay: {
         position: 'absolute',
         top: 0,

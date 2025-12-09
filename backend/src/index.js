@@ -714,6 +714,16 @@ Lưu ý: confidence >= 60 là match thành công. Nếu ảnh mờ hoặc khó n
 app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
+
+        // Ensure deleted_at column exists
+        try {
+            await pool.execute('SELECT deleted_at FROM conversation_participants LIMIT 1');
+        } catch (e) {
+            try {
+                await pool.execute('ALTER TABLE conversation_participants ADD COLUMN deleted_at DATETIME NULL');
+            } catch (alterErr) { }
+        }
+
         // Get private conversations with partner info, pin/mute status
         const [rows] = await pool.execute(`
             SELECT 
@@ -721,17 +731,22 @@ app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
                 u.name,
                 u.avatar,
                 u.id as partner_id,
-                m.content as last_message,
+                CASE 
+                    WHEN m.created_at > IFNULL(cp_me.deleted_at, '1970-01-01') OR m.created_at IS NULL THEN m.content 
+                    ELSE '' 
+                END as last_message,
                 m.created_at as last_message_time,
                 m.sender_id as last_message_sender_id,
                 u.last_seen,
                 u.status,
                 cp_me.is_pinned,
                 cp_me.is_muted,
+                cp_me.deleted_at,
                 (SELECT COUNT(*) FROM messages msg 
                  WHERE msg.conversation_id = c.id 
                  AND msg.sender_id != ? 
                  AND msg.id NOT IN (SELECT message_id FROM message_reads WHERE user_id = ?)
+                 AND msg.created_at > IFNULL(cp_me.deleted_at, '1970-01-01')
                 ) as unread_count
             FROM conversations c
             JOIN conversation_participants cp_me ON cp_me.conversation_id = c.id
@@ -758,9 +773,9 @@ app.get('/api/chat/history/:partnerId', authenticateToken, async (req, res) => {
         const userId = req.user.id;
         const partnerId = req.params.partnerId;
 
-        // Find conversation
+        // Find conversation and my deleted_at timestamp
         const [convRows] = await pool.execute(`
-            SELECT c.id 
+            SELECT c.id, cp1.deleted_at
             FROM conversations c
             JOIN conversation_participants cp1 ON c.id = cp1.conversation_id
             JOIN conversation_participants cp2 ON c.id = cp2.conversation_id
@@ -773,15 +788,34 @@ app.get('/api/chat/history/:partnerId', authenticateToken, async (req, res) => {
         if (convRows.length === 0) return res.json([]);
 
         const conversationId = convRows[0].id;
+        const myDeletedAt = convRows[0].deleted_at;
+
+        // Check if deleted_by column exists (quick hack)
+        try {
+            await pool.execute('SELECT deleted_by FROM messages LIMIT 1');
+        } catch (e) {
+            try {
+                await pool.execute('ALTER TABLE messages ADD COLUMN deleted_by JSON');
+            } catch (alterErr) {
+                // Ignore if already exists or other error
+            }
+        }
+
         const [messages] = await pool.execute(`
-            SELECT id, sender_id, content, created_at, type, image_url 
+            SELECT id, sender_id, content, created_at, type, image_url, deleted_by
             FROM messages 
             WHERE conversation_id = ? 
+            AND (created_at > ? OR ? IS NULL)
             ORDER BY created_at DESC
             LIMIT 50
-        `, [conversationId]);
+        `, [conversationId, myDeletedAt, myDeletedAt]);
 
-        res.json(messages.reverse().map(m => ({
+        const filteredMessages = messages.filter(m => {
+            const deletedBy = safeJsonParse(m.deleted_by);
+            return !deletedBy.includes(userId);
+        });
+
+        res.json(filteredMessages.reverse().map(m => ({
             _id: m.id,
             text: m.content,
             type: m.type || 'text',
@@ -791,6 +825,29 @@ app.get('/api/chat/history/:partnerId', authenticateToken, async (req, res) => {
         })));
     } catch (error) {
         console.error('Get history error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Delete message (for me only)
+app.delete('/api/chat/messages/:id', authenticateToken, async (req, res) => {
+    try {
+        const messageId = req.params.id;
+        const userId = req.user.id;
+
+        // Get current deleted_by
+        const [rows] = await pool.execute('SELECT deleted_by FROM messages WHERE id = ?', [messageId]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Message not found' });
+
+        let deletedBy = safeJsonParse(rows[0].deleted_by);
+        if (!deletedBy.includes(userId)) {
+            deletedBy.push(userId);
+            await pool.execute('UPDATE messages SET deleted_by = ? WHERE id = ?', [JSON.stringify(deletedBy), messageId]);
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Delete message error:', error);
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
@@ -863,9 +920,18 @@ app.delete('/api/chat/conversations/:id', authenticateToken, async (req, res) =>
         const conversationId = req.params.id;
         const userId = req.user.id;
 
-        // Soft delete: mark as hidden for this user
+        // Ensure deleted_at column exists
+        try {
+            await pool.execute('SELECT deleted_at FROM conversation_participants LIMIT 1');
+        } catch (e) {
+            try {
+                await pool.execute('ALTER TABLE conversation_participants ADD COLUMN deleted_at DATETIME NULL');
+            } catch (alterErr) { }
+        }
+
+        // Soft delete + Clear history
         await pool.execute(
-            'UPDATE conversation_participants SET is_hidden = 1 WHERE conversation_id = ? AND user_id = ?',
+            'UPDATE conversation_participants SET is_hidden = 1, deleted_at = NOW() WHERE conversation_id = ? AND user_id = ?',
             [conversationId, userId]
         );
 

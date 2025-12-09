@@ -8,6 +8,7 @@ import HistoryScreen from './src/screens/HistoryScreen';
 import LiveSessionScreen from './src/screens/LiveSessionScreen';
 import SplashScreen from './src/screens/SplashScreen';
 import UpdateModal from './src/components/UpdateModal';
+import PlaceScreen from './src/screens/PlaceScreen';
 import IncomingCallModal from './src/components/IncomingCallModal';
 import BottomTabBar, { TabType } from './src/components/BottomTabBar';
 import {
@@ -19,7 +20,7 @@ import { getLatestChangelog } from './src/utils/changelog';
 import { COLORS } from './src/utils/theme';
 import { useAppUpdates } from './src/hooks/useAppUpdates';
 
-type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'PROFILE' | 'SESSION';
+type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'PROFILE' | 'SESSION' | 'PLACE';
 
 interface SessionConfig {
   mode: LiveMode;
@@ -368,6 +369,9 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       case 'HISTORY':
         return <HistoryScreen user={user} />;
 
+      case 'PLACE':
+        return <PlaceScreen user={user} />;
+
       case 'HOME':
       default:
         return (
@@ -387,6 +391,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     if (view === 'HOME') return 'HOME';
     if (view === 'HISTORY') return 'HISTORY';
     if (view === 'PROFILE') return 'PROFILE';
+    if (view === 'PLACE') return 'PLACE';
     return 'HOME';
   };
 
@@ -400,7 +405,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     }
 
     if (tab === 'PLACE') {
-      Alert.alert('Thông báo', 'Tính năng FPT Place đang được phát triển');
+      setView('PLACE');
       return;
     }
 

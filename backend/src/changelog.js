@@ -4,6 +4,17 @@
 
 const CHANGELOG = [
     {
+        version: "3.8",
+        date: "09/12/2025",
+        title: "RA MẮT CHỨC NĂNG PLACE & GIAO DIỆN CHAT MỚI",
+        changes: [
+            "📰 Ra mắt tính năng Place: Mạng xã hội nội bộ",
+            "💬 Giao diện Chat mới : Đính kèm file, Sticker tiện lợi",
+            "📱 Sửa lỗi hiển thị Splash Screen và tối ưu icon",
+            "📞 Khắc phục lỗi xác thực cuộc gọi và tối ưu kết nối",
+        ]
+    },
+    {
         version: "3.7",
         date: "09/12/2025",
         title: "CẬP NHẬT TỐI ƯU HIỆU NĂNG UI/UX",
