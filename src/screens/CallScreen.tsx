@@ -98,11 +98,12 @@ export default function CallScreen() {
             }
         }
 
-        // Try to setup Agora (may fail if token required)
+        // Try to setup Agora
         try {
             await setupAgora(userId);
-        } catch (e) {
-            console.log('Agora setup skipped:', e);
+        } catch (e: any) {
+            console.error('Agora setup failed:', e);
+            Alert.alert('Lỗi khởi tạo', 'Không thể khởi động Agora: ' + (e.message || JSON.stringify(e)));
         }
     };
 
