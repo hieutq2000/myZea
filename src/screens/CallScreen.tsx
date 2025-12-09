@@ -79,6 +79,19 @@ export default function CallScreen() {
         const userId = user.id;
         setCurrentUserId(userId);
 
+        // EMIT CALL REQUEST IMMEDIATELY (don't wait for Agora)
+        if (!isIncoming && socket) {
+            const channel = channelName || `call_${userId}_${partnerId}`;
+            console.log('📞 Emitting callRequest to', partnerId);
+            socket.emit('callRequest', {
+                callerId: userId,
+                receiverId: partnerId,
+                channelName: channel,
+                isVideo: isVideo,
+            });
+            setCallStatus('ringing');
+        }
+
         // Then setup Agora with the user ID
         await setupAgora(userId);
     };
@@ -93,21 +106,9 @@ export default function CallScreen() {
 
             engine.registerEventHandler({
                 onJoinChannelSuccess: () => {
-                    console.log('✅ Joined channel successfully');
+                    console.log('✅ Joined Agora channel successfully');
                     setIsJoined(true);
-                    if (!isIncoming) {
-                        setCallStatus('ringing');
-                        // Emit call request to partner
-                        if (socket) {
-                            console.log('📞 Emitting callRequest to', partnerId);
-                            socket.emit('callRequest', {
-                                callerId: userId,
-                                receiverId: partnerId,
-                                channelName: channelName || `call_${userId}_${partnerId}`,
-                                isVideo: isVideo,
-                            });
-                        }
-                    }
+                    // callRequest already emitted in initCall(), no need to emit here
                 },
                 onUserJoined: (_connection, uid) => {
                     console.log('👤 Remote user joined:', uid);
