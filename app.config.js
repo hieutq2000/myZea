@@ -8,9 +8,9 @@ module.exports = {
         userInterfaceStyle: "light",
         newArchEnabled: true,
         splash: {
-            image: "./assets/splash.png",
+            image: "./assets/adaptive-icon.png",
             resizeMode: "contain",
-            backgroundColor: "#667eea"
+            backgroundColor: "#ffffff"
         },
         ios: {
             supportsTablet: true,
@@ -18,7 +18,8 @@ module.exports = {
             infoPlist: {
                 NSCameraUsageDescription: "Ứng dụng cần quyền camera để xác thực danh tính và giám sát trong quá trình thi.",
                 NSMicrophoneUsageDescription: "Ứng dụng cần quyền microphone để ghi âm câu trả lời của bạn.",
-                NSPhotoLibraryUsageDescription: "Ứng dụng cần quyền truy cập thư viện ảnh để chọn ảnh đại diện."
+                NSPhotoLibraryUsageDescription: "Ứng dụng cần quyền truy cập thư viện ảnh để chọn ảnh đại diện.",
+                NSPhotoLibraryAddUsageDescription: "Ứng dụng cần quyền lưu ảnh vào thư viện của bạn."
             }
         },
         android: {

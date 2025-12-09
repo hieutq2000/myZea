@@ -42,6 +42,17 @@ import { initSocket, disconnectSocket, getSocket } from './src/utils/socket';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync, schedulePushNotification } from './src/utils/notifications';
 
+// Configure Notifications to show alert when app is in foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 const Stack = createStackNavigator<RootStackParamList>();
 
 function AppContent({ navigationRef }: { navigationRef: any }) {

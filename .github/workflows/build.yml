@@ -93,14 +93,14 @@ jobs:
           
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
-          zip -r VinaliveAI.ipa Payload
+          zip -r Zyea.ipa Payload
           
           echo "IPA size:"
-          ls -la VinaliveAI.ipa
+          ls -la Zyea.ipa
 
       - name: 📤 Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: VinaliveAI-IPA
-          path: VinaliveAI.ipa
+          name: Zyea-IPA
+          path: Zyea.ipa
           retention-days: 30
