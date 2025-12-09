@@ -372,8 +372,8 @@ const styles = StyleSheet.create({
 
     // New Styles for  Design
     headerGradient: {
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) + 10 : 0,
-        paddingBottom: 80, // Increased to allow more overlap
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) : 0, // Removed +10
+        paddingBottom: 50, // Reduced from 80
     },
     headerCircle1: {
         position: 'absolute',
@@ -399,7 +399,9 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
+        paddingBottom: 0, // Ensure no extra padding at bottom of content
     },
+
     headerLeft: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -463,10 +465,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         backgroundColor: COLORS.white,
-        borderRadius: 24, // Increased for rounded look
+        borderRadius: 24,
         padding: 16,
         marginHorizontal: 16,
-        marginTop: -60, // Pull up more to overlap header
+        marginTop: -40, // Adjusted overlap
         ...SHADOWS.md,
     },
     quickMenuItem: {

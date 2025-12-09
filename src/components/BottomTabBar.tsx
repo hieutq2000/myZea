@@ -26,8 +26,8 @@ interface TabItem {
 const tabs: TabItem[] = [
     { key: 'HOME', icon: 'planet-outline', iconSet: Ionicons, label: 'My Home' },
     { key: 'HISTORY', icon: 'clipboard-list-outline', iconSet: MaterialCommunityIcons, label: 'My Tasks' },
-    { key: 'PLACE', icon: 'at-circle-outline', iconSet: Ionicons, label: 'Vina Place' },
-    { key: 'CHAT_TAB', icon: 'chatbubble-ellipses-outline', iconSet: Ionicons, label: 'Vina Chat' },
+    { key: 'PLACE', icon: 'at-circle-outline', iconSet: Ionicons, label: 'Place' },
+    { key: 'CHAT_TAB', icon: 'chatbubble-ellipses-outline', iconSet: Ionicons, label: 'Chats' },
     { key: 'PROFILE', icon: 'grid-outline', iconSet: Ionicons, label: 'Store' },
 ];
 
