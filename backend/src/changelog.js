@@ -4,12 +4,14 @@
 
 const CHANGELOG = [
     {
-        version: "3.2",
-        date: "08/12/2025",
-        title: "TỐI ƯU HIỆU NĂNG GIAO DIỆN",
+        version: "3.3",
+        date: "09/12/2025",
+        title: "TỐI ƯU HIỆU NĂNG ",
         changes: [
             "⚡ Cải tiến một số chức năng giao diện",
-            "🧠 Cải thiện UI/UX",
+            " Cải thiện Tính năng chats",
+            " Thêm chức năng hiển thị thông báo khi có tin nhắn mới",
+            " Cải thiện UI/UX",
 
         ]
     },

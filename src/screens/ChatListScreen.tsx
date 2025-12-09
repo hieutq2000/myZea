@@ -108,10 +108,19 @@ export default function ChatListScreen() {
     useEffect(() => {
         loadConversations();
 
-        const socket = getSocket();
-        if (socket) {
-            socket.on('receiveMessage', () => loadConversations());
-            socket.on('messageSent', () => loadConversations());
+        // Function to setup socket listeners
+        const setupSocketListeners = (socket: any) => {
+            socket.off('receiveMessage'); // Remove old listener first
+            socket.off('messageSent');
+
+            socket.on('receiveMessage', () => {
+                console.log('📩 ChatList: New message received via socket');
+                loadConversations();
+            });
+            socket.on('messageSent', () => {
+                console.log('📤 ChatList: Message sent confirmed');
+                loadConversations();
+            });
 
             socket.on('userStatusChanged', (data: any) => {
                 if (data.userId && data.status) {
@@ -147,15 +156,34 @@ export default function ChatListScreen() {
                     setTypingUsers(prev => ({ ...prev, [data.conversationId]: false }));
                 }
             });
+        };
+
+        const socket = getSocket();
+        if (socket) {
+            if (socket.connected) {
+                setupSocketListeners(socket);
+            }
+            // Listen for connect event to setup listeners when socket connects
+            socket.on('connect', () => {
+                console.log('🔌 ChatList: Socket connected, setting up listeners');
+                setupSocketListeners(socket);
+            });
         }
 
+        // Backup polling every 5 seconds in case socket misses events
+        const pollInterval = setInterval(() => {
+            loadConversations();
+        }, 5000);
+
         return () => {
+            clearInterval(pollInterval);
             if (socket) {
                 socket.off('receiveMessage');
                 socket.off('messageSent');
                 socket.off('userStatusChanged');
                 socket.off('userTyping');
                 socket.off('userStoppedTyping');
+                socket.off('connect');
             }
         };
     }, []);
