@@ -84,6 +84,12 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: '#F1F5F9',
         ...SHADOWS.sm,
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1000,
+        elevation: 200, // Higher than HomeScreen content
     },
     tabBar: {
         flexDirection: 'row',
