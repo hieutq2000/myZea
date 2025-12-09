@@ -377,6 +377,12 @@ const styles = StyleSheet.create({
         zIndex: 0,
         elevation: 0,
     },
+    content: {
+        flex: 1,
+        backgroundColor: COLORS.background,
+        zIndex: 10, // Content MUST be above Header
+        elevation: 10,
+    },
     headerCircle1: {
         position: 'absolute',
         top: -50,
