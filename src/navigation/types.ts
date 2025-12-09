@@ -20,4 +20,14 @@ export type RootStackParamList = {
         avatar?: string;
     };
     NewChat: undefined;
+
+    // Call Screen
+    Call: {
+        partnerId: string;
+        userName?: string;
+        avatar?: string;
+        isVideo: boolean;
+        isIncoming?: boolean;
+        channelName?: string;
+    };
 };

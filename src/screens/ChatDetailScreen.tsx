@@ -1,21 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Image, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Image, Keyboard, Modal, Alert, ActivityIndicator, Dimensions } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
-import { Ionicons, Feather, FontAwesome } from '@expo/vector-icons';
+import { Ionicons, Feather, FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
-import { getChatHistory, getCurrentUser, markConversationAsRead } from '../utils/api';
+import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL } from '../utils/api';
+import { launchImageLibrary, launchCamera } from '../utils/imagePicker';
+import EmojiPicker from '../components/EmojiPicker';
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList, 'ChatDetail'>;
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ZALO_BLUE = '#0068FF';
-const ZALO_BG = '#E2E9F1'; // Light gray background
-const MY_BUBBLE = '#D7F0FF'; // Light blue bubble for "me"
-const OTHER_BUBBLE = '#FFFFFF'; // White for "other"
+const ZALO_BG = '#E2E9F1';
+const MY_BUBBLE = '#D7F0FF';
+const OTHER_BUBBLE = '#FFFFFF';
 
 export default function ChatDetailScreen() {
-
     const route = useRoute<ChatDetailRouteProp>();
     const navigation = useNavigation();
     const { conversationId, partnerId, userName, avatar } = route.params;
@@ -23,7 +25,12 @@ export default function ChatDetailScreen() {
     const [inputText, setInputText] = useState('');
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [showMediaPicker, setShowMediaPicker] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const flatListRef = useRef<FlatList>(null);
+    const inputRef = useRef<TextInput>(null);
     const socket = getSocket();
 
     useEffect(() => {
@@ -32,6 +39,7 @@ export default function ChatDetailScreen() {
 
         const keyboardWillShow = Keyboard.addListener('keyboardWillShow', (e) => {
             setKeyboardHeight(e.endCoordinates.height);
+            setShowEmojiPicker(false);
         });
         const keyboardWillHide = Keyboard.addListener('keyboardWillHide', () => {
             setKeyboardHeight(0);
@@ -43,7 +51,6 @@ export default function ChatDetailScreen() {
                 markConversationAsRead(conversationId);
             });
             socket.on('messageSent', (message) => {
-                // Update the temporary message with the actual message from the server
                 setMessages(prev => prev.map(msg => msg.id === message.tempId ? {
                     ...msg,
                     id: message._id,
@@ -60,7 +67,7 @@ export default function ChatDetailScreen() {
                 socket.off('messageSent');
             }
         };
-    }, [conversationId, partnerId, currentUserId, socket]); // Added dependencies for useEffect
+    }, [conversationId, partnerId, currentUserId, socket]);
 
     const fetchCurrentUser = async () => {
         const user = await getCurrentUser();
@@ -73,6 +80,8 @@ export default function ChatDetailScreen() {
             const mapped = history.map((m: any) => ({
                 id: m._id,
                 text: m.text,
+                type: m.type || 'text',
+                imageUrl: m.imageUrl,
                 sender: m.user._id === currentUserId ? 'me' : 'other',
                 time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 senderId: m.user._id
@@ -80,7 +89,6 @@ export default function ChatDetailScreen() {
             setMessages(mapped);
             scrollToBottom();
 
-            // Mark conversation as read when opening
             if (conversationId) {
                 markConversationAsRead(conversationId).catch(err =>
                     console.log('Mark as read error:', err)
@@ -97,6 +105,8 @@ export default function ChatDetailScreen() {
             return [...prev, {
                 id: msg._id,
                 text: msg.text,
+                type: msg.type || 'text',
+                imageUrl: msg.imageUrl,
                 sender: msg.user._id === currentUserId ? 'me' : 'other',
                 time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 senderId: msg.user._id
@@ -111,13 +121,17 @@ export default function ChatDetailScreen() {
         }, 100);
     };
 
-    const sendMessage = async () => {
-        if (!inputText.trim() || !currentUserId) return;
+    const sendMessage = async (text?: string, type: string = 'text', imageUrl?: string) => {
+        const messageText = text || inputText.trim();
+        if (!messageText && type === 'text') return;
+        if (!currentUserId) return;
 
         const tempId = Date.now().toString();
-        const newMessage = {
+        const newMessage: any = {
             id: tempId,
-            text: inputText,
+            text: messageText,
+            type: type,
+            imageUrl: imageUrl,
             sender: 'me',
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             senderId: currentUserId
@@ -131,13 +145,97 @@ export default function ChatDetailScreen() {
                 conversationId,
                 senderId: currentUserId,
                 receiverId: partnerId,
-                message: inputText,
-                type: 'text',
-                tempId: tempId // Pass temporary ID for optimistic UI update
+                message: messageText,
+                type: type,
+                imageUrl: imageUrl,
+                tempId: tempId
             });
         }
 
         setInputText('');
+    };
+
+    const handleEmojiSelect = (emoji: string) => {
+        setInputText(prev => prev + emoji);
+    };
+
+    const toggleEmojiPicker = () => {
+        if (showEmojiPicker) {
+            setShowEmojiPicker(false);
+            inputRef.current?.focus();
+        } else {
+            Keyboard.dismiss();
+            setShowEmojiPicker(true);
+        }
+    };
+
+    const handlePickImage = async () => {
+        setShowMediaPicker(false);
+        const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
+
+        if (result.didCancel || result.error) {
+            if (result.error) Alert.alert('Lỗi', result.error);
+            return;
+        }
+
+        if (result.assets && result.assets[0]) {
+            const imageUri = result.assets[0].uri;
+            await uploadAndSendImage(imageUri);
+        }
+    };
+
+    const handleTakePhoto = async () => {
+        setShowMediaPicker(false);
+        const result = await launchCamera({ mediaType: 'photo', quality: 0.8 });
+
+        if (result.didCancel || result.error) {
+            if (result.error) Alert.alert('Lỗi', result.error);
+            return;
+        }
+
+        if (result.assets && result.assets[0]) {
+            const imageUri = result.assets[0].uri;
+            await uploadAndSendImage(imageUri);
+        }
+    };
+
+    const uploadAndSendImage = async (imageUri: string) => {
+        setIsUploading(true);
+        try {
+            // Create FormData for upload
+            const formData = new FormData();
+            const fileName = imageUri.split('/').pop() || 'image.jpg';
+            formData.append('image', {
+                uri: imageUri,
+                type: 'image/jpeg',
+                name: fileName,
+            } as any);
+
+            // Upload image to server
+            const response = await fetch(`${API_URL}/api/upload/image`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Upload failed');
+            }
+
+            const data = await response.json();
+            const imageUrl = data.url || imageUri; // Use uploaded URL or local URI as fallback
+
+            // Send message with image
+            sendMessage('[Hình ảnh]', 'image', imageUrl);
+        } catch (error) {
+            console.error('Upload error:', error);
+            // Fallback: send with local URI
+            sendMessage('[Hình ảnh]', 'image', imageUri);
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     const renderHeader = () => (
@@ -161,10 +259,28 @@ export default function ChatDetailScreen() {
                 </View>
             </View>
             <View style={styles.headerRight}>
-                <TouchableOpacity style={styles.headerIcon}>
+                <TouchableOpacity
+                    style={styles.headerIcon}
+                    onPress={() => (navigation as any).navigate('Call', {
+                        partnerId,
+                        userName,
+                        avatar,
+                        isVideo: false,
+                        isIncoming: false,
+                    })}
+                >
                     <Ionicons name="call-outline" size={22} color="white" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.headerIcon}>
+                <TouchableOpacity
+                    style={styles.headerIcon}
+                    onPress={() => (navigation as any).navigate('Call', {
+                        partnerId,
+                        userName,
+                        avatar,
+                        isVideo: true,
+                        isIncoming: false,
+                    })}
+                >
                     <Ionicons name="videocam-outline" size={24} color="white" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.headerIcon}>
@@ -175,12 +291,10 @@ export default function ChatDetailScreen() {
     );
 
     const renderMessageItem = ({ item, index }: { item: any, index: number }) => {
-        // Use senderId for robust comparison, enabling dynamic updates when currentUserId loads
         const isMe = item.sender === 'me' || (currentUserId && item.senderId === currentUserId);
-
-        // Check if this is the last message in a consecutive group from the same sender
         const nextMessage = messages[index + 1];
         const isLast = index === messages.length - 1 || (nextMessage && nextMessage.senderId !== item.senderId);
+        const isImage = item.type === 'image' && item.imageUrl;
 
         return (
             <View style={[
@@ -200,13 +314,24 @@ export default function ChatDetailScreen() {
                     </View>
                 )}
 
-                <View style={[
-                    styles.messageBubble,
-                    isMe ? styles.bubbleMe : styles.bubbleOther
-                ]}>
-                    <Text style={[styles.messageText, { color: '#000' }]}>{item.text}</Text>
-                    <Text style={styles.messageTime}>{item.time}</Text>
-                </View>
+                {isImage ? (
+                    <TouchableOpacity
+                        style={[styles.imageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
+                        onPress={() => setSelectedImage(item.imageUrl)}
+                    >
+                        <Image
+                            source={{ uri: item.imageUrl }}
+                            style={styles.messageImage}
+                            resizeMode="cover"
+                        />
+                        <Text style={styles.messageTime}>{item.time}</Text>
+                    </TouchableOpacity>
+                ) : (
+                    <View style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+                        <Text style={[styles.messageText, { color: '#000' }]}>{item.text}</Text>
+                        <Text style={styles.messageTime}>{item.time}</Text>
+                    </View>
+                )}
             </View>
         );
     };
@@ -227,26 +352,30 @@ export default function ChatDetailScreen() {
                     contentContainerStyle={styles.listContent}
                     style={styles.listStyle}
                     onContentSizeChange={() => scrollToBottom()}
-                    onLayout={() => scrollToBottom()}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="interactive"
                 />
 
+                {/* Input Container */}
                 <View style={[
                     styles.inputContainer,
-                    // On iOS: add keyboard height as margin, on Android use default
                     Platform.OS === 'ios'
-                        ? { marginBottom: keyboardHeight > 0 ? keyboardHeight : 30 }
+                        ? { marginBottom: showEmojiPicker ? 0 : (keyboardHeight > 0 ? keyboardHeight : 30) }
                         : {}
                 ]}>
-                    {/* Sticker/Emoji button - Left side */}
-                    <TouchableOpacity style={styles.stickerButton}>
-                        <FontAwesome name="smile-o" size={26} color={ZALO_BLUE} />
+                    {/* Emoji button */}
+                    <TouchableOpacity style={styles.stickerButton} onPress={toggleEmojiPicker}>
+                        <FontAwesome
+                            name={showEmojiPicker ? "keyboard-o" : "smile-o"}
+                            size={26}
+                            color={showEmojiPicker ? ZALO_BLUE : '#6B7280'}
+                        />
                     </TouchableOpacity>
 
-                    {/* Text Input - Center */}
+                    {/* Text Input */}
                     <View style={styles.inputWrapper}>
                         <TextInput
+                            ref={inputRef}
                             style={styles.input}
                             value={inputText}
                             onChangeText={setInputText}
@@ -254,6 +383,7 @@ export default function ChatDetailScreen() {
                             placeholderTextColor="#9CA3AF"
                             multiline
                             onFocus={() => {
+                                setShowEmojiPicker(false);
                                 setTimeout(() => scrollToBottom(), 300);
                             }}
                         />
@@ -261,24 +391,93 @@ export default function ChatDetailScreen() {
 
                     {/* Right side buttons */}
                     {inputText.trim() ? (
-                        <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
+                        <TouchableOpacity style={styles.sendButton} onPress={() => sendMessage()}>
                             <Ionicons name="send" size={24} color={ZALO_BLUE} />
                         </TouchableOpacity>
                     ) : (
                         <View style={styles.rightButtons}>
-                            <TouchableOpacity style={styles.actionButton}>
+                            <TouchableOpacity style={styles.actionButton} onPress={() => setShowMediaPicker(true)}>
                                 <Feather name="more-horizontal" size={24} color="#6B7280" />
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionButton}>
-                                <Ionicons name="mic-outline" size={24} color="#6B7280" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionButton}>
+                            <TouchableOpacity style={styles.actionButton} onPress={handlePickImage}>
                                 <Ionicons name="image-outline" size={24} color="#6B7280" />
                             </TouchableOpacity>
                         </View>
                     )}
                 </View>
+
+                {/* Emoji Picker */}
+                {showEmojiPicker && (
+                    <EmojiPicker onSelectEmoji={handleEmojiSelect} />
+                )}
+
+                {/* Upload indicator */}
+                {isUploading && (
+                    <View style={styles.uploadingOverlay}>
+                        <ActivityIndicator size="large" color={ZALO_BLUE} />
+                        <Text style={styles.uploadingText}>Đang tải ảnh...</Text>
+                    </View>
+                )}
             </View>
+
+            {/* Media Picker Modal */}
+            <Modal
+                visible={showMediaPicker}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowMediaPicker(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowMediaPicker(false)}
+                >
+                    <View style={styles.mediaPickerContainer}>
+                        <View style={styles.mediaPickerHandle} />
+                        <Text style={styles.mediaPickerTitle}>Chọn phương thức</Text>
+
+                        <View style={styles.mediaPickerOptions}>
+                            <TouchableOpacity style={styles.mediaOption} onPress={handleTakePhoto}>
+                                <View style={[styles.mediaOptionIcon, { backgroundColor: '#E0F2FE' }]}>
+                                    <Ionicons name="camera" size={28} color="#0284C7" />
+                                </View>
+                                <Text style={styles.mediaOptionText}>Chụp ảnh</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.mediaOption} onPress={handlePickImage}>
+                                <View style={[styles.mediaOptionIcon, { backgroundColor: '#DCFCE7' }]}>
+                                    <Ionicons name="images" size={28} color="#16A34A" />
+                                </View>
+                                <Text style={styles.mediaOptionText}>Thư viện</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* Image Preview Modal */}
+            <Modal
+                visible={!!selectedImage}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setSelectedImage(null)}
+            >
+                <View style={styles.imagePreviewContainer}>
+                    <TouchableOpacity
+                        style={styles.imagePreviewClose}
+                        onPress={() => setSelectedImage(null)}
+                    >
+                        <Ionicons name="close" size={30} color="white" />
+                    </TouchableOpacity>
+                    {selectedImage && (
+                        <Image
+                            source={{ uri: selectedImage }}
+                            style={styles.imagePreview}
+                            resizeMode="contain"
+                        />
+                    )}
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -328,6 +527,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         borderRadius: 12,
     },
+    imageBubble: {
+        maxWidth: '70%',
+        padding: 4,
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
     bubbleMe: {
         backgroundColor: MY_BUBBLE,
     },
@@ -336,11 +541,16 @@ const styles = StyleSheet.create({
     },
     messageText: { fontSize: 16, lineHeight: 22 },
     messageTime: { fontSize: 10, color: '#9CA3AF', marginTop: 4, alignSelf: 'flex-end' },
+    messageImage: {
+        width: SCREEN_WIDTH * 0.6,
+        height: SCREEN_WIDTH * 0.6,
+        borderRadius: 8,
+    },
 
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'transparent',
+        backgroundColor: '#FFFFFF',
         paddingVertical: 10,
         paddingHorizontal: 8,
         borderTopWidth: 1,
@@ -377,5 +587,86 @@ const styles = StyleSheet.create({
     sendButton: {
         padding: 8,
         marginLeft: 4,
+    },
+
+    uploadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    uploadingText: {
+        color: 'white',
+        marginTop: 10,
+        fontSize: 16,
+    },
+
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    mediaPickerContainer: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        paddingBottom: 40,
+    },
+    mediaPickerHandle: {
+        width: 40,
+        height: 4,
+        backgroundColor: '#D1D5DB',
+        borderRadius: 2,
+        alignSelf: 'center',
+        marginBottom: 20,
+    },
+    mediaPickerTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1F2937',
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    mediaPickerOptions: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+    },
+    mediaOption: {
+        alignItems: 'center',
+    },
+    mediaOptionIcon: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    mediaOptionText: {
+        fontSize: 14,
+        color: '#4B5563',
+    },
+
+    imagePreviewContainer: {
+        flex: 1,
+        backgroundColor: 'black',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    imagePreviewClose: {
+        position: 'absolute',
+        top: 50,
+        right: 20,
+        zIndex: 10,
+        padding: 10,
+    },
+    imagePreview: {
+        width: SCREEN_WIDTH,
+        height: SCREEN_WIDTH,
     },
 });

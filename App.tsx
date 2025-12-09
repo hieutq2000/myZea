@@ -32,6 +32,7 @@ import { RootStackParamList } from './src/navigation/types';
 import ChatListScreen from './src/screens/ChatListScreen';
 import ChatDetailScreen from './src/screens/ChatDetailScreen';
 import NewChatScreen from './src/screens/NewChatScreen';
+import CallScreen from './src/screens/CallScreen';
 import { initSocket, disconnectSocket, getSocket } from './src/utils/socket';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync, schedulePushNotification } from './src/utils/notifications';
@@ -109,17 +110,79 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
 
       if (socket) {
         socketListener = async (message: any) => {
-          // Trigger notification if message is from someone else
+          // Show in-app alert if message is from someone else
           if (message.user && message.user._id !== user.id) {
-            await schedulePushNotification(
-              message.user.name || 'Tin nhắn mới',
-              message.text || 'Đã gửi một hình ảnh',
-              { conversationId: message.conversationId, partnerId: message.user._id }
+            const senderName = message.user.name || 'Tin nhắn mới';
+            const messageText = message.text || 'Đã gửi một tin nhắn';
+
+            // Show Alert notification
+            Alert.alert(
+              `💬 ${senderName}`,
+              messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText,
+              [
+                { text: 'Đóng', style: 'cancel' },
+                {
+                  text: 'Xem',
+                  onPress: () => {
+                    if (navigationRef.isReady()) {
+                      navigationRef.navigate('ChatDetail', {
+                        conversationId: message.conversationId,
+                        partnerId: message.user._id,
+                        userName: senderName,
+                        avatar: message.user.avatar
+                      });
+                    }
+                  }
+                }
+              ],
+              { cancelable: true }
             );
           }
         };
 
         socket.on('receiveMessage', socketListener);
+
+        // Handle incoming call
+        socket.on('incomingCall', (data: any) => {
+          console.log('📞 Incoming call from:', data.callerId);
+
+          Alert.alert(
+            `📞 Cuộc gọi ${data.isVideo ? 'video' : 'thoại'} đến`,
+            'Bạn có muốn trả lời?',
+            [
+              {
+                text: 'Từ chối',
+                style: 'cancel',
+                onPress: () => {
+                  socket.emit('callRejected', {
+                    callerId: data.callerId,
+                    receiverId: user?.id,
+                  });
+                }
+              },
+              {
+                text: 'Trả lời',
+                onPress: () => {
+                  socket.emit('callAccepted', {
+                    callerId: data.callerId,
+                    receiverId: user?.id,
+                    channelName: data.channelName,
+                  });
+
+                  if (navigationRef.isReady()) {
+                    navigationRef.navigate('Call', {
+                      partnerId: data.callerId,
+                      isVideo: data.isVideo,
+                      isIncoming: true,
+                      channelName: data.channelName,
+                    });
+                  }
+                }
+              }
+            ],
+            { cancelable: false }
+          );
+        });
       }
     } else {
       disconnectSocket();
@@ -129,6 +192,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       const socket = getSocket();
       if (socket && socketListener) {
         socket.off('receiveMessage', socketListener);
+        socket.off('incomingCall');
       }
     };
   }, [user?.id]);
@@ -358,6 +422,13 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         <Stack.Screen name="ChatList" component={ChatListScreen} />
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
         <Stack.Screen name="NewChat" component={NewChatScreen} />
+
+        {/* Call Screen */}
+        <Stack.Screen
+          name="Call"
+          component={CallScreen}
+          options={{ headerShown: false, gestureEnabled: false }}
+        />
       </Stack.Navigator>
 
       <UpdateModal

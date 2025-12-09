@@ -903,6 +903,70 @@ app.post('/api/chat/conversations/:id/read', authenticateToken, async (req, res)
     }
 });
 
+// ============ IMAGE UPLOAD ============
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Create uploads directory if not exists
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer storage
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname) || '.jpg';
+        cb(null, 'img-' + uniqueSuffix + ext);
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif|webp/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+        if (extname && mimetype) {
+            return cb(null, true);
+        }
+        cb(new Error('Chỉ chấp nhận file ảnh!'));
+    }
+});
+
+// Serve static files from uploads folder
+app.use('/uploads', express.static(uploadsDir));
+
+// Upload image endpoint
+app.post('/api/upload/image', upload.single('image'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Không có file được upload' });
+        }
+
+        // Get the host from request or use default
+        const host = req.headers.host || 'localhost:3001';
+        const protocol = req.protocol || 'http';
+        const imageUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
+
+        console.log('📸 Image uploaded:', imageUrl);
+        res.json({
+            success: true,
+            url: imageUrl,
+            filename: req.file.filename
+        });
+    } catch (error) {
+        console.error('Upload error:', error);
+        res.status(500).json({ error: 'Lỗi khi upload ảnh' });
+    }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -1035,6 +1099,42 @@ io.on('connection', (socket) => {
 
     socket.on('stopTyping', ({ senderId, receiverId }) => {
         io.to(receiverId).emit('userStopTyping', { senderId });
+    });
+
+    // ============ CALL SIGNALING ============
+
+    // Call request - caller requests a call to receiver
+    socket.on('callRequest', (data) => {
+        console.log('📞 Call request from', data.callerId, 'to', data.receiverId);
+        io.to(data.receiverId).emit('incomingCall', {
+            callerId: data.callerId,
+            channelName: data.channelName,
+            isVideo: data.isVideo,
+        });
+    });
+
+    // Call accepted - receiver accepts the call
+    socket.on('callAccepted', (data) => {
+        console.log('✅ Call accepted by', data.receiverId);
+        io.to(data.callerId).emit('callAccepted', {
+            receiverId: data.receiverId,
+            channelName: data.channelName,
+        });
+    });
+
+    // Call rejected - receiver rejects the call
+    socket.on('callRejected', (data) => {
+        console.log('❌ Call rejected by', data.receiverId);
+        io.to(data.callerId).emit('callRejected', {
+            receiverId: data.receiverId,
+        });
+    });
+
+    // End call - either party ends the call
+    socket.on('endCall', (data) => {
+        console.log('📵 Call ended');
+        io.to(data.callerId).emit('callEnded', {});
+        io.to(data.receiverId).emit('callEnded', {});
     });
 
     socket.on('disconnect', () => {
