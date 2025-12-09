@@ -372,8 +372,10 @@ const styles = StyleSheet.create({
 
     // New Styles for  Design
     headerGradient: {
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) : 0, // Removed +10
-        paddingBottom: 30, // Reduced further to 30 to shorten header
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) : 0,
+        paddingBottom: 50, // Restore large padding for overlap
+        zIndex: 0,
+        elevation: 0,
     },
     headerCircle1: {
         position: 'absolute',
@@ -468,10 +470,10 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         padding: 16,
         marginHorizontal: 16,
-        marginTop: -40, // Adjusted overlap
+        marginTop: -30, // Negative margin for overlap
         ...SHADOWS.md,
-        zIndex: 100, // Ensure it sits ON TOP of header
-        elevation: 10, // Android shadow/layering override
+        zIndex: 100,
+        elevation: 10,
     },
     quickMenuItem: {
         alignItems: 'center',
