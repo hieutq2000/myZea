@@ -376,6 +376,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
             onLogout={handleLogout}
             onOpenProfile={() => setView('PROFILE')}
             onStartSession={handleStartSession}
+            onViewTasks={() => setView('HISTORY')}
           />
         );
     }
@@ -391,6 +392,23 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
 
   // Handle tab change
   const handleTabChange = (tab: TabType) => {
+    if (tab === 'CHAT_TAB') {
+      if (navigationRef.isReady()) {
+        navigationRef.navigate('ChatList');
+      }
+      return;
+    }
+
+    if (tab === 'PLACE') {
+      Alert.alert('Thông báo', 'Tính năng FPT Place đang được phát triển');
+      return;
+    }
+
+    if (tab === 'PROFILE') { // Map Store -> Profile for now
+      setView('PROFILE');
+      return;
+    }
+
     setView(tab as ViewType);
   };
 

@@ -9,6 +9,7 @@ import {
     SafeAreaView,
     StatusBar,
     Alert,
+    Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -23,9 +24,10 @@ interface HomeScreenProps {
     onLogout: () => void;
     onOpenProfile: () => void;
     onStartSession: (mode: LiveMode, topic: Topic, audience: TargetAudience) => void;
+    onViewTasks: () => void;
 }
 
-export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSession }: HomeScreenProps) {
+export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSession, onViewTasks }: HomeScreenProps) {
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
     const [selectedMode, setSelectedMode] = useState<LiveMode | null>(null);
     const [targetAudience, setTargetAudience] = useState<TargetAudience>(TargetAudience.GENERAL);
@@ -200,297 +202,395 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="#EA580C" />
 
-            {/* Modern Header */}
-            <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity style={styles.profileBtn} onPress={onOpenProfile}>
-                        {user.avatar ? (
-                            <Image source={{ uri: user.avatar }} style={styles.avatar} />
-                        ) : (
-                            <LinearGradient
-                                colors={COLORS.gradientPrimary as [string, string]}
-                                style={styles.avatarGradient}
-                            >
-                                <Text style={styles.avatarText}>{user.name?.charAt(0) || '👤'}</Text>
-                            </LinearGradient>
-                        )}
-                        <View style={styles.onlineIndicator} />
-                    </TouchableOpacity>
-
-                    <View style={styles.headerInfo}>
-                        <View>
-                            <Text style={styles.greeting}>Xin chào </Text>
-                            <Text style={[styles.greeting, { fontSize: 10, color: COLORS.primary }]}>Học tập hiệu quả mỗi ngày!</Text>
+            {/* Gradient Header */}
+            <LinearGradient
+                colors={['#EA580C', '#FB923C']} // Orange gradient
+                style={styles.headerGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+            >
+                <SafeAreaView>
+                    <View style={styles.headerContent}>
+                        <View style={styles.headerLeft}>
+                            {user.avatar ? (
+                                <Image source={{ uri: user.avatar }} style={styles.headerAvatar} />
+                            ) : (
+                                <View style={styles.headerAvatarPlaceholder}>
+                                    <Text style={styles.headerAvatarText}>{user.name?.charAt(0) || 'H'}</Text>
+                                </View>
+                            )}
+                            <Text style={styles.headerTitle}>My Zone</Text>
                         </View>
-                        <Text style={styles.userName} numberOfLines={1}>{user.name || 'Học viên'}</Text>
+                        <View style={styles.headerRight}>
+                            <TouchableOpacity style={styles.headerIconBtn}>
+                                <MaterialIcons name="qr-code-scanner" size={24} color="white" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.headerIconBtn}
+                                onPress={() => {
+                                    Alert.alert('Thông báo', 'Bạn có 99+ thông báo mới');
+                                }}
+                            >
+                                <Ionicons name="notifications-outline" size={24} color="white" />
+                                <View style={styles.headerBadge}>
+                                    <Text style={styles.headerBadgeText}>99+</Text>
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.headerIconBtn} onPress={onOpenProfile}>
+                                <Ionicons name="settings-outline" size={24} color="white" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
-
-                <View style={styles.headerRight}>
-                    <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => navigation.navigate('ChatList')}
-                    >
-                        <Ionicons name="chatbubbles-outline" size={22} color={COLORS.text} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => {
-                            Alert.alert('Thông báo', 'Không có thông báo mới');
-                        }}
-                    >
-                        <Feather name="bell" size={22} color={COLORS.text} />
-                        <View style={styles.badgeDot} />
-                    </TouchableOpacity>
-                </View>
-            </View>
+                </SafeAreaView>
+            </LinearGradient>
 
             <ScrollView
                 style={styles.content}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* Stats Card */}
-                <View style={styles.statsCard}>
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <View style={[styles.statIconBox, { backgroundColor: '#E0F2FE' }]}>
-                                <Feather name="file-text" size={18} color="#0284C7" />
-                            </View>
-                            <Text style={styles.statNumber}>{user.history?.length || 0}</Text>
-                            <Text style={styles.statLabel}>Bài thi</Text>
+                {/* 1. Quick Menu */}
+                <View style={styles.quickMenuCard}>
+                    <View style={styles.quickMenuItem}>
+                        <View style={[styles.quickMenuIcon, { backgroundColor: '#FFEDD5' }]}>
+                            <Ionicons name="trophy" size={24} color="#F97316" />
                         </View>
-
-                        <View style={styles.statDivider} />
-
-                        <View style={styles.statItem}>
-                            <View style={[styles.statIconBox, { backgroundColor: '#DCFCE7' }]}>
-                                <Feather name="check-circle" size={18} color="#16A34A" />
-                            </View>
-                            <Text style={styles.statNumber}>
-                                {user.history?.filter(h => h.score === 'ĐẠT').length || 0}
-                            </Text>
-                            <Text style={styles.statLabel}>Đạt</Text>
-                        </View>
-
-                        <View style={styles.statDivider} />
-
-                        <View style={styles.statItem}>
-                            <View style={[styles.statIconBox, { backgroundColor: '#FEF3C7' }]}>
-                                <Feather name="award" size={18} color="#D97706" />
-                            </View>
-                            <Text style={styles.statNumber}>{user.badges?.length || 0}</Text>
-                            <Text style={styles.statLabel}>Huy hiệu</Text>
-                        </View>
+                        <Text style={styles.quickMenuLabel}>Reward</Text>
                     </View>
-
-                    {/* Level Progress Bar */}
-                    <View style={styles.levelContainer}>
-                        <View style={styles.levelInfo}>
-                            <Text style={styles.levelText}>Level {user.level || 1}</Text>
-                            <Text style={styles.xpText}>{user.xp || 0} XP</Text>
+                    <View style={styles.quickMenuItem}>
+                        <View style={[styles.quickMenuIcon, { backgroundColor: '#FEF9C3' }]}>
+                            <Ionicons name="star" size={24} color="#EAB308" />
                         </View>
-                        <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: `${Math.min((user.xp || 0) % 100, 100)}%` }]} />
+                        <Text style={styles.quickMenuLabel}>My Gold</Text>
+                    </View>
+                    <View style={styles.quickMenuItem}>
+                        <View style={[styles.quickMenuIcon, { backgroundColor: '#DBEAFE' }]}>
+                            <MaterialIcons name="security" size={24} color="#3B82F6" />
                         </View>
+                        <Text style={styles.quickMenuLabel}>FPT Care</Text>
+                    </View>
+                    <View style={styles.quickMenuItem}>
+                        <View style={[styles.quickMenuIcon, { backgroundColor: '#FFEDD5' }]}>
+                            <Ionicons name="clipboard" size={24} color="#F97316" />
+                        </View>
+                        <Text style={styles.quickMenuLabel}>To-do Notes</Text>
                     </View>
                 </View>
 
+                {/* 2. My Tasks (Việc của tôi) */}
+                <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeaderNew}>
+                        <Text style={styles.sectionTitleNew}>Việc của tôi</Text>
+                        <TouchableOpacity onPress={onViewTasks}>
+                            <Text style={styles.viewAllText}>Xem tất cả {'>'}</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.tasksRow}>
+                        {/* Orange Card */}
+                        <TouchableOpacity style={[styles.taskCard, { backgroundColor: '#EA580C' }]}>
+                            <View style={styles.taskCardHeader}>
+                                <Text style={[styles.taskCount, { color: 'white' }]}>0</Text>
+                                <Feather name="info" size={16} color="rgba(255,255,255,0.7)" />
+                            </View>
+                            <Text style={[styles.taskLabel, { color: 'white' }]}>Công việc{'\n'}chưa làm</Text>
+                            <View style={styles.taskCardBgIcon}>
+                                <Feather name="file-text" size={60} color="rgba(255,255,255,0.1)" />
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* White Card */}
+                        <TouchableOpacity style={[styles.taskCard, { backgroundColor: 'white', borderColor: '#E2E8F0', borderWidth: 1 }]}>
+                            <View style={styles.taskCardHeader}>
+                                <Text style={[styles.taskCount, { color: '#0F172A' }]}>0</Text>
+                                <Feather name="info" size={16} color="#94A3B8" />
+                            </View>
+                            <Text style={[styles.taskLabel, { color: '#0F172A' }]}>Quá hạn{'\n'}đã lâu</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* 3. News (Không thể bỏ lỡ) */}
+                <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeaderNew}>
+                        <Text style={styles.sectionTitleNew}>Không thể bỏ lỡ</Text>
+                        <TouchableOpacity>
+                            <Ionicons name="refresh" size={20} color="#64748B" />
+                        </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity style={styles.newsCard}>
+                        <View style={styles.newsImageContainer}>
+                            <LinearGradient
+                                colors={['#10B981', '#059669']}
+                                style={styles.newsImagePlaceholder}
+                            >
+                                <Text style={styles.newsPlaceholderText}>FPT Place</Text>
+                            </LinearGradient>
+                        </View>
+                        <View style={styles.newsContent}>
+                            <View style={styles.newsMeta}>
+                                <Text style={styles.newsSource}>chungta.vn</Text>
+                                <Text style={styles.newsDate}>• 09/12/2025</Text>
+                            </View>
+                            <Text style={styles.newsTitle} numberOfLines={2}>
+                                Ban hành 2 quy định mới, thiết lập chuẩn giao tiếp số cho toàn FPT
+                            </Text>
+                            <Text style={styles.newsDesc} numberOfLines={2}>
+                                Tập đoàn vừa chính thức ban hành bộ đổi quy định về sử dụng chatbot, email và FPT Place...
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                {/* --- Existing Functionality (Moved to bottom) --- */}
+                <View style={styles.divider} />
+                <Text style={styles.functionalityTitle}>Học tập & Rèn luyện</Text>
                 {renderModeSelection()}
                 {renderTopicSelection()}
 
                 <View style={{ height: 40 }} />
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F8FAFC',
+    // ... (Keep existing styles for Compatibility with renderModeSelection)
+
+    // New Styles for FPT Design
+    headerGradient: {
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) : 0,
+        paddingBottom: 30, // Space for Quick Menu overlap
     },
-    header: {
+    headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: SPACING.md,
-        paddingVertical: SPACING.md,
-        backgroundColor: COLORS.white,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
-        ...SHADOWS.xs,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
     },
     headerLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        flex: 1,
+    },
+    headerAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: 'white',
+    },
+    headerAvatarPlaceholder: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: 'white',
+    },
+    headerAvatarText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 18,
+    },
+    headerTitle: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: '700',
+        marginLeft: 10,
     },
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 16,
     },
-    profileBtn: {
+    headerIconBtn: {
+        padding: 4,
         position: 'relative',
-        marginRight: 12,
     },
-    avatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        borderWidth: 2,
-        borderColor: COLORS.primary,
+    headerBadge: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'white',
     },
-    avatarGradient: {
+    headerBadgeText: {
+        color: 'white',
+        fontSize: 8,
+        fontWeight: 'bold',
+    },
+    quickMenuCard: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        backgroundColor: COLORS.white,
+        borderRadius: 16,
+        padding: 16,
+        marginHorizontal: 16,
+        marginTop: -20,
+        ...SHADOWS.md,
+    },
+    quickMenuItem: {
+        alignItems: 'center',
+        width: '23%',
+    },
+    quickMenuIcon: {
         width: 48,
         height: 48,
         borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
+        marginBottom: 8,
     },
-    avatarText: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: COLORS.white,
+    quickMenuLabel: {
+        fontSize: 11,
+        color: '#334155',
+        textAlign: 'center',
+        fontWeight: '500',
     },
-    onlineIndicator: {
-        position: 'absolute',
-        bottom: 2,
-        right: 2,
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#22C55E',
-        borderWidth: 2,
-        borderColor: COLORS.white,
+    sectionContainer: {
+        marginTop: 24,
+        paddingHorizontal: 16,
     },
-    headerInfo: {
-        flex: 1,
+    sectionHeaderNew: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
     },
-    greeting: {
-        fontSize: 13,
-        color: COLORS.textLight,
-        marginBottom: 2,
-    },
-    userName: {
+    sectionTitleNew: {
         fontSize: 18,
         fontWeight: '700',
-        color: COLORS.text,
+        color: '#0F172A',
     },
-    actionBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#F1F5F9',
-        alignItems: 'center',
-        justifyContent: 'center',
+    viewAllText: {
+        color: '#64748B',
+        fontSize: 13,
     },
-    logoutBtn: {
-        backgroundColor: '#FEF2F2',
+    tasksRow: {
+        flexDirection: 'row',
+        gap: 12,
     },
-    badgeDot: {
+    taskCard: {
+        flex: 1,
+        borderRadius: 16,
+        padding: 16,
+        paddingVertical: 20,
+        minHeight: 120,
+        justifyContent: 'space-between',
+        overflow: 'hidden',
+    },
+    taskCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+    taskCount: {
+        fontSize: 36,
+        fontWeight: 'bold',
+        lineHeight: 40,
+    },
+    taskLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        marginTop: 8,
+    },
+    taskCardBgIcon: {
         position: 'absolute',
-        top: 10,
-        right: 10,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#EF4444',
-        borderWidth: 1.5,
+        bottom: -20,
+        right: -20,
+    },
+    newsCard: {
+        backgroundColor: COLORS.white,
+        borderRadius: 16,
+        overflow: 'hidden',
+        borderWidth: 1,
         borderColor: '#F1F5F9',
+        ...SHADOWS.sm,
+    },
+    newsImageContainer: {
+        height: 160,
+        backgroundColor: '#E2E8F0',
+    },
+    newsImagePlaceholder: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    newsPlaceholderText: {
+        color: 'white',
+        fontSize: 24,
+        fontWeight: 'bold',
+    },
+    newsContent: {
+        padding: 16,
+    },
+    newsMeta: {
+        flexDirection: 'row',
+        marginBottom: 8,
+    },
+    newsSource: {
+        color: '#64748B',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    newsDate: {
+        color: '#94A3B8',
+        fontSize: 12,
+        marginLeft: 4,
+    },
+    newsTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#0F172A',
+        marginBottom: 8,
+        lineHeight: 24,
+    },
+    newsDesc: {
+        fontSize: 14,
+        color: '#475569',
+        lineHeight: 20,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: '#E2E8F0',
+        marginVertical: 24,
+        marginHorizontal: 16,
+    },
+    functionalityTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#0F172A',
+        paddingHorizontal: 16,
+        marginBottom: 16,
+    },
+
+    // Existing styles required for compatibility
+    container: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
     },
     content: {
         flex: 1,
     },
     scrollContent: {
-        padding: SPACING.md,
-    },
-    statsCard: {
-        backgroundColor: COLORS.white,
-        borderRadius: BORDER_RADIUS.xl,
-        padding: SPACING.lg,
-        marginBottom: SPACING.xl,
-        ...SHADOWS.md,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: SPACING.lg,
-    },
-    statItem: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    statIconBox: {
-        width: 36,
-        height: 36,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 8,
-    },
-    statNumber: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: COLORS.text,
-    },
-    statLabel: {
-        fontSize: 12,
-        color: COLORS.textLight,
-    },
-    statDivider: {
-        width: 1,
-        height: 40,
-        backgroundColor: '#F1F5F9',
-    },
-    levelContainer: {
-        marginTop: SPACING.xs,
-    },
-    levelInfo: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 6,
-    },
-    levelText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: COLORS.text,
-    },
-    xpText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: COLORS.primary,
-    },
-    progressBarBg: {
-        height: 8,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 4,
-        overflow: 'hidden',
-    },
-    progressBarFill: {
-        height: '100%',
-        backgroundColor: COLORS.primary,
-        borderRadius: 4,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: SPACING.md,
-        gap: 8,
-    },
-    sectionTitle: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: COLORS.text,
+        paddingBottom: 40,
     },
     modeSection: {
         marginBottom: SPACING.xl,
+        paddingHorizontal: 16,
     },
     modeGrid: {
         gap: SPACING.md,
@@ -534,6 +634,61 @@ const styles = StyleSheet.create({
         width: 24,
         height: 24,
         borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    topicsSection: {
+        marginBottom: SPACING.lg,
+        paddingHorizontal: 16,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: SPACING.md,
+        gap: 8,
+    },
+    sectionTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: COLORS.text,
+    },
+    topicsGrid: {
+        gap: SPACING.sm,
+    },
+    topicCard: {
+        borderRadius: BORDER_RADIUS.lg,
+        overflow: 'hidden',
+        ...SHADOWS.sm,
+        backgroundColor: COLORS.white,
+    },
+    kidsTopicCard: {
+        borderWidth: 2,
+        borderColor: '#FBCFE8',
+    },
+    topicGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: SPACING.md,
+    },
+    topicIcon: {
+        fontSize: 26,
+        marginRight: SPACING.md,
+    },
+    topicLabel: {
+        flex: 1,
+        fontSize: 15,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    kidsTopicLabel: {
+        color: '#DB2777',
+        fontWeight: '700',
+    },
+    topicArrow: {
+        width: 32,
+        height: 32,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -598,47 +753,7 @@ const styles = StyleSheet.create({
     switchThumbActive: {
         transform: [{ translateX: 20 }],
     },
-    topicsSection: {
-        marginBottom: SPACING.lg,
-    },
-    topicsGrid: {
-        gap: SPACING.sm,
-    },
-    topicCard: {
-        borderRadius: BORDER_RADIUS.lg,
-        overflow: 'hidden',
-        ...SHADOWS.sm,
-        backgroundColor: COLORS.white,
-    },
-    kidsTopicCard: {
-        borderWidth: 2,
-        borderColor: '#FBCFE8',
-    },
-    topicGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: SPACING.md,
-    },
-    topicIcon: {
-        fontSize: 26,
-        marginRight: SPACING.md,
-    },
-    topicLabel: {
-        flex: 1,
-        fontSize: 15,
-        fontWeight: '600',
-        color: COLORS.text,
-    },
-    kidsTopicLabel: {
-        color: '#DB2777',
-        fontWeight: '700',
-    },
-    topicArrow: {
-        width: 32,
-        height: 32,
-        borderRadius: 12,
-        backgroundColor: '#F1F5F9',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+
+    // Unused Legacy Styles (Safe to leave or remove if confirmed unused)
+    // ...
 });

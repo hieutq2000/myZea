@@ -6,10 +6,10 @@ import {
     StyleSheet,
     Platform,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../utils/theme';
 
-export type TabType = 'HOME' | 'HISTORY' | 'PROFILE';
+export type TabType = 'HOME' | 'HISTORY' | 'PROFILE' | 'PLACE' | 'CHAT_TAB';
 
 interface BottomTabBarProps {
     activeTab: TabType;
@@ -18,14 +18,17 @@ interface BottomTabBarProps {
 
 interface TabItem {
     key: TabType;
-    icon: string;
+    icon: any;
+    iconSet: any;
     label: string;
 }
 
 const tabs: TabItem[] = [
-    { key: 'HOME', icon: 'home', label: 'Trang chủ' },
-    { key: 'HISTORY', icon: 'bar-chart-2', label: 'Lịch sử' },
-    { key: 'PROFILE', icon: 'user', label: 'Hồ sơ' },
+    { key: 'HOME', icon: 'planet-outline', iconSet: Ionicons, label: 'My Zone' },
+    { key: 'HISTORY', icon: 'clipboard-list-outline', iconSet: MaterialCommunityIcons, label: 'My Tasks' },
+    { key: 'PLACE', icon: 'at-circle-outline', iconSet: Ionicons, label: 'FPT Place' },
+    { key: 'CHAT_TAB', icon: 'chatbubble-ellipses-outline', iconSet: Ionicons, label: 'FPT Chat' },
+    { key: 'PROFILE', icon: 'grid-outline', iconSet: Ionicons, label: 'Store' },
 ];
 
 export default function BottomTabBar({ activeTab, onTabChange }: BottomTabBarProps) {
@@ -33,7 +36,18 @@ export default function BottomTabBar({ activeTab, onTabChange }: BottomTabBarPro
         <View style={styles.container}>
             <View style={styles.tabBar}>
                 {tabs.map((tab) => {
+                    // Map active logic (HOME covers My Zone, etc)
+                    // For now, let's strictly follow the activeTab prop
                     const isActive = activeTab === tab.key;
+                    // Custom mapping for icon names if needed based on active state (filled vs outline)
+                    let iconName = tab.icon;
+                    if (isActive) {
+                        if (tab.key === 'HOME') iconName = 'planet';
+                        if (tab.key === 'PLACE') iconName = 'at-circle';
+                        if (tab.key === 'CHAT_TAB') iconName = 'chatbubble-ellipses';
+                        if (tab.key === 'PROFILE') iconName = 'grid';
+                    }
+
                     return (
                         <TouchableOpacity
                             key={tab.key}
@@ -41,14 +55,11 @@ export default function BottomTabBar({ activeTab, onTabChange }: BottomTabBarPro
                             onPress={() => onTabChange(tab.key)}
                             activeOpacity={0.7}
                         >
-                            <View style={[
-                                styles.iconContainer,
-                                isActive && styles.iconContainerActive
-                            ]}>
-                                <Feather
-                                    name={tab.icon as any}
-                                    size={22}
-                                    color={isActive ? COLORS.white : COLORS.textMuted}
+                            <View style={styles.iconContainer}>
+                                <tab.iconSet
+                                    name={iconName}
+                                    size={24}
+                                    color={isActive ? '#F97316' : '#94A3B8'}
                                 />
                             </View>
                             <Text style={[
@@ -68,16 +79,17 @@ export default function BottomTabBar({ activeTab, onTabChange }: BottomTabBarPro
 const styles = StyleSheet.create({
     container: {
         backgroundColor: COLORS.white,
-        paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+        paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+        paddingTop: 12,
         borderTopWidth: 1,
-        borderTopColor: COLORS.border,
+        borderTopColor: '#F1F5F9',
         ...SHADOWS.sm,
     },
     tabBar: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 10,
+        paddingHorizontal: 16,
     },
     tabItem: {
         alignItems: 'center',
@@ -85,23 +97,15 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     iconContainer: {
-        width: 44,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
         marginBottom: 4,
     },
-    iconContainerActive: {
-        backgroundColor: COLORS.primary,
-    },
     label: {
-        fontSize: 11,
-        color: COLORS.textMuted,
+        fontSize: 10,
+        color: '#94A3B8',
         fontWeight: '500',
     },
     labelActive: {
-        color: COLORS.primary,
+        color: '#F97316',
         fontWeight: '600',
     },
 });
