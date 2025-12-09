@@ -550,11 +550,11 @@ const styles = StyleSheet.create({
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'transparent',
         paddingVertical: 10,
         paddingHorizontal: 8,
-        borderTopWidth: 1,
-        borderTopColor: '#E5E7EB',
+        borderTopWidth: 0,
+        borderTopColor: 'transparent',
     },
     stickerButton: {
         padding: 8,

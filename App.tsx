@@ -110,32 +110,17 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
 
       if (socket) {
         socketListener = async (message: any) => {
-          // Show in-app alert if message is from someone else
+          // Show nice iOS notification banner if message is from someone else
           if (message.user && message.user._id !== user.id) {
-            const senderName = message.user.name || 'Tin nhắn mới';
-            const messageText = message.text || 'Đã gửi một tin nhắn';
-
-            // Show Alert notification
-            Alert.alert(
-              `💬 ${senderName}`,
-              messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText,
-              [
-                { text: 'Đóng', style: 'cancel' },
-                {
-                  text: 'Xem',
-                  onPress: () => {
-                    if (navigationRef.isReady()) {
-                      navigationRef.navigate('ChatDetail', {
-                        conversationId: message.conversationId,
-                        partnerId: message.user._id,
-                        userName: senderName,
-                        avatar: message.user.avatar
-                      });
-                    }
-                  }
-                }
-              ],
-              { cancelable: true }
+            await schedulePushNotification(
+              message.user.name || 'Tin nhắn mới',
+              message.text || 'Đã gửi một tin nhắn',
+              {
+                conversationId: message.conversationId,
+                partnerId: message.user._id,
+                userName: message.user.name,
+                avatar: message.user.avatar
+              }
             );
           }
         };

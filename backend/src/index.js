@@ -774,7 +774,7 @@ app.get('/api/chat/history/:partnerId', authenticateToken, async (req, res) => {
 
         const conversationId = convRows[0].id;
         const [messages] = await pool.execute(`
-            SELECT id, sender_id, content, created_at, type 
+            SELECT id, sender_id, content, created_at, type, image_url 
             FROM messages 
             WHERE conversation_id = ? 
             ORDER BY created_at DESC
@@ -784,6 +784,8 @@ app.get('/api/chat/history/:partnerId', authenticateToken, async (req, res) => {
         res.json(messages.reverse().map(m => ({
             _id: m.id,
             text: m.content,
+            type: m.type || 'text',
+            imageUrl: m.image_url || null,
             createdAt: m.created_at,
             user: { _id: m.sender_id }
         })));
@@ -1029,11 +1031,19 @@ io.on('connection', (socket) => {
                 await pool.execute('INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)', [conversationId, data.receiverId]);
             }
 
-            // Save message
+            // Save message (with image_url if present)
             const messageId = uuidv4();
+
+            // Add image_url column if not exists (quick hack for development)
+            try {
+                await pool.execute('ALTER TABLE messages ADD COLUMN image_url TEXT');
+            } catch (e) {
+                // Column likely exists
+            }
+
             await pool.execute(
-                'INSERT INTO messages (id, conversation_id, sender_id, content, type) VALUES (?, ?, ?, ?, ?)',
-                [messageId, conversationId, data.senderId, data.message, data.type || 'text']
+                'INSERT INTO messages (id, conversation_id, sender_id, content, type, image_url) VALUES (?, ?, ?, ?, ?, ?)',
+                [messageId, conversationId, data.senderId, data.message, data.type || 'text', data.imageUrl || null]
             );
 
             // Update conversation last message
@@ -1046,13 +1056,16 @@ io.on('connection', (socket) => {
             const fullMessage = {
                 _id: messageId,
                 text: data.message,
+                type: data.type || 'text',
+                imageUrl: data.imageUrl || null,
                 createdAt: new Date(),
                 user: {
                     _id: data.senderId,
                     name: senderInfo.name,
                     avatar: senderInfo.avatar
                 },
-                conversationId
+                conversationId,
+                tempId: data.tempId // Include tempId for optimistic UI update
             };
 
             // Emit to receiver

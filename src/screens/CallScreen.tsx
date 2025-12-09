@@ -49,8 +49,7 @@ export default function CallScreen() {
     const socket = getSocket();
 
     useEffect(() => {
-        fetchCurrentUser();
-        setupAgora();
+        initCall();
 
         // Socket listeners for call signaling
         if (socket) {
@@ -69,13 +68,25 @@ export default function CallScreen() {
         };
     }, []);
 
-    const fetchCurrentUser = async () => {
+    const initCall = async () => {
+        // First get current user ID
         const user = await getCurrentUser();
-        if (user) setCurrentUserId(user.id);
+        if (!user) {
+            Alert.alert('Lỗi', 'Không thể lấy thông tin người dùng');
+            navigation.goBack();
+            return;
+        }
+        const userId = user.id;
+        setCurrentUserId(userId);
+
+        // Then setup Agora with the user ID
+        await setupAgora(userId);
     };
 
-    const setupAgora = async () => {
+    const setupAgora = async (userId: string) => {
         try {
+
+
 
             const engine = createAgoraRtcEngine();
             agoraEngineRef.current = engine;
@@ -87,11 +98,12 @@ export default function CallScreen() {
                     if (!isIncoming) {
                         setCallStatus('ringing');
                         // Emit call request to partner
-                        if (socket && currentUserId) {
+                        if (socket) {
+                            console.log('📞 Emitting callRequest to', partnerId);
                             socket.emit('callRequest', {
-                                callerId: currentUserId,
+                                callerId: userId,
                                 receiverId: partnerId,
-                                channelName: channelName || `call_${currentUserId}_${partnerId}`,
+                                channelName: channelName || `call_${userId}_${partnerId}`,
                                 isVideo: isVideo,
                             });
                         }
@@ -127,8 +139,8 @@ export default function CallScreen() {
             engine.setEnableSpeakerphone(true);
 
             // Join channel
-            const channel = channelName || `call_${currentUserId}_${partnerId}`;
-            await engine.joinChannel('', channel, parseInt(currentUserId || '0', 10), {});
+            const channel = channelName || `call_${userId}_${partnerId}`;
+            await engine.joinChannel('', channel, parseInt(userId || '0', 10), {});
 
         } catch (error) {
             console.error('Agora setup error:', error);

@@ -3,6 +3,19 @@
 // Backend sẽ serve dữ liệu này cho mobile app
 
 const CHANGELOG = [
+
+    {
+        version: "3.4",
+        date: "09/12/2025",
+        title: "TỐI ƯU HIỆU NĂNG",
+        changes: [
+            "⚡ Cải tiến hiệu năng và ổn định hệ thống",
+            "✨ Cải tiến chức năng Chats giúp gửi/nhận tin nhắn mượt hơn",
+            "🔔 Thêm chức năng hiển thị thông báo khi có tin nhắn mới",
+            "📞 Thêm chức năng gọi Video / Call trực tiếp trong ứng dụng",
+            "🎨 Cải thiện UI/UX tổng thể"
+        ]
+    },
     {
         version: "3.3",
         date: "09/12/2025",
