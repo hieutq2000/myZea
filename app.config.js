@@ -1,6 +1,6 @@
 module.exports = {
     expo: {
-        name: "Vinalive AI",
+        name: "myZyea",
         slug: "vinalive-ai-mobile",
         version: "2.9.0",
         orientation: "portrait",
@@ -14,7 +14,7 @@ module.exports = {
         },
         ios: {
             supportsTablet: true,
-            bundleIdentifier: "com.vinalive.ai",
+            bundleIdentifier: "com.zyea.mobile",
             infoPlist: {
                 NSCameraUsageDescription: "Ứng dụng cần quyền camera để xác thực danh tính và giám sát trong quá trình thi.",
                 NSMicrophoneUsageDescription: "Ứng dụng cần quyền microphone để ghi âm câu trả lời của bạn.",
@@ -26,7 +26,7 @@ module.exports = {
                 foregroundImage: "./assets/adaptive-icon.png",
                 backgroundColor: "#f97316"
             },
-            package: "com.vinalive.ai",
+            package: "com.zyea.mobile",
             permissions: [
                 "android.permission.CAMERA",
                 "android.permission.RECORD_AUDIO",
