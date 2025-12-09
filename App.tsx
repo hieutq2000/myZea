@@ -258,6 +258,13 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
 
     setUser(null);
     setView('AUTH');
+
+    if (navigationRef.isReady()) {
+      navigationRef.reset({
+        index: 0,
+        routes: [{ name: 'Main' }],
+      });
+    }
   };
 
   const handleStartSession = (mode: LiveMode, topic: Topic, audience: TargetAudience) => {
