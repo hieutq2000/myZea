@@ -70,7 +70,7 @@ module.exports = {
         ],
         updates: {
             url: "https://u.expo.dev/7244ecfc-4a54-4232-a0a3-e17d5039b55c",
-            checkAutomatically: "NEVER",  // Don't auto-download, only update when user clicks button
+            checkAutomatically: "NEVER",  // Don't auto-download, only update when user clicks button (Updated for v3.4 build)
             fallbackToCacheTimeout: 0,
             requestHeaders: {
                 "expo-channel-name": "production"
