@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View, Text } from 'react-native';
+import { ActivityIndicator, View, Text, Alert } from 'react-native';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -52,20 +52,34 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   // Setup Notifications
   useEffect(() => {
     registerForPushNotificationsAsync().then(token => {
-      if (token) setPushToken(token);
+      if (token) {
+        setPushToken(token);
+        Alert.alert('✅ Push Token', `Đã lấy được token:\n${token.substring(0, 30)}...`);
+      } else {
+        Alert.alert('❌ Push Token', 'Không lấy được push token! Kiểm tra quyền thông báo.');
+      }
+    }).catch(err => {
+      Alert.alert('❌ Lỗi Push Token', err.message || 'Lỗi không xác định');
     });
 
     // Handle user tapping on notification
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
+      console.log('🔔 Notification Tapped:', data);
+
       if (data && data.conversationId && data.partnerId) {
-        if (navigationRef.isReady()) {
-          navigationRef.navigate('ChatDetail', {
-            conversationId: data.conversationId,
-            partnerId: data.partnerId,
-            userName: response.notification.request.content.title,
-          });
-        }
+        // Delay slightly to allow app to wake up/mount navigation
+        setTimeout(() => {
+          if (navigationRef.isReady()) {
+            navigationRef.navigate('ChatDetail', {
+              conversationId: data.conversationId,
+              partnerId: data.partnerId,
+              userName: response.notification.request.content.title || 'Người dùng',
+            });
+          } else {
+            console.log('⚠️ Navigation not ready');
+          }
+        }, 500);
       }
     });
 
@@ -78,7 +92,13 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   useEffect(() => {
     if (user && pushToken) {
       const { updatePushToken } = require('./src/utils/api');
-      updatePushToken(pushToken).catch((err: any) => console.log('Failed to update push token:', err));
+      updatePushToken(pushToken)
+        .then(() => {
+          Alert.alert('✅ Server', 'Đã gửi push token lên server thành công!');
+        })
+        .catch((err: any) => {
+          Alert.alert('❌ Server Error', `Gửi token thất bại: ${err.message || err}`);
+        });
     }
   }, [user, pushToken]);
 

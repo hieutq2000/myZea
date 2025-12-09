@@ -11,7 +11,7 @@ const DB_CONFIG = {
     database: process.env.DB_NAME || 'vinalive_ai'
 };
 
-const SOCKET_URL = 'http://localhost:3001';
+const SOCKET_URL = 'http://192.168.0.102:3001';
 
 async function simulateMessage() {
     let connection;
