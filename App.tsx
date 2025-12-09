@@ -9,6 +9,7 @@ import LiveSessionScreen from './src/screens/LiveSessionScreen';
 import SplashScreen from './src/screens/SplashScreen';
 import UpdateModal from './src/components/UpdateModal';
 import PlaceScreen from './src/screens/PlaceScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import IncomingCallModal from './src/components/IncomingCallModal';
 import BottomTabBar, { TabType } from './src/components/BottomTabBar';
 import {
@@ -456,6 +457,10 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
           component={CallScreen}
           options={{ headerShown: false, gestureEnabled: false }}
         />
+
+        <Stack.Screen name="Settings">
+          {(props) => <SettingsScreen {...props} onLogout={handleLogout} />}
+        </Stack.Screen>
       </Stack.Navigator>
 
       <UpdateModal

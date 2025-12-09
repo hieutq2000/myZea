@@ -1123,7 +1123,7 @@ app.post('/api/place/posts', authenticateToken, async (req, res) => {
 
         await pool.execute(
             'INSERT INTO posts (id, user_id, content, image_url) VALUES (?, ?, ?, ?)',
-            [postId, userId, content, imageUrl]
+            [postId, userId, content, imageUrl || null]
         );
 
         // Fetch user info to return complete post object

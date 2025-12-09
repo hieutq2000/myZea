@@ -14,7 +14,8 @@ import {
     ActivityIndicator,
     Dimensions,
     RefreshControl,
-    ScrollView
+    ScrollView,
+    Platform
 } from 'react-native';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -127,25 +128,29 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
             end={{ x: 1, y: 0.5 }}
             style={styles.header}
         >
-            <View style={styles.headerLogoContainer}>
-                <LinearGradient
-                    colors={['#00C6FF', '#0072FF']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.logoBadge}
-                >
-                    <Text style={styles.logoText}>P</Text>
-                </LinearGradient>
-                <Text style={styles.headerTitle}>Zyea Place</Text>
-            </View>
-            <View style={styles.headerIcons}>
-                <TouchableOpacity style={[styles.circleButton, { backgroundColor: 'rgba(255,255,255,0.5)' }]}>
-                    <Ionicons name="search" size={22} color="#333" />
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}>
-                    <MaterialIcons name="notifications-none" size={24} color="#FF5722" />
-                </TouchableOpacity>
-            </View>
+            <SafeAreaView>
+                <View style={styles.headerContent}>
+                    <View style={styles.headerLogoContainer}>
+                        <LinearGradient
+                            colors={['#00C6FF', '#0072FF']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.logoBadge}
+                        >
+                            <Text style={styles.logoText}>P</Text>
+                        </LinearGradient>
+                        <Text style={styles.headerTitle}>Zyea Place</Text>
+                    </View>
+                    <View style={styles.headerIcons}>
+                        <TouchableOpacity style={[styles.circleButton, { backgroundColor: 'rgba(255,255,255,0.5)' }]}>
+                            <Ionicons name="search" size={22} color="#333" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}>
+                            <MaterialIcons name="notifications-none" size={24} color="#FF5722" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </SafeAreaView>
         </LinearGradient>
     );
 
@@ -232,9 +237,7 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
 
     return (
         <View style={styles.container}>
-            <SafeAreaView style={{ backgroundColor: '#fff' }}>
-                <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-            </SafeAreaView>
+            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
             {renderHeader()}
 
@@ -304,6 +307,29 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
                                 value={newPostContent}
                                 onChangeText={setNewPostContent}
                             />
+                            {newPostImage && (
+                                <View style={styles.previewContainer}>
+                                    <Image source={{ uri: newPostImage }} style={styles.previewImage} resizeMode="cover" />
+                                    <TouchableOpacity
+                                        style={styles.removeImageBtn}
+                                        onPress={() => setNewPostImage(null)}
+                                    >
+                                        <Ionicons name="close" size={20} color="white" />
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Modal Footer - Actions */}
+                        <View style={styles.modalFooter}>
+                            <TouchableOpacity style={styles.footerButton} onPress={handlePickImage}>
+                                <Ionicons name="image-outline" size={24} color="#45BD62" />
+                                <Text style={styles.footerButtonText}>Ảnh/Video</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.footerButton}>
+                                <Ionicons name="happy-outline" size={24} color="#F7B928" />
+                                <Text style={styles.footerButtonText}>Cảm xúc</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -318,14 +344,17 @@ const styles = StyleSheet.create({
         backgroundColor: '#F0F2F5', // Light gray background for feed
     },
     header: {
+        // backgroundColor: '#fff', // Removed for gradient
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0,0,0,0.05)', // Softer border
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    },
+    headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        // backgroundColor: '#fff', // Removed for gradient
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.05)', // Softer border
     },
     headerLogoContainer: {
         flexDirection: 'row',

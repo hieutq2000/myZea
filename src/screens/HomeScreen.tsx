@@ -294,7 +294,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                                 <Text style={styles.headerBadgeText}>99+</Text>
                             </View>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.headerIconBtn} onPress={onOpenProfile}>
+                        <TouchableOpacity style={styles.headerIconBtn} onPress={() => navigation.navigate('Settings')}>
                             <Ionicons name="settings-outline" size={24} color="white" />
                         </TouchableOpacity>
                     </View>

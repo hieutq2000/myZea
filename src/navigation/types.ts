@@ -10,6 +10,7 @@ export type RootStackParamList = {
     };
     History: undefined;
     Profile: undefined;
+    Settings: undefined;
 
     // Chat Screens
     ChatList: undefined;

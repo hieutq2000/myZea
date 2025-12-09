@@ -6,12 +6,12 @@ const CHANGELOG = [
     {
         version: "3.9",
         date: "09/12/2025",
-        title: "HOÀN THIỆN TÍNH NĂNG PLACE",
+        title: "TỐI ƯU GIAO DIỆN & TÍNH NĂNG PLACE",
         changes: [
-            "✨ Cập nhật giao diện Place đẹp mắt hơn",
-            "🚀 Bổ sung API Đăng bài và Like bài viết",
-            "🛠️ Sửa lỗi không đăng được bài viết",
-            "🎨 Tối ưu gradient Header mượt mà"
+            "✨ Giao diện Gradient đồng bộ (Place, Settings, Profile)",
+            "🛠️ Fix lỗi đăng bài kèm ảnh trên Place",
+            "⚙️ Cập nhật màn hình Cài đặt & Profile mới",
+            "🚀 Tối ưu trải nghiệm chìm (Translucent Header)"
         ]
     },
     {

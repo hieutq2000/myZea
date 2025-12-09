@@ -11,6 +11,7 @@ import {
     StatusBar,
     Modal,
     Switch,
+    Platform
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -232,21 +233,30 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
     }
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+        <View style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
             {/* Header */}
-            <View style={styles.header}>
-                {!isOnboarding && (
-                    <TouchableOpacity style={styles.backBtn} onPress={onCancel}>
-                        <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-                    </TouchableOpacity>
-                )}
-                <Text style={styles.headerTitle}>
-                    {isOnboarding ? 'Tạo hồ sơ' : 'Hồ sơ'}
-                </Text>
-                <View style={{ width: 40 }} />
-            </View>
+            <LinearGradient
+                colors={['#ffebd9', '#e0f8ff']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={styles.header}
+            >
+                <SafeAreaView>
+                    <View style={styles.headerContent}>
+                        {!isOnboarding && (
+                            <TouchableOpacity style={styles.backBtn} onPress={onCancel}>
+                                <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+                            </TouchableOpacity>
+                        )}
+                        <Text style={styles.headerTitle}>
+                            {isOnboarding ? 'Tạo hồ sơ' : 'Hồ sơ'}
+                        </Text>
+                        <View style={{ width: 40 }} />
+                    </View>
+                </SafeAreaView>
+            </LinearGradient>
 
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
@@ -471,7 +481,7 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
                 onClose={() => setShowUpdateModal(false)}
                 isDownloading={isDownloading}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -481,6 +491,9 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.background,
     },
     header: {
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    },
+    headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
