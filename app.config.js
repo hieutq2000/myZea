@@ -1,6 +1,6 @@
 module.exports = {
     expo: {
-        name: "Vinalive AI",
+        name: "Zyea",
         slug: "vinalive-ai-mobile",
         version: "2.9.0",
         orientation: "portrait",

@@ -214,7 +214,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         date: "06/12/2024",
         title: "Phiên bản đầu tiên",
         changes: [
-            "🚀 Ra mắt ứng dụng Vinalive AI Mobile",
+            "🚀 Ra mắt ứng dụng Zyea Mobile",
             "📚 Hỗ trợ luyện tập và thi thử với AI",
             "👶 Chế độ Kids Mode cho trẻ em",
             "🎤 Nhận dạng giọng nói và phản hồi AI",

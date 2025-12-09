@@ -217,7 +217,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.logo}>🎓</Text>
-                    <Text style={styles.title}>Vinalive AI</Text>
+                    <Text style={styles.title}>Zyea</Text>
                     <Text style={styles.subtitle}>Trợ lý học tập AI cá nhân</Text>
                 </View>
 
@@ -335,7 +335,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                             style={styles.forgotPasswordButton}
                             onPress={() => Alert.alert(
                                 'Quên mật khẩu',
-                                'Vui lòng liên hệ admin để được hỗ trợ reset mật khẩu.\n\nEmail: support@vinalive.ai',
+                                'Vui lòng liên hệ admin để được hỗ trợ reset mật khẩu.\n\nEmail: support@zyea.ai',
                                 [{ text: 'Đóng' }]
                             )}
                         >

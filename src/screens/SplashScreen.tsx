@@ -38,13 +38,13 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
             {/* Logo */}
             <View style={styles.logoContainer}>
                 <Text style={styles.logo}>🎓</Text>
-                <Text style={styles.title}>Vinalive AI</Text>
+                <Text style={styles.title}>Zyea</Text>
             </View>
 
             {/* Bottom section */}
             <View style={styles.bottomSection}>
                 <Text style={styles.slogan}>Trợ lý học tập AI cá nhân</Text>
-                <Text style={styles.copyright}>© Vinalive AI v{getLatestChangelog()?.version || '2.0'}</Text>
+                <Text style={styles.copyright}>© Zyea v{getLatestChangelog()?.version || '2.0'}</Text>
             </View>
         </LinearGradient>
     );

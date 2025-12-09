@@ -90,7 +90,7 @@ export default function IncomingCallModal({
                                 color="#00D26A"
                             />
                             <Text style={styles.appName}>
-                                Vinalive AI • {isVideo ? 'Video' : 'Cuộc gọi'}
+                                Zyea • {isVideo ? 'Video' : 'Cuộc gọi'}
                             </Text>
                         </View>
                         <Text style={styles.callType}>Đến...</Text>
