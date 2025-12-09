@@ -116,6 +116,29 @@ async function initDatabase() {
       )
     `);
 
+        await pool.execute(`
+      CREATE TABLE IF NOT EXISTS posts (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        content TEXT,
+        image_url TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+        await pool.execute(`
+      CREATE TABLE IF NOT EXISTS post_likes (
+        id VARCHAR(36) PRIMARY KEY,
+        post_id VARCHAR(36) NOT NULL,
+        user_id VARCHAR(36) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_like (post_id, user_id),
+        FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
         console.log('✅ Database connected and tables created');
     } catch (error) {
         console.error('❌ Database connection failed:', error.message);

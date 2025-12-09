@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -8,83 +8,118 @@ import {
     FlatList,
     SafeAreaView,
     StatusBar,
-    ScrollView,
-    Dimensions
+    Modal,
+    TextInput,
+    Alert,
+    ActivityIndicator,
+    Dimensions,
+    RefreshControl
 } from 'react-native';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getPosts, createPost, toggleLikePost, Post } from '../utils/api';
 
 const { width } = Dimensions.get('window');
 
-// --- Mock Data ---
-const MOCK_POSTS = [
-    {
-        id: '1',
-        author: {
-            name: 'Vinalive News',
-            avatar: 'https://ui-avatars.com/api/?name=Vinalive+News&background=0D8ABC&color=fff',
-            time: '5 giờ trước'
-        },
-        content: '[Livestream] TRẠNG NGUYÊN 2025 - VÒNG THI BIỆN LUẬN CHÍNH THỨC LÊN SÓNG\n\n35 sĩ tử đang tranh luận trí tuệ để tìm ra Top 13. Đội nào sẽ có màn thể hiện bứt phá? ... Xem thêm',
-        image: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?q=80&w=2070&auto=format&fit=crop',
-        views: '581 người đã xem',
-        likes: 120,
-        comments: 45,
-        shares: 12
-    },
-    {
-        id: '2',
-        author: {
-            name: 'Vinalive News',
-            avatar: 'https://ui-avatars.com/api/?name=Vinalive+News&background=0D8ABC&color=fff',
-            time: 'Hôm qua lúc 17:20'
-        },
-        content: 'Lộ diện 4 ứng cử viên sáng giá cho cúp Vô Địch khu vực HCM\n\nVòng bảng đã khép lại với 4 đội hạt giống mạnh nhất: FEDU, SOFT1 ở bảng A, và FTEL, Liên quân SENDO-FO ở bảng B giống kết quả được dự đoán từ các vòng đấu trước.... Xem thêm',
-        image: 'https://images.unsplash.com/photo-1579952363873-27f3bade0f55?q=80&w=2070&auto=format&fit=crop',
-        with: 'Khoa Nguyen Van và 3 người khác',
-        views: '1.2k người đã xem',
-        likes: 340,
-        comments: 89,
-        shares: 56
-    },
-    {
-        id: '3',
-        author: {
-            name: 'Cộng đồng AI',
-            avatar: 'https://ui-avatars.com/api/?name=AI+Community&background=FF5722&color=fff',
-            time: '2 giờ trước'
-        },
-        content: 'Chia sẻ bộ tài liệu học Machine Learning cơ bản cho người mới bắt đầu. Link tải bên dưới phần bình luận nhé mọi người! 👇',
-        views: '300 người đã xem',
-        likes: 85,
-        comments: 20,
-        shares: 5
-    }
-];
+// --- Helper Date ---
+const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = (now.getTime() - date.getTime()) / 1000; // seconds
+    if (diff < 60) return 'Vừa xong';
+    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
+    return date.toLocaleDateString('vi-VN');
+};
 
 interface PlaceScreenProps {
     user: any;
 }
 
 export default function PlaceScreen({ user }: PlaceScreenProps) {
+    const [posts, setPosts] = useState<Post[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isPostModalVisible, setPostModalVisible] = useState(false);
+    const [newPostContent, setNewPostContent] = useState('');
+    const [isPosting, setIsPosting] = useState(false);
+
+    useEffect(() => {
+        loadPosts();
+    }, []);
+
+    const loadPosts = async () => {
+        setIsLoading(true);
+        try {
+            const data = await getPosts();
+            setPosts(data);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
+    };
+
+    const handleRefresh = () => {
+        setIsRefreshing(true);
+        loadPosts();
+    };
+
+    const handleCreatePost = async () => {
+        if (!newPostContent.trim()) return;
+        setIsPosting(true);
+        try {
+            const newPost = await createPost(newPostContent);
+            setPosts([newPost, ...posts]);
+            setNewPostContent('');
+            setPostModalVisible(false);
+        } catch (error) {
+            Alert.alert('Lỗi', 'Không thể đăng bài viết');
+        } finally {
+            setIsPosting(false);
+        }
+    };
+
+    const handleLike = async (postId: string) => {
+        // Optimistic UI update
+        setPosts(prev => prev.map(p => {
+            if (p.id === postId) {
+                return {
+                    ...p,
+                    likes: p.isLiked ? p.likes - 1 : p.likes + 1,
+                    isLiked: !p.isLiked
+                };
+            }
+            return p;
+        }));
+
+        try {
+            await toggleLikePost(postId);
+        } catch (error) {
+            console.error('Like error', error);
+        }
+    };
+
     const renderHeader = () => (
         <View style={styles.header}>
             <View style={styles.headerLogoContainer}>
-                {/* Logo Placeholder - using text/icon to match screenshot "FPT Place" style */}
-                <View style={styles.logoIcon}>
-                    <Ionicons name="school" size={24} color="#0068FF" />
-                </View>
-                <Text style={styles.headerTitle}>Vinalive Place</Text>
+                <LinearGradient
+                    colors={['#00C6FF', '#0072FF']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.logoBadge}
+                >
+                    <Text style={styles.logoText}>P</Text>
+                </LinearGradient>
+                <Text style={styles.headerTitle}>Zyea Place</Text>
             </View>
             <View style={styles.headerIcons}>
-                <TouchableOpacity style={styles.iconButton}>
-                    <Ionicons name="search" size={24} color="#666" />
+                <TouchableOpacity style={styles.circleButton}>
+                    <Ionicons name="search" size={22} color="#333" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.iconButton}>
-                    <Image
-                        source={{ uri: user?.avatar || `https://ui-avatars.com/api/?name=${user?.name || 'User'}` }}
-                        style={styles.headerAvatar}
-                    />
+                <TouchableOpacity style={[styles.circleButton, { marginLeft: 12 }]}>
+                    <MaterialIcons name="notifications-none" size={24} color="#FF5722" />
                 </TouchableOpacity>
             </View>
         </View>
@@ -96,8 +131,11 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
                 source={{ uri: user?.avatar || `https://ui-avatars.com/api/?name=${user?.name || 'User'}` }}
                 style={styles.composerAvatar}
             />
-            <TouchableOpacity style={styles.composerInput}>
-                <Text style={styles.composerPlaceholder}>Tạo bài viết...</Text>
+            <TouchableOpacity
+                style={styles.composerInput}
+                onPress={() => setPostModalVisible(true)}
+            >
+                <Text style={styles.composerPlaceholder}>Bạn đang nghĩ gì?</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.composerImageBtn}>
                 <Ionicons name="image-outline" size={24} color="#666" />
@@ -105,15 +143,18 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
         </View>
     );
 
-    const renderPost = ({ item }: { item: any }) => (
+    const renderPost = ({ item }: { item: Post }) => (
         <View style={styles.postCard}>
             {/* Post Header */}
             <View style={styles.postHeader}>
-                <Image source={{ uri: item.author.avatar }} style={styles.postAvatar} />
+                <Image
+                    source={{ uri: item.author.avatar || `https://ui-avatars.com/api/?name=${item.author.name}` }}
+                    style={styles.postAvatar}
+                />
                 <View style={styles.postInfo}>
                     <Text style={styles.postAuthor}>{item.author.name}</Text>
                     <View style={styles.postMeta}>
-                        <Text style={styles.postTime}>{item.author.time}</Text>
+                        <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
                         <Text style={styles.dot}>•</Text>
                         <Ionicons name="earth" size={12} color="#666" />
                     </View>
@@ -126,11 +167,6 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
             {/* Post Content */}
             <View style={styles.postContent}>
                 <Text style={styles.postText}>{item.content}</Text>
-                {item.with && (
-                    <Text style={styles.postWith}>
-                        — cùng với <Text style={{ fontWeight: 'bold' }}>{item.with}</Text>
-                    </Text>
-                )}
             </View>
 
             {/* Post Image */}
@@ -140,17 +176,23 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
 
             {/* Post Stats */}
             <View style={styles.postStats}>
-                {/* Left side stats (if any) */}
-                <View />
-                {/* View count */}
-                <Text style={styles.viewCount}>{item.views}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ backgroundColor: '#1877F2', borderRadius: 10, padding: 2, marginRight: 4 }}>
+                        <FontAwesome name="thumbs-up" size={10} color="white" />
+                    </View>
+                    <Text style={styles.viewCount}>{item.likes}</Text>
+                </View>
+                <Text style={styles.viewCount}>{item.comments} bình luận</Text>
             </View>
 
             {/* Post Actions */}
             <View style={styles.actionContainer}>
-                <TouchableOpacity style={styles.actionButton}>
-                    <FontAwesome name="thumbs-o-up" size={18} color="#666" />
-                    <Text style={styles.actionText}>Thích</Text>
+                <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => handleLike(item.id)}
+                >
+                    <FontAwesome name={item.isLiked ? "thumbs-up" : "thumbs-o-up"} size={18} color={item.isLiked ? "#1877F2" : "#666"} />
+                    <Text style={[styles.actionText, item.isLiked && { color: '#1877F2', fontWeight: 'bold' }]}>Thích</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionButton}>
                     <FontAwesome name="comment-o" size={18} color="#666" />
@@ -173,9 +215,10 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
             {renderHeader()}
 
             <FlatList
-                data={MOCK_POSTS}
+                data={posts}
                 keyExtractor={item => item.id}
                 renderItem={renderPost}
+                refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
                 ListHeaderComponent={() => (
                     <>
                         {renderComposer()}
@@ -191,7 +234,56 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
                     </>
                 )}
                 contentContainerStyle={{ paddingBottom: 20 }}
+                ListEmptyComponent={() => (
+                    <View style={{ padding: 20, alignItems: 'center' }}>
+                        {isLoading ? <ActivityIndicator color="#0068FF" /> : <Text style={{ color: '#666' }}>Chưa có bài viết nào</Text>}
+                    </View>
+                )}
             />
+
+            {/* Create Post Modal */}
+            <Modal
+                visible={isPostModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setPostModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <TouchableOpacity onPress={() => setPostModalVisible(false)}>
+                                <Ionicons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                            <Text style={styles.modalTitle}>Tạo bài viết</Text>
+                            <TouchableOpacity
+                                onPress={handleCreatePost}
+                                disabled={isPosting || !newPostContent.trim()}
+                                style={[styles.postButton, (!newPostContent.trim() || isPosting) && styles.postButtonDisabled]}
+                            >
+                                {isPosting ? <ActivityIndicator color="white" size="small" /> : <Text style={styles.postButtonText}>Đăng</Text>}
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.modalBody}>
+                            <View style={styles.modalUserRow}>
+                                <Image
+                                    source={{ uri: user?.avatar || `https://ui-avatars.com/api/?name=${user?.name || 'User'}` }}
+                                    style={styles.postAvatar}
+                                />
+                                <Text style={styles.postAuthor}>{user?.name}</Text>
+                            </View>
+                            <TextInput
+                                style={styles.modalInput}
+                                placeholder="Bạn đang nghĩ gì?"
+                                multiline
+                                autoFocus
+                                value={newPostContent}
+                                onChangeText={setNewPostContent}
+                            />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -215,18 +307,38 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    logoIcon: {
-        marginRight: 8,
+    logoBadge: {
+        width: 34,
+        height: 34,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    logoText: {
+        color: 'white',
+        fontWeight: '900',
+        fontSize: 20,
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 22,
         fontWeight: 'bold',
-        color: '#333',
+        color: '#1A1A1A',
     },
     headerIcons: {
         flexDirection: 'row',
         alignItems: 'center',
     },
+    circleButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F0F2F5',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    // Removed unused icons styles
+    /*
     iconButton: {
         marginLeft: 16,
     },
@@ -235,6 +347,7 @@ const styles = StyleSheet.create({
         height: 32,
         borderRadius: 16,
     },
+    */
 
     // Composer
     composerContainer: {
@@ -366,5 +479,56 @@ const styles = StyleSheet.create({
         color: '#666',
         fontSize: 14,
         fontWeight: '500',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        height: '90%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    postButton: {
+        backgroundColor: '#0068FF',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    postButtonDisabled: {
+        backgroundColor: '#B0B0B0',
+    },
+    postButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
+    },
+    modalBody: {
+        padding: 16,
+    },
+    modalUserRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    modalInput: {
+        fontSize: 18,
+        color: '#333',
+        minHeight: 100,
+        textAlignVertical: 'top',
     },
 });

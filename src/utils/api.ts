@@ -265,3 +265,38 @@ export async function updatePushToken(token: string): Promise<void> {
         body: JSON.stringify({ token }),
     });
 }
+
+// ============ PLACE API ============
+
+export interface Post {
+    id: string;
+    author: {
+        id: string;
+        name: string;
+        avatar: string;
+    };
+    content: string;
+    image?: string;
+    createdAt: string;
+    likes: number;
+    isLiked: boolean;
+    comments: number;
+    shares: number;
+}
+
+export async function getPosts(): Promise<Post[]> {
+    return apiRequest<Post[]>('/api/place/posts');
+}
+
+export async function createPost(content: string, imageUrl?: string): Promise<Post> {
+    return apiRequest<Post>('/api/place/posts', {
+        method: 'POST',
+        body: JSON.stringify({ content, imageUrl }),
+    });
+}
+
+export async function toggleLikePost(postId: string): Promise<{ success: boolean; isLiked: boolean }> {
+    return apiRequest<{ success: boolean; isLiked: boolean }>(`/api/place/posts/${postId}/like`, {
+        method: 'POST',
+    });
+}

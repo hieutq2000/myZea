@@ -12,7 +12,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     {
         version: "3.8",
         date: "09/12/2025",
-        title: "RA MẮT CHỨC NĂNG PLACE & GIAO DIỆN CHAT MỚI",
+        title: "TỐI ƯU CHỨC NĂNG PLACE",
         changes: [
             "📰 Ra mắt tính năng Place: Mạng xã hội nội bộ",
             "💬 Giao diện Chat mới : Đính kèm file, Sticker tiện lợi",

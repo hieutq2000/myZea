@@ -596,12 +596,12 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F3F4F6',
+        backgroundColor: 'transparent',
         borderRadius: 20,
         paddingHorizontal: 12,
         minHeight: 40,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
+        // borderWidth: 1, // Removed border
+        // borderColor: '#E5E7EB', // Removed border color
     },
     input: {
         flex: 1,
