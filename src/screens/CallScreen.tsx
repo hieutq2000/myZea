@@ -169,209 +169,215 @@ export default function CallScreen() {
 
             // Join channel
             const channel = channelName || `call_${userId}_${partnerId}`;
-            await engine.joinChannel('', channel, parseInt(userId || '0', 10), {});
+            console.log('Joining channel:', channel);
+
+            // UID = 0 means Agora assigns a random ID. Use this for UUID users.
+            console.log('Join channel API called successfully');
+        }
 
         } catch (error) {
-            console.error('Agora setup error:', error);
-            Alert.alert('Lỗi', 'Không thể khởi tạo cuộc gọi');
-            navigation.goBack();
-        }
-    };
-
-    const handleCallAccepted = () => {
-        setCallStatus('connected');
-        startCallTimer();
-    };
-
-    const handleCallRejected = () => {
-        Alert.alert('Cuộc gọi', 'Người dùng từ chối cuộc gọi');
-        cleanup();
+        console.error('Agora setup error:', error);
+        Alert.alert('Lỗi', 'Không thể khởi tạo cuộc gọi');
         navigation.goBack();
-    };
+    }
+};
 
-    const handleCallEnded = () => {
-        cleanup();
-        navigation.goBack();
-    };
+const handleCallAccepted = (data: any) => {
+    console.log('✅ SIGNALING: Call Accepted received!', data);
+    // Alert.alert('Debug', 'Đã nhận tín hiệu chấp nhận cuộc gọi!');
+    setCallStatus('connected');
+    startCallTimer();
+};
 
-    const startCallTimer = () => {
-        timerRef.current = setInterval(() => {
-            setCallDuration(prev => prev + 1);
-        }, 1000);
-    };
+const handleCallRejected = () => {
+    Alert.alert('Cuộc gọi', 'Người dùng từ chối cuộc gọi');
+    cleanup();
+    navigation.goBack();
+};
 
-    const cleanup = () => {
-        if (timerRef.current) {
-            clearInterval(timerRef.current);
+const handleCallEnded = () => {
+    cleanup();
+    navigation.goBack();
+};
+
+const startCallTimer = () => {
+    timerRef.current = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+    }, 1000);
+};
+
+const cleanup = () => {
+    if (timerRef.current) {
+        clearInterval(timerRef.current);
+    }
+    if (agoraEngineRef.current) {
+        agoraEngineRef.current.leaveChannel();
+        agoraEngineRef.current.release();
+        agoraEngineRef.current = null;
+    }
+};
+
+const endCall = () => {
+    if (socket) {
+        socket.emit('endCall', {
+            callerId: currentUserId,
+            receiverId: partnerId,
+        });
+    }
+    cleanup();
+    navigation.goBack();
+};
+
+const toggleMute = () => {
+    if (agoraEngineRef.current) {
+        agoraEngineRef.current.muteLocalAudioStream(!isMuted);
+        setIsMuted(!isMuted);
+    }
+};
+
+const toggleSpeaker = () => {
+    if (agoraEngineRef.current) {
+        agoraEngineRef.current.setEnableSpeakerphone(!isSpeakerOn);
+        setIsSpeakerOn(!isSpeakerOn);
+    }
+};
+
+const toggleVideo = () => {
+    if (agoraEngineRef.current) {
+        if (isVideoEnabled) {
+            agoraEngineRef.current.disableVideo();
+        } else {
+            agoraEngineRef.current.enableVideo();
+            agoraEngineRef.current.startPreview();
         }
-        if (agoraEngineRef.current) {
-            agoraEngineRef.current.leaveChannel();
-            agoraEngineRef.current.release();
-            agoraEngineRef.current = null;
-        }
-    };
+        setIsVideoEnabled(!isVideoEnabled);
+    }
+};
 
-    const endCall = () => {
-        if (socket) {
-            socket.emit('endCall', {
-                callerId: currentUserId,
-                receiverId: partnerId,
-            });
-        }
-        cleanup();
-        navigation.goBack();
-    };
+const switchCamera = () => {
+    if (agoraEngineRef.current && isVideoEnabled) {
+        agoraEngineRef.current.switchCamera();
+    }
+};
 
-    const toggleMute = () => {
-        if (agoraEngineRef.current) {
-            agoraEngineRef.current.muteLocalAudioStream(!isMuted);
-            setIsMuted(!isMuted);
-        }
-    };
+const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
 
-    const toggleSpeaker = () => {
-        if (agoraEngineRef.current) {
-            agoraEngineRef.current.setEnableSpeakerphone(!isSpeakerOn);
-            setIsSpeakerOn(!isSpeakerOn);
-        }
-    };
+const getStatusText = () => {
+    switch (callStatus) {
+        case 'calling':
+            return 'Đang kết nối...';
+        case 'ringing':
+            return 'Đang đổ chuông...';
+        case 'connected':
+            return formatDuration(callDuration);
+        case 'ended':
+            return 'Cuộc gọi kết thúc';
+        default:
+            return '';
+    }
+};
 
-    const toggleVideo = () => {
-        if (agoraEngineRef.current) {
-            if (isVideoEnabled) {
-                agoraEngineRef.current.disableVideo();
-            } else {
-                agoraEngineRef.current.enableVideo();
-                agoraEngineRef.current.startPreview();
-            }
-            setIsVideoEnabled(!isVideoEnabled);
-        }
-    };
+return (
+    <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-    const switchCamera = () => {
-        if (agoraEngineRef.current && isVideoEnabled) {
-            agoraEngineRef.current.switchCamera();
-        }
-    };
+        {/* Video View */}
+        {isVideoEnabled && remoteUid ? (
+            <View style={styles.videoContainer}>
+                {/* Remote Video (Full screen) */}
+                <RtcSurfaceView
+                    style={styles.remoteVideo}
+                    canvas={{ uid: remoteUid }}
+                />
 
-    const formatDuration = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const getStatusText = () => {
-        switch (callStatus) {
-            case 'calling':
-                return 'Đang kết nối...';
-            case 'ringing':
-                return 'Đang đổ chuông...';
-            case 'connected':
-                return formatDuration(callDuration);
-            case 'ended':
-                return 'Cuộc gọi kết thúc';
-            default:
-                return '';
-        }
-    };
-
-    return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#000" />
-
-            {/* Video View */}
-            {isVideoEnabled && remoteUid ? (
-                <View style={styles.videoContainer}>
-                    {/* Remote Video (Full screen) */}
+                {/* Local Video (Small) */}
+                <View style={styles.localVideoContainer}>
                     <RtcSurfaceView
-                        style={styles.remoteVideo}
-                        canvas={{ uid: remoteUid }}
+                        style={styles.localVideo}
+                        canvas={{ uid: 0 }}
                     />
-
-                    {/* Local Video (Small) */}
-                    <View style={styles.localVideoContainer}>
-                        <RtcSurfaceView
-                            style={styles.localVideo}
-                            canvas={{ uid: 0 }}
-                        />
-                    </View>
                 </View>
-            ) : (
-                /* Audio Call / Waiting Screen */
-                <View style={styles.audioCallContainer}>
-                    <View style={styles.avatarLarge}>
-                        {avatar ? (
-                            <Image source={{ uri: avatar }} style={styles.avatarImage} />
-                        ) : (
-                            <View style={styles.avatarPlaceholder}>
-                                <Text style={styles.avatarText}>{userName?.[0]?.toUpperCase()}</Text>
-                            </View>
-                        )}
-                    </View>
-                    <Text style={styles.userName}>{userName}</Text>
-                    <Text style={styles.callStatus}>{getStatusText()}</Text>
+            </View>
+        ) : (
+            /* Audio Call / Waiting Screen */
+            <View style={styles.audioCallContainer}>
+                <View style={styles.avatarLarge}>
+                    {avatar ? (
+                        <Image source={{ uri: avatar }} style={styles.avatarImage} />
+                    ) : (
+                        <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarText}>{userName?.[0]?.toUpperCase()}</Text>
+                        </View>
+                    )}
+                </View>
+                <Text style={styles.userName}>{userName}</Text>
+                <Text style={styles.callStatus}>{getStatusText()}</Text>
+            </View>
+        )}
+
+        {/* Controls */}
+        <SafeAreaView style={styles.controlsContainer}>
+            <View style={styles.controlsRow}>
+                {/* Mute */}
+                <TouchableOpacity
+                    style={[styles.controlButton, isMuted && styles.controlButtonActive]}
+                    onPress={toggleMute}
+                >
+                    <Ionicons
+                        name={isMuted ? "mic-off" : "mic"}
+                        size={28}
+                        color="white"
+                    />
+                    <Text style={styles.controlLabel}>{isMuted ? 'Bật mic' : 'Tắt mic'}</Text>
+                </TouchableOpacity>
+
+                {/* End Call */}
+                <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
+                    <MaterialIcons name="call-end" size={36} color="white" />
+                </TouchableOpacity>
+
+                {/* Speaker */}
+                <TouchableOpacity
+                    style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]}
+                    onPress={toggleSpeaker}
+                >
+                    <Ionicons
+                        name={isSpeakerOn ? "volume-high" : "volume-low"}
+                        size={28}
+                        color="white"
+                    />
+                    <Text style={styles.controlLabel}>Loa</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Video Controls */}
+            {isVideo && (
+                <View style={styles.videoControlsRow}>
+                    <TouchableOpacity
+                        style={[styles.controlButton, !isVideoEnabled && styles.controlButtonActive]}
+                        onPress={toggleVideo}
+                    >
+                        <Ionicons
+                            name={isVideoEnabled ? "videocam" : "videocam-off"}
+                            size={28}
+                            color="white"
+                        />
+                        <Text style={styles.controlLabel}>Camera</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.controlButton} onPress={switchCamera}>
+                        <Ionicons name="camera-reverse" size={28} color="white" />
+                        <Text style={styles.controlLabel}>Đổi cam</Text>
+                    </TouchableOpacity>
                 </View>
             )}
-
-            {/* Controls */}
-            <SafeAreaView style={styles.controlsContainer}>
-                <View style={styles.controlsRow}>
-                    {/* Mute */}
-                    <TouchableOpacity
-                        style={[styles.controlButton, isMuted && styles.controlButtonActive]}
-                        onPress={toggleMute}
-                    >
-                        <Ionicons
-                            name={isMuted ? "mic-off" : "mic"}
-                            size={28}
-                            color="white"
-                        />
-                        <Text style={styles.controlLabel}>{isMuted ? 'Bật mic' : 'Tắt mic'}</Text>
-                    </TouchableOpacity>
-
-                    {/* End Call */}
-                    <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-                        <MaterialIcons name="call-end" size={36} color="white" />
-                    </TouchableOpacity>
-
-                    {/* Speaker */}
-                    <TouchableOpacity
-                        style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]}
-                        onPress={toggleSpeaker}
-                    >
-                        <Ionicons
-                            name={isSpeakerOn ? "volume-high" : "volume-low"}
-                            size={28}
-                            color="white"
-                        />
-                        <Text style={styles.controlLabel}>Loa</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Video Controls */}
-                {isVideo && (
-                    <View style={styles.videoControlsRow}>
-                        <TouchableOpacity
-                            style={[styles.controlButton, !isVideoEnabled && styles.controlButtonActive]}
-                            onPress={toggleVideo}
-                        >
-                            <Ionicons
-                                name={isVideoEnabled ? "videocam" : "videocam-off"}
-                                size={28}
-                                color="white"
-                            />
-                            <Text style={styles.controlLabel}>Camera</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.controlButton} onPress={switchCamera}>
-                            <Ionicons name="camera-reverse" size={28} color="white" />
-                            <Text style={styles.controlLabel}>Đổi cam</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-            </SafeAreaView>
-        </View>
-    );
+        </SafeAreaView>
+    </View>
+);
 }
 
 const styles = StyleSheet.create({
