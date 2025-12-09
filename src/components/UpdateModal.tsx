@@ -60,7 +60,7 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
             visible={visible}
             transparent
             animationType="fade"
-            onRequestClose={onClose}
+            onRequestClose={() => { }} // Prevent closing by back button
         >
             <View style={styles.overlay}>
                 <View style={styles.container}>
@@ -115,8 +115,6 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
                             {isDownloading ? 'Đang tải xuống...' : 'Cập nhật'}
                         </Text>
                     </TouchableOpacity>
-
-
                 </View>
             </View>
         </Modal>
