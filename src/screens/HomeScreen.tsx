@@ -229,7 +229,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                             <View style={{ marginLeft: 12 }}>
                                 <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '500' }}>Xin chào,</Text>
                                 <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
-                                    {user.full_name || user.name || 'Người dùng'}
+                                    {user.name || 'Người dùng'}
                                 </Text>
                             </View>
                         </View>
@@ -470,6 +470,8 @@ const styles = StyleSheet.create({
         marginHorizontal: 16,
         marginTop: -40, // Adjusted overlap
         ...SHADOWS.md,
+        zIndex: 100, // Ensure it sits ON TOP of header
+        elevation: 10, // Android shadow/layering override
     },
     quickMenuItem: {
         alignItems: 'center',

@@ -227,7 +227,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
                 <SafeAreaView style={{ flex: 1 }}>
                     <View style={styles.headerTextContainer}>
-                        <Text style={styles.wBrandTitle}>Gene FPT</Text>
+                        <Text style={styles.wBrandTitle}>Gene ZYEA+</Text>
                         <Text style={styles.wSlogan}>
                             Foster a dynamic, innovative workforce committed to excellence
                         </Text>
@@ -253,7 +253,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     <View style={styles.wLogoRow}>
                         {/* <Text style={styles.wLogoIcon}>🎓</Text> */}
                         {/* Use FPT/Zyea Logo here, text for now */}
-                        <Text style={[styles.wLogoText, { color: '#F97316' }]}>FPT</Text>
+                        <Text style={[styles.wLogoText, { color: '#F97316' }]}>ZYEA</Text>
                         {/* Or Image Logo */}
                     </View>
 
