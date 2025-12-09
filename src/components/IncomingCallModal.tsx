@@ -11,7 +11,6 @@ import {
     Platform,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -73,8 +72,8 @@ export default function IncomingCallModal({
             statusBarTranslucent
         >
             <View style={styles.container}>
-                {/* Blur Background */}
-                <BlurView intensity={30} style={StyleSheet.absoluteFill} tint="dark" />
+                {/* Dark overlay background */}
+                <View style={styles.overlay} />
 
                 <Animated.View
                     style={[
@@ -169,6 +168,10 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-start',
         alignItems: 'center',
         paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
     },
     card: {
         width: SCREEN_WIDTH - 32,
