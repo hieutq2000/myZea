@@ -49,17 +49,18 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
 
   const [pushToken, setPushToken] = useState<string | null>(null);
 
-  // Setup Notifications
+  // Setup Notifications (silently - no alerts)
   useEffect(() => {
     registerForPushNotificationsAsync().then(token => {
       if (token) {
         setPushToken(token);
-        Alert.alert('✅ Push Token', `Đã lấy được token:\n${token.substring(0, 30)}...`);
+        console.log('✅ Push Token obtained');
       } else {
-        Alert.alert('❌ Push Token', 'Không lấy được push token! Kiểm tra quyền thông báo.');
+        console.log('⚠️ No push token - notifications disabled');
       }
     }).catch(err => {
-      Alert.alert('❌ Lỗi Push Token', err.message || 'Lỗi không xác định');
+      // Silently ignore push token errors (Apple Developer account required)
+      console.log('⚠️ Push token error (ignored):', err.message);
     });
 
     // Handle user tapping on notification
@@ -93,12 +94,8 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     if (user && pushToken) {
       const { updatePushToken } = require('./src/utils/api');
       updatePushToken(pushToken)
-        .then(() => {
-          Alert.alert('✅ Server', 'Đã gửi push token lên server thành công!');
-        })
-        .catch((err: any) => {
-          Alert.alert('❌ Server Error', `Gửi token thất bại: ${err.message || err}`);
-        });
+        .then(() => console.log('✅ Push token sent to server'))
+        .catch((err: any) => console.log('⚠️ Failed to update push token:', err.message));
     }
   }, [user, pushToken]);
 
