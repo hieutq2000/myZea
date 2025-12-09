@@ -8,6 +8,7 @@ import HistoryScreen from './src/screens/HistoryScreen';
 import LiveSessionScreen from './src/screens/LiveSessionScreen';
 import SplashScreen from './src/screens/SplashScreen';
 import UpdateModal from './src/components/UpdateModal';
+import IncomingCallModal from './src/components/IncomingCallModal';
 import BottomTabBar, { TabType } from './src/components/BottomTabBar';
 import {
   User, ExamResult, LiveMode, Topic, TargetAudience,
@@ -47,6 +48,16 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
+  // Incoming call state
+  const [incomingCall, setIncomingCall] = useState<{
+    visible: boolean;
+    callerId: string;
+    callerName?: string;
+    callerAvatar?: string;
+    channelName?: string;
+    isVideo: boolean;
+  }>({ visible: false, callerId: '', isVideo: false });
+
 
   const [pushToken, setPushToken] = useState<string | null>(null);
 
@@ -127,46 +138,17 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
 
         socket.on('receiveMessage', socketListener);
 
-        // Handle incoming call
+        // Handle incoming call - show beautiful modal
         socket.on('incomingCall', (data: any) => {
           console.log('📞 Incoming call from:', data.callerId);
-
-          Alert.alert(
-            `📞 Cuộc gọi ${data.isVideo ? 'video' : 'thoại'} đến`,
-            'Bạn có muốn trả lời?',
-            [
-              {
-                text: 'Từ chối',
-                style: 'cancel',
-                onPress: () => {
-                  socket.emit('callRejected', {
-                    callerId: data.callerId,
-                    receiverId: user?.id,
-                  });
-                }
-              },
-              {
-                text: 'Trả lời',
-                onPress: () => {
-                  socket.emit('callAccepted', {
-                    callerId: data.callerId,
-                    receiverId: user?.id,
-                    channelName: data.channelName,
-                  });
-
-                  if (navigationRef.isReady()) {
-                    navigationRef.navigate('Call', {
-                      partnerId: data.callerId,
-                      isVideo: data.isVideo,
-                      isIncoming: true,
-                      channelName: data.channelName,
-                    });
-                  }
-                }
-              }
-            ],
-            { cancelable: false }
-          );
+          setIncomingCall({
+            visible: true,
+            callerId: data.callerId,
+            callerName: data.callerName,
+            callerAvatar: data.callerAvatar,
+            channelName: data.channelName,
+            isVideo: data.isVideo,
+          });
         });
       }
     } else {
@@ -199,6 +181,43 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle accepting incoming call
+  const handleAcceptCall = () => {
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('callAccepted', {
+        callerId: incomingCall.callerId,
+        receiverId: user?.id,
+        channelName: incomingCall.channelName,
+      });
+    }
+
+    setIncomingCall({ ...incomingCall, visible: false });
+
+    if (navigationRef.isReady()) {
+      navigationRef.navigate('Call', {
+        partnerId: incomingCall.callerId,
+        userName: incomingCall.callerName,
+        avatar: incomingCall.callerAvatar,
+        isVideo: incomingCall.isVideo,
+        isIncoming: true,
+        channelName: incomingCall.channelName,
+      });
+    }
+  };
+
+  // Handle rejecting incoming call
+  const handleRejectCall = () => {
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('callRejected', {
+        callerId: incomingCall.callerId,
+        receiverId: user?.id,
+      });
+    }
+    setIncomingCall({ ...incomingCall, visible: false });
   };
 
   const handleLogin = async (loggedInUser: User) => {
@@ -421,6 +440,15 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         isDownloading={isDownloading}
         onUpdate={downloadAndApply}
         onClose={dismissUpdate}
+      />
+
+      <IncomingCallModal
+        visible={incomingCall.visible}
+        callerName={incomingCall.callerName}
+        callerAvatar={incomingCall.callerAvatar}
+        isVideo={incomingCall.isVideo}
+        onAccept={handleAcceptCall}
+        onReject={handleRejectCall}
       />
     </>
   );

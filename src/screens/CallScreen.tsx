@@ -79,21 +79,31 @@ export default function CallScreen() {
         const userId = user.id;
         setCurrentUserId(userId);
 
-        // EMIT CALL REQUEST IMMEDIATELY (don't wait for Agora)
-        if (!isIncoming && socket) {
-            const channel = channelName || `call_${userId}_${partnerId}`;
-            console.log('📞 Emitting callRequest to', partnerId);
-            socket.emit('callRequest', {
-                callerId: userId,
-                receiverId: partnerId,
-                channelName: channel,
-                isVideo: isVideo,
-            });
-            setCallStatus('ringing');
+        if (isIncoming) {
+            // Incoming call - already accepted, show connected immediately
+            setCallStatus('connected');
+            startCallTimer();
+        } else {
+            // Outgoing call - emit call request
+            if (socket) {
+                const channel = channelName || `call_${userId}_${partnerId}`;
+                console.log('📞 Emitting callRequest to', partnerId);
+                socket.emit('callRequest', {
+                    callerId: userId,
+                    receiverId: partnerId,
+                    channelName: channel,
+                    isVideo: isVideo,
+                });
+                setCallStatus('ringing');
+            }
         }
 
-        // Then setup Agora with the user ID
-        await setupAgora(userId);
+        // Try to setup Agora (may fail if token required)
+        try {
+            await setupAgora(userId);
+        } catch (e) {
+            console.log('Agora setup skipped:', e);
+        }
     };
 
     const setupAgora = async (userId: string) => {

@@ -1117,10 +1117,26 @@ io.on('connection', (socket) => {
     // ============ CALL SIGNALING ============
 
     // Call request - caller requests a call to receiver
-    socket.on('callRequest', (data) => {
+    socket.on('callRequest', async (data) => {
         console.log('📞 Call request from', data.callerId, 'to', data.receiverId);
+
+        // Get caller info for display
+        let callerName = 'Unknown';
+        let callerAvatar = null;
+        try {
+            const [callers] = await pool.execute('SELECT name, avatar FROM users WHERE id = ?', [data.callerId]);
+            if (callers[0]) {
+                callerName = callers[0].name;
+                callerAvatar = callers[0].avatar;
+            }
+        } catch (e) {
+            console.error('Error fetching caller info:', e);
+        }
+
         io.to(data.receiverId).emit('incomingCall', {
             callerId: data.callerId,
+            callerName: callerName,
+            callerAvatar: callerAvatar,
             channelName: data.channelName,
             isVideo: data.isVideo,
         });
