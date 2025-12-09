@@ -79,6 +79,13 @@ export default function ChatDetailScreen() {
             }));
             setMessages(mapped);
             scrollToBottom();
+
+            // Mark conversation as read when opening
+            if (conversationId) {
+                markConversationAsRead(conversationId).catch(err =>
+                    console.log('Mark as read error:', err)
+                );
+            }
         } catch (error) {
             console.log('Load history error:', error);
         }
