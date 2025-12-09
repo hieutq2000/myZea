@@ -599,6 +599,8 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         paddingHorizontal: 12,
         minHeight: 40,
+        borderWidth: 1,
+        borderColor: 'rgba(150, 150, 150, 0.4)',
     },
     input: {
         flex: 1,
