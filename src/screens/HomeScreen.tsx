@@ -210,8 +210,12 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                 colors={['#EA580C', '#FB923C']} // Orange gradient
                 style={styles.headerGradient}
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+                end={{ x: 1, y: 0.5 }}
             >
+                {/* Decorative Circles Overlay */}
+                <View style={styles.headerCircle1} />
+                <View style={styles.headerCircle2} />
+
                 <SafeAreaView>
                     <View style={styles.headerContent}>
                         <View style={styles.headerLeft}>
@@ -222,7 +226,12 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                                     <Text style={styles.headerAvatarText}>{user.name?.charAt(0) || 'H'}</Text>
                                 </View>
                             )}
-                            <Text style={styles.headerTitle}>My Zone</Text>
+                            <View style={{ marginLeft: 12 }}>
+                                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '500' }}>Xin chào,</Text>
+                                <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
+                                    {user.full_name || user.name || 'Người dùng'}
+                                </Text>
+                            </View>
                         </View>
                         <View style={styles.headerRight}>
                             <TouchableOpacity style={styles.headerIconBtn}>
@@ -361,10 +370,28 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
 const styles = StyleSheet.create({
     // ... (Keep existing styles for Compatibility with renderModeSelection)
 
-    // New Styles for FPT Design
+    // New Styles for  Design
     headerGradient: {
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) : 0,
-        paddingBottom: 30, // Space for Quick Menu overlap
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) + 10 : 0,
+        paddingBottom: 80, // Increased to allow more overlap
+    },
+    headerCircle1: {
+        position: 'absolute',
+        top: -50,
+        right: -20,
+        width: 240,
+        height: 240,
+        borderRadius: 120,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+    headerCircle2: {
+        position: 'absolute',
+        top: 40,
+        right: -40,
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        backgroundColor: 'rgba(255,255,255,0.08)',
     },
     headerContent: {
         flexDirection: 'row',
@@ -436,10 +463,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         backgroundColor: COLORS.white,
-        borderRadius: 16,
+        borderRadius: 24, // Increased for rounded look
         padding: 16,
         marginHorizontal: 16,
-        marginTop: -20,
+        marginTop: -60, // Pull up more to overlap header
         ...SHADOWS.md,
     },
     quickMenuItem: {
