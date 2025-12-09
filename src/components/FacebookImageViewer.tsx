@@ -1,6 +1,17 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Platform } from 'react-native';
-import ImageViewing from 'react-native-image-viewing';
+import React, { useState, useRef } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    Image,
+    Dimensions,
+    Platform,
+    Modal,
+    FlatList,
+    StatusBar,
+    SafeAreaView,
+} from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Post } from '../utils/api';
@@ -12,120 +23,168 @@ interface FacebookImageViewerProps {
     images: string[];
     imageIndex: number;
     onClose: () => void;
-    post: Post; // To display stats and handle actions
+    post: Post;
     onLike?: () => void;
     onComment?: () => void;
 }
 
-export default function FacebookImageViewer({ visible, images, imageIndex, onClose, post, onLike, onComment }: FacebookImageViewerProps) {
+export default function FacebookImageViewer({
+    visible,
+    images,
+    imageIndex,
+    onClose,
+    post,
+    onLike,
+    onComment,
+}: FacebookImageViewerProps) {
+    const [currentIndex, setCurrentIndex] = useState(imageIndex);
+    const flatListRef = useRef<FlatList>(null);
 
-    const renderHeader = () => (
-        <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <Ionicons name="close" size={28} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuButton}>
-                <Ionicons name="ellipsis-horizontal" size={24} color="white" />
-            </TouchableOpacity>
+    // Reset index when opening
+    React.useEffect(() => {
+        if (visible) {
+            setCurrentIndex(imageIndex);
+            setTimeout(() => {
+                flatListRef.current?.scrollToIndex({ index: imageIndex, animated: false });
+            }, 100);
+        }
+    }, [visible, imageIndex]);
+
+    const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+        if (viewableItems.length > 0) {
+            setCurrentIndex(viewableItems[0].index);
+        }
+    }).current;
+
+    const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+
+    const renderImage = ({ item }: { item: string }) => (
+        <View style={styles.imageContainer}>
+            <Image
+                source={{ uri: item }}
+                style={styles.image}
+                resizeMode="contain"
+            />
         </View>
     );
 
-    const renderFooter = () => (
-        <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.9)']}
-            style={styles.footer}
+    return (
+        <Modal
+            visible={visible}
+            transparent={false}
+            animationType="fade"
+            onRequestClose={onClose}
+            statusBarTranslucent
         >
-            {/* Top Comments Preview (Fake/Simulated for visual match) */}
-            <View style={styles.topComments}>
-                <View style={styles.commentRow}>
-                    <Image
-                        source={{ uri: `https://ui-avatars.com/api/?name=Huy+Nguyen&background=random` }}
-                        style={styles.commentAvatar}
-                    />
-                    <View style={styles.commentContent}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                            <Text style={styles.commentAuthor}>Huy Nguyen <Text style={styles.commentTime}>• 8 phút</Text></Text>
+            <View style={styles.container}>
+                <StatusBar barStyle="light-content" backgroundColor="#000" />
+
+                {/* Header */}
+                <SafeAreaView style={styles.header}>
+                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                        <Ionicons name="close" size={28} color="white" />
+                    </TouchableOpacity>
+                    {images.length > 1 && (
+                        <Text style={styles.pageIndicator}>
+                            {currentIndex + 1} / {images.length}
+                        </Text>
+                    )}
+                    <TouchableOpacity style={styles.menuButton}>
+                        <Ionicons name="ellipsis-horizontal" size={24} color="white" />
+                    </TouchableOpacity>
+                </SafeAreaView>
+
+                {/* Image Gallery */}
+                <FlatList
+                    ref={flatListRef}
+                    data={images}
+                    renderItem={renderImage}
+                    keyExtractor={(item, index) => index.toString()}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    onViewableItemsChanged={onViewableItemsChanged}
+                    viewabilityConfig={viewabilityConfig}
+                    initialScrollIndex={imageIndex}
+                    getItemLayout={(data, index) => ({
+                        length: width,
+                        offset: width * index,
+                        index,
+                    })}
+                />
+
+                {/* Footer */}
+                <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.9)']}
+                    style={styles.footer}
+                >
+                    {/* Post Info */}
+                    <View style={styles.postInfoContainer}>
+                        <View style={styles.authorRow}>
+                            <Text style={styles.authorName}>{post.author.name}</Text>
+                            <Text style={styles.postTime}> • 1 giờ</Text>
                         </View>
-                        <Text style={styles.commentText}>Ảnh đẹp quá bạn ơi! 😍</Text>
-                        <View style={styles.commentActions}>
-                            <Text style={styles.commentActionText}>Trả lời</Text>
-                            <View style={styles.commentLikeBadge}>
-                                <FontAwesome name="thumbs-up" size={10} color="#1877F2" />
-                                <Text style={styles.commentLikeCount}>1</Text>
+
+                        <Text style={styles.caption} numberOfLines={2}>
+                            {post.content}
+                        </Text>
+
+                        {/* Stats */}
+                        <View style={styles.statsRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <FontAwesome name="thumbs-up" size={14} color="#1877F2" />
+                                <Text style={styles.statsText}>{post.likes}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <FontAwesome name="comment" size={14} color="#fff" />
+                                <Text style={styles.statsText}>{post.comments}</Text>
+                                <FontAwesome name="share" size={14} color="#fff" style={{ marginLeft: 12 }} />
                             </View>
                         </View>
                     </View>
-                </View>
-            </View>
 
-            {/* Post Info */}
-            <View style={styles.postInfoContainer}>
-                {/* Author */}
-                <View style={styles.authorRow}>
-                    <Text style={styles.authorName}>{post.author.name}</Text>
-                    <Text style={styles.postTime}> • 1 giờ</Text>
-                </View>
-
-                {/* Caption */}
-                <Text style={styles.caption} numberOfLines={2}>
-                    {post.content}
-                </Text>
-
-                {/* Stats */}
-                <View style={styles.statsRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <FontAwesome name="thumbs-up" size={14} color="#1877F2" />
-                        <Text style={styles.statsText}>{post.likes}</Text>
+                    {/* Action Buttons */}
+                    <View style={styles.actionRow}>
+                        <TouchableOpacity style={styles.actionButton} onPress={onLike}>
+                            <FontAwesome
+                                name={post.isLiked ? 'thumbs-up' : 'thumbs-o-up'}
+                                size={20}
+                                color={post.isLiked ? '#1877F2' : 'white'}
+                            />
+                            <Text style={[styles.actionBtnText, post.isLiked && { color: '#1877F2' }]}>
+                                Thích
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.actionButton} onPress={onComment}>
+                            <FontAwesome name="comment-o" size={20} color="white" />
+                            <Text style={styles.actionBtnText}>Bình luận</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.actionButton}>
+                            <FontAwesome name="share-square-o" size={20} color="white" />
+                            <Text style={styles.actionBtnText}>Chia sẻ</Text>
+                        </TouchableOpacity>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <FontAwesome name="comment" size={14} color="#fff" />
-                        <Text style={styles.statsText}>{post.comments}</Text>
-                        <FontAwesome name="share" size={14} color="#fff" style={{ marginLeft: 12 }} />
-                    </View>
-                </View>
+                </LinearGradient>
             </View>
-
-            {/* Action Buttons */}
-            <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.actionButton} onPress={onLike}>
-                    <FontAwesome name={post.isLiked ? "thumbs-up" : "thumbs-o-up"} size={20} color={post.isLiked ? "#1877F2" : "white"} />
-                    <Text style={[styles.actionBtnText, post.isLiked && { color: '#1877F2' }]}>Thích</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton} onPress={onComment}>
-                    <FontAwesome name="comment-o" size={20} color="white" />
-                    <Text style={styles.actionBtnText}>Bình luận</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                    <FontAwesome name="share-square-o" size={20} color="white" />
-                    <Text style={styles.actionBtnText}>Chia sẻ</Text>
-                </TouchableOpacity>
-            </View>
-        </LinearGradient>
-    );
-
-    return (
-        <ImageViewing
-            images={images.map(uri => ({ uri }))}
-            imageIndex={imageIndex}
-            visible={visible}
-            onRequestClose={onClose}
-            HeaderComponent={renderHeader}
-            FooterComponent={renderFooter}
-            presentationStyle="overFullScreen"
-            backgroundColor="#000"
-        />
+        </Modal>
     );
 }
 
 const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#000',
+    },
     header: {
         position: 'absolute',
-        top: 40,
+        top: 0,
         left: 0,
         right: 0,
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
         paddingHorizontal: 16,
+        paddingTop: Platform.OS === 'android' ? 40 : 0,
         zIndex: 10,
     },
     closeButton: {
@@ -133,6 +192,21 @@ const styles = StyleSheet.create({
     },
     menuButton: {
         padding: 8,
+    },
+    pageIndicator: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    imageContainer: {
+        width: width,
+        height: height,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    image: {
+        width: width,
+        height: height * 0.7,
     },
     footer: {
         width: width,
@@ -142,66 +216,6 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 0,
     },
-    // Top Comments
-    topComments: {
-        marginBottom: 16,
-        opacity: 0.9,
-    },
-    commentRow: {
-        flexDirection: 'row',
-        marginBottom: 12,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        padding: 8,
-        borderRadius: 12,
-    },
-    commentAvatar: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        marginRight: 8,
-    },
-    commentContent: {
-        flex: 1,
-    },
-    commentAuthor: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 13,
-    },
-    commentTime: {
-        fontWeight: 'normal',
-        color: '#ccc',
-        fontSize: 12,
-    },
-    commentText: {
-        color: '#eee',
-        fontSize: 14,
-        marginVertical: 2,
-    },
-    commentActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 4,
-    },
-    commentActionText: {
-        color: '#ccc',
-        fontSize: 12,
-        marginRight: 10,
-    },
-    commentLikeBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        paddingHorizontal: 4,
-        paddingVertical: 1,
-    },
-    commentLikeCount: {
-        color: '#333',
-        fontSize: 10,
-        marginLeft: 2,
-    },
-    // Post Info
     postInfoContainer: {
         marginBottom: 16,
     },
@@ -237,7 +251,6 @@ const styles = StyleSheet.create({
         marginLeft: 6,
         fontSize: 13,
     },
-    // Action Buttons
     actionRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',

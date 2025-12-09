@@ -12,8 +12,11 @@ import {
     TextInput,
     Alert,
     ActivityIndicator,
+    Dimensions,
+    RefreshControl,
+    ScrollView,
     Platform,
-    Share // Share system import
+    Share,
 } from 'react-native';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -193,6 +196,42 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
         setSelectedImageIndex(index);
         setIsImageViewerVisible(true);
     };
+
+    const handleShare = (post: Post) => {
+        setPostToShare(post);
+        setShareModalVisible(true);
+    };
+
+    const onShareNow = async () => {
+        if (!postToShare) return;
+        setShareModalVisible(false);
+        setIsLoading(true);
+        try {
+            const originalId = postToShare.originalPost ? postToShare.originalPost.id : postToShare.id;
+            const newPost = await createPost('', undefined, undefined, originalId);
+            setPosts([newPost, ...posts]);
+            Alert.alert('Thành công', 'Đã chia sẻ bài viết lên dòng thời gian của bạn.');
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Lỗi', 'Không thể chia sẻ bài viết.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const onShareExternal = async () => {
+        if (!postToShare) return;
+        setShareModalVisible(false);
+        try {
+            await Share.share({
+                message: `Xem bài viết của ${postToShare.author.name} trên Zyea Place:\n${postToShare.content || 'Bài viết thú vị!'}`,
+                url: postToShare.image || '',
+            });
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
 
     const renderHeaderAndComposer = () => (
         <LinearGradient
@@ -875,5 +914,96 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         marginHorizontal: 4,
-    }
+    },
+    // Shared Post Styles
+    sharedContainer: {
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 8,
+        marginHorizontal: 15,
+        marginTop: 10,
+        overflow: 'hidden',
+    },
+    sharedHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        backgroundColor: '#F9F9F9',
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    sharedAvatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        marginRight: 8,
+    },
+    sharedAuthor: {
+        fontWeight: 'bold',
+        fontSize: 14,
+        color: '#333',
+    },
+    sharedTime: {
+        fontSize: 11,
+        color: '#666',
+    },
+    sharedContent: {
+        fontSize: 14,
+        color: '#333',
+        padding: 10,
+        lineHeight: 20,
+    },
+    // Share Modal Styles
+    shareOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    shareSheet: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    },
+    shareIndicator: {
+        width: 40,
+        height: 5,
+        backgroundColor: '#ccc',
+        borderRadius: 3,
+        alignSelf: 'center',
+        marginBottom: 15,
+    },
+    shareTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 20,
+        textAlign: 'center',
+        color: '#333',
+    },
+    shareOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    shareIconParams: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+    },
+    shareOptionTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 2,
+    },
+    shareOptionSub: {
+        fontSize: 12,
+        color: '#666',
+    },
 });
