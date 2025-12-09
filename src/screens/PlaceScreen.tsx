@@ -121,7 +121,12 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
     };
 
     const renderHeader = () => (
-        <View style={styles.header}>
+        <LinearGradient
+            colors={['#ffebd9', '#e0f8ff']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.header}
+        >
             <View style={styles.headerLogoContainer}>
                 <LinearGradient
                     colors={['#00C6FF', '#0072FF']}
@@ -134,14 +139,14 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
                 <Text style={styles.headerTitle}>Zyea Place</Text>
             </View>
             <View style={styles.headerIcons}>
-                <TouchableOpacity style={styles.circleButton}>
+                <TouchableOpacity style={[styles.circleButton, { backgroundColor: 'rgba(255,255,255,0.5)' }]}>
                     <Ionicons name="search" size={22} color="#333" />
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.circleButton, { marginLeft: 12 }]}>
+                <TouchableOpacity style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}>
                     <MaterialIcons name="notifications-none" size={24} color="#FF5722" />
                 </TouchableOpacity>
             </View>
-        </View>
+        </LinearGradient>
     );
 
     const renderComposer = () => (
@@ -318,9 +323,9 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        backgroundColor: '#fff',
+        // backgroundColor: '#fff', // Removed for gradient
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderBottomColor: 'rgba(0,0,0,0.05)', // Softer border
     },
     headerLogoContainer: {
         flexDirection: 'row',

@@ -1063,6 +1063,133 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ============ PLACE API ============
+
+// Get posts
+app.get('/api/place/posts', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const [posts] = await pool.execute(`
+            SELECT 
+                p.id, 
+                p.content, 
+                p.image_url as image, 
+                p.created_at as createdAt,
+                u.id as author_id,
+                u.name as author_name,
+                u.avatar as author_avatar,
+                (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes,
+                (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ?) as isLiked
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            ORDER BY p.created_at DESC
+            LIMIT 50
+        `, [userId]);
+
+        const formattedPosts = posts.map(p => ({
+            id: p.id,
+            author: {
+                id: p.author_id,
+                name: p.author_name,
+                avatar: p.author_avatar
+            },
+            content: p.content,
+            image: p.image,
+            createdAt: p.createdAt,
+            likes: p.likes,
+            isLiked: p.isLiked > 0,
+            comments: 0, // Placeholder
+            shares: 0 // Placeholder
+        }));
+
+        res.json(formattedPosts);
+    } catch (error) {
+        console.error('Get posts error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Create post
+app.post('/api/place/posts', authenticateToken, async (req, res) => {
+    try {
+        const { content, imageUrl } = req.body;
+
+        if (!content && !imageUrl) {
+            return res.status(400).json({ error: 'Nội dung không được để trống' });
+        }
+
+        const postId = uuidv4();
+        const userId = req.user.id;
+
+        await pool.execute(
+            'INSERT INTO posts (id, user_id, content, image_url) VALUES (?, ?, ?, ?)',
+            [postId, userId, content, imageUrl]
+        );
+
+        // Fetch user info to return complete post object
+        const [users] = await pool.execute('SELECT name, avatar FROM users WHERE id = ?', [userId]);
+        const user = users[0];
+
+        const newPost = {
+            id: postId,
+            author: {
+                id: userId,
+                name: user.name,
+                avatar: user.avatar
+            },
+            content,
+            image: imageUrl,
+            createdAt: new Date().toISOString(),
+            likes: 0,
+            isLiked: false,
+            comments: 0,
+            shares: 0
+        };
+
+        res.json(newPost);
+    } catch (error) {
+        console.error('Create post error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Toggle like
+app.post('/api/place/posts/:id/like', authenticateToken, async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const userId = req.user.id;
+
+        // Check if liked
+        const [likes] = await pool.execute(
+            'SELECT id FROM post_likes WHERE post_id = ? AND user_id = ?',
+            [postId, userId]
+        );
+
+        let isLiked = false;
+
+        if (likes.length > 0) {
+            // Unlike
+            await pool.execute(
+                'DELETE FROM post_likes WHERE post_id = ? AND user_id = ?',
+                [postId, userId]
+            );
+            isLiked = false;
+        } else {
+            // Like
+            await pool.execute(
+                'INSERT INTO post_likes (id, post_id, user_id) VALUES (?, ?, ?)',
+                [uuidv4(), postId, userId]
+            );
+            isLiked = true;
+        }
+
+        res.json({ success: true, isLiked });
+    } catch (error) {
+        console.error('Toggle like error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
 // Start server
 const PORT = process.env.PORT || 3001;
 

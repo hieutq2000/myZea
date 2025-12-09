@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "3.9",
+        date: "09/12/2025",
+        title: "HOÀN THIỆN TÍNH NĂNG PLACE",
+        changes: [
+            "✨ Cập nhật giao diện Place đẹp mắt hơn",
+            "🚀 Bổ sung API Đăng bài và Like bài viết",
+            "🛠️ Sửa lỗi không đăng được bài viết",
+            "🎨 Tối ưu gradient Header mượt mà"
+        ]
+    },
+    {
         version: "3.8",
         date: "09/12/2025",
         title: "TỐI ƯU CHỨC NĂNG PLACE",
