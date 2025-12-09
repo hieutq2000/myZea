@@ -81,6 +81,18 @@ export default function CallScreen() {
         const userId = user.id;
         setCurrentUserId(userId);
 
+        // Generate or safe-keep channel name
+        // Agora channel name limit is 64 bytes. UUIDs are 36 chars.
+        // call_UUID_UUID = 5 + 36 + 1 + 36 = 78 chars -> Too long!
+        // We use slice to shorten IDs to ensure we are under the limit.
+        let channel = channelName;
+        if (!channel) {
+            // Take first 15 chars of each ID: 5 + 15 + 1 + 15 = 36 chars (Safe)
+            const safeUserId = userId.slice(0, 15);
+            const safePartnerId = partnerId.slice(0, 15);
+            channel = `call_${safeUserId}_${safePartnerId}`;
+        }
+
         if (isIncoming) {
             // Incoming call - already accepted, show connected immediately
             setCallStatus('connected');
@@ -88,8 +100,7 @@ export default function CallScreen() {
         } else {
             // Outgoing call - emit call request
             if (socket) {
-                const channel = channelName || `call_${userId}_${partnerId}`;
-                console.log('📞 Emitting callRequest to', partnerId);
+                console.log('📞 Emitting callRequest to', partnerId, 'Channel:', channel);
                 socket.emit('callRequest', {
                     callerId: userId,
                     receiverId: partnerId,
@@ -102,14 +113,14 @@ export default function CallScreen() {
 
         // Try to setup Agora
         try {
-            await setupAgora(userId);
+            await setupAgora(userId, channel);
         } catch (e: any) {
             console.error('Agora setup failed:', e);
             Alert.alert('Lỗi khởi tạo', 'Không thể khởi động Agora: ' + (e.message || JSON.stringify(e)));
         }
     };
 
-    const setupAgora = async (userId: string) => {
+    const setupAgora = async (userId: string, channel: string) => {
         try {
             // Request permissions first
             if (Platform.OS === 'android' || Platform.OS === 'ios') {
@@ -168,7 +179,6 @@ export default function CallScreen() {
             engine.setEnableSpeakerphone(true);
 
             // Join channel
-            const channel = channelName || `call_${userId}_${partnerId}`;
             console.log('Joining channel:', channel);
 
             // UID = 0 means Agora assigns a random ID. Use this for UUID users.

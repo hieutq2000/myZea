@@ -1,6 +1,6 @@
 module.exports = {
     expo: {
-        name: "Zyea",
+        name: "Vinalive AI",
         slug: "vinalive-ai-mobile",
         version: "2.9.0",
         orientation: "portrait",
@@ -9,7 +9,7 @@ module.exports = {
         newArchEnabled: true,
         splash: {
             image: "./assets/splash.png",
-            resizeMode: "cover",
+            resizeMode: "contain",
             backgroundColor: "#667eea"
         },
         ios: {
