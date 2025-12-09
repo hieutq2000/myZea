@@ -117,11 +117,12 @@ export default function CallScreen() {
             engine.registerEventHandler({
                 onJoinChannelSuccess: () => {
                     console.log('✅ Joined Agora channel successfully');
+                    // Alert.alert('Debug', '✅ Máy bạn đã kết nối Agora Server!');
                     setIsJoined(true);
-                    // callRequest already emitted in initCall(), no need to emit here
                 },
                 onUserJoined: (_connection, uid) => {
                     console.log('👤 Remote user joined:', uid);
+                    // Alert.alert('Debug', `👤 Người kia (${uid}) đã kết nối Audio!`);
                     setRemoteUid(uid);
                     setCallStatus('connected');
                     startCallTimer();
@@ -131,9 +132,13 @@ export default function CallScreen() {
                     setRemoteUid(null);
                     endCall();
                 },
-                onError: (err) => {
-                    console.error('❌ Agora Error:', err);
+                onError: (err, msg) => {
+                    console.error('❌ Agora Error:', err, msg);
+                    Alert.alert('Lỗi Agora', `Code: ${err} - Msg: ${msg}`);
                 },
+                onPermissionError: (type) => {
+                    Alert.alert('Lỗi quyền', `Không có quyền truy cập ${type === 0 ? 'Audio' : 'Camera'}`);
+                }
             });
 
             engine.initialize({
