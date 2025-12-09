@@ -22,6 +22,8 @@ import createAgoraRtcEngine, {
     IRtcEngine,
     RtcSurfaceView,
 } from 'react-native-agora';
+import { Camera } from 'expo-camera';
+import { Audio } from 'expo-av';
 
 type CallScreenRouteProp = RouteProp<RootStackParamList, 'Call'>;
 
@@ -109,6 +111,16 @@ export default function CallScreen() {
 
     const setupAgora = async (userId: string) => {
         try {
+            // Request permissions first
+            if (Platform.OS === 'android' || Platform.OS === 'ios') {
+                const { status: cameraStatus } = await Camera.requestCameraPermissionsAsync();
+                const { status: audioStatus } = await Camera.requestMicrophonePermissionsAsync();
+
+                if (cameraStatus !== 'granted' || audioStatus !== 'granted') {
+                    Alert.alert('Lỗi quyền', 'Cần quyền Camera và Microphone để gọi điện.');
+                    return;
+                }
+            }
 
 
 
