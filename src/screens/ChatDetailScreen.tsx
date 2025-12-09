@@ -582,11 +582,10 @@ const styles = StyleSheet.create({
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'white',
+        backgroundColor: '#fff',
         paddingVertical: 8,
         paddingHorizontal: 10,
-        borderTopWidth: 1,
-        borderTopColor: '#E5E7EB',
+        borderTopWidth: 0,
     },
     leftButton: {
         padding: 8,
@@ -600,8 +599,6 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         paddingHorizontal: 12,
         minHeight: 40,
-        // borderWidth: 1, // Removed border
-        // borderColor: '#E5E7EB', // Removed border color
     },
     input: {
         flex: 1,
