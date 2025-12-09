@@ -205,56 +205,58 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#EA580C" />
 
-            {/* Gradient Header */}
-            <LinearGradient
-                colors={['#EA580C', '#FB923C']} // Orange gradient
-                style={styles.headerGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0.5 }}
-            >
-                {/* Decorative Circles Overlay */}
-                <View style={styles.headerCircle1} />
-                <View style={styles.headerCircle2} />
+            {/* Header Wrapper to control zIndex */}
+            <View style={{ zIndex: 0, elevation: 0 }}>
+                <LinearGradient
+                    colors={['#EA580C', '#FB923C']} // Orange gradient
+                    style={styles.headerGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0.5 }}
+                >
+                    {/* Decorative Circles Overlay */}
+                    <View style={styles.headerCircle1} />
+                    <View style={styles.headerCircle2} />
 
-                <SafeAreaView>
-                    <View style={styles.headerContent}>
-                        <View style={styles.headerLeft}>
-                            {user.avatar ? (
-                                <Image source={{ uri: user.avatar }} style={styles.headerAvatar} />
-                            ) : (
-                                <View style={styles.headerAvatarPlaceholder}>
-                                    <Text style={styles.headerAvatarText}>{user.name?.charAt(0) || 'H'}</Text>
+                    <SafeAreaView>
+                        <View style={styles.headerContent}>
+                            <View style={styles.headerLeft}>
+                                {user.avatar ? (
+                                    <Image source={{ uri: user.avatar }} style={styles.headerAvatar} />
+                                ) : (
+                                    <View style={styles.headerAvatarPlaceholder}>
+                                        <Text style={styles.headerAvatarText}>{user.name?.charAt(0) || 'H'}</Text>
+                                    </View>
+                                )}
+                                <View style={{ marginLeft: 12 }}>
+                                    <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '500' }}>Xin chào,</Text>
+                                    <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
+                                        {user.name || 'Người dùng'}
+                                    </Text>
                                 </View>
-                            )}
-                            <View style={{ marginLeft: 12 }}>
-                                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '500' }}>Xin chào,</Text>
-                                <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
-                                    {user.name || 'Người dùng'}
-                                </Text>
+                            </View>
+                            <View style={styles.headerRight}>
+                                <TouchableOpacity style={styles.headerIconBtn}>
+                                    <MaterialIcons name="qr-code-scanner" size={24} color="white" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.headerIconBtn}
+                                    onPress={() => {
+                                        Alert.alert('Thông báo', 'Bạn có 99+ thông báo mới');
+                                    }}
+                                >
+                                    <Ionicons name="notifications-outline" size={24} color="white" />
+                                    <View style={styles.headerBadge}>
+                                        <Text style={styles.headerBadgeText}>99+</Text>
+                                    </View>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.headerIconBtn} onPress={onOpenProfile}>
+                                    <Ionicons name="settings-outline" size={24} color="white" />
+                                </TouchableOpacity>
                             </View>
                         </View>
-                        <View style={styles.headerRight}>
-                            <TouchableOpacity style={styles.headerIconBtn}>
-                                <MaterialIcons name="qr-code-scanner" size={24} color="white" />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.headerIconBtn}
-                                onPress={() => {
-                                    Alert.alert('Thông báo', 'Bạn có 99+ thông báo mới');
-                                }}
-                            >
-                                <Ionicons name="notifications-outline" size={24} color="white" />
-                                <View style={styles.headerBadge}>
-                                    <Text style={styles.headerBadgeText}>99+</Text>
-                                </View>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.headerIconBtn} onPress={onOpenProfile}>
-                                <Ionicons name="settings-outline" size={24} color="white" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </SafeAreaView>
-            </LinearGradient>
+                    </SafeAreaView>
+                </LinearGradient>
+            </View>
 
             <ScrollView
                 style={styles.content}
@@ -621,9 +623,7 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F8FAFC',
     },
-    content: {
-        flex: 1,
-    },
+
     scrollContent: {
         paddingBottom: 40,
     },
