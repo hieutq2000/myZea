@@ -688,8 +688,9 @@ const styles = StyleSheet.create({
         right: 0,
         height: 100,
         backgroundColor: '#111',
-        borderTopLeftRadius: 100, // Curve effect
-        transform: [{ translateY: -40 }], // Move up to cut into orange
+        borderTopLeftRadius: 50, // Curve effect - left side
+        borderTopRightRadius: 50, // Curve effect - right side
+        transform: [{ translateY: -50 }], // Move up to cut into orange
         zIndex: 0,
     },
     bottomContent: {
