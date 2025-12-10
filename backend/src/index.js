@@ -29,6 +29,12 @@ app.use(express.json({ limit: '50mb' })); // Increase limit for images
 // Serve static files from public directory (landing page)
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Serve uploaded images with aggressive caching (30 days)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+    maxAge: '2592000000', // 30 days in ms
+    immutable: true
+}));
+
 // Safe JSON parse helper
 function safeJsonParse(str, defaultValue = []) {
     if (!str || str === '' || str === 'null' || str === 'undefined') {
@@ -1022,15 +1028,18 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit for videos
     fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|gif|webp/;
+        const allowedTypes = /jpeg|jpg|png|gif|webp|mp4|mov|avi|quicktime/;
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
-        if (extname && mimetype) {
+        // Check mimetype strictly for images, but for video sometimes mimetype varies, so rely on extension too
+        const isImage = file.mimetype.startsWith('image/');
+        const isVideo = file.mimetype.startsWith('video/');
+
+        if (extname && (isImage || isVideo)) {
             return cb(null, true);
         }
-        cb(new Error('Chỉ chấp nhận file ảnh!'));
+        cb(new Error('Chỉ chấp nhận file ảnh hoặc video!'));
     }
 });
 
@@ -1104,9 +1113,14 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
 
         // Helper to fix localhost URLs to actual IP
         const fixImageUrl = (url) => {
-            if (!url) return url;
+            if (!url) return null;
             const host = req.headers.host || 'localhost:3001';
-            return url.replace(/localhost:3001/g, host);
+            // Nếu URL chứa /uploads/, ta sẽ ép nó dùng host hiện tại
+            if (url.includes('/uploads/')) {
+                const path = url.split('/uploads/')[1];
+                return `http://${host}/uploads/${path}`;
+            }
+            return url.replace(/localhost:3001/g, host).replace(/127.0.0.1:3001/g, host);
         };
 
         const formattedPosts = posts.map(p => {
@@ -1345,6 +1359,408 @@ app.post('/api/place/posts/:id/comments', authenticateToken, async (req, res) =>
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
+
+// ============ GROUPS API ============
+
+// Function to optimize database indexes
+const optimizeDatabase = async () => {
+    try {
+        // Index for sorting posts by date (Critical for Feed speed)
+        try { await pool.execute('CREATE INDEX idx_posts_created_at ON posts(created_at DESC)'); } catch (e) { }
+
+        // Index for filtering posts by group
+        try { await pool.execute('CREATE INDEX idx_posts_group_id ON posts(group_id)'); } catch (e) { }
+
+        // Index for counting likes and comments faster
+        try { await pool.execute('CREATE INDEX idx_post_likes_post_id ON post_likes(post_id)'); } catch (e) { }
+        try { await pool.execute('CREATE INDEX idx_post_comments_post_id ON post_comments(post_id)'); } catch (e) { }
+
+        console.log('✅ Database indexes optimized for performance');
+    } catch (error) {
+        console.error('DB Optimization warning:', error.message);
+    }
+};
+
+// Initialize groups tables
+const initGroupsTables = async () => {
+    try {
+        await optimizeDatabase(); // Optimize DB on startup
+
+        // Create place_groups table
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS place_groups (
+                id VARCHAR(36) PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                avatar TEXT,
+                cover_image TEXT,
+                privacy ENUM('public', 'private', 'secret') DEFAULT 'public',
+                created_by VARCHAR(36) NOT NULL,
+                member_count INT DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Create place_group_members table
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS place_group_members (
+                id VARCHAR(36) PRIMARY KEY,
+                group_id VARCHAR(36) NOT NULL,
+                user_id VARCHAR(36) NOT NULL,
+                role ENUM('admin', 'moderator', 'member') DEFAULT 'member',
+                is_pinned BOOLEAN DEFAULT FALSE,
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_member (group_id, user_id)
+            )
+        `);
+
+        // Add group_id to posts if not exists
+        try {
+            await pool.execute('ALTER TABLE posts ADD COLUMN group_id VARCHAR(36) NULL');
+        } catch (e) { /* Column exists */ }
+
+        console.log('✅ Groups tables initialized');
+    } catch (error) {
+        console.error('Groups tables init error:', error);
+    }
+};
+
+// Get user's groups
+app.get('/api/place/groups', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const [groups] = await pool.execute(`
+            SELECT 
+                g.id,
+                g.name,
+                g.description,
+                g.avatar,
+                g.cover_image as coverImage,
+                g.privacy,
+                g.member_count as memberCount,
+                g.created_at as createdAt,
+                gm.role,
+                gm.is_pinned as isPinned
+            FROM place_groups g
+            JOIN place_group_members gm ON g.id = gm.group_id
+            WHERE gm.user_id = ?
+            ORDER BY gm.is_pinned DESC, g.updated_at DESC
+        `, [userId]);
+
+        // Separate pinned and unpinned
+        const pinnedGroups = groups.filter(g => g.isPinned);
+        const myGroups = groups.filter(g => !g.isPinned);
+
+        res.json({
+            pinned: pinnedGroups,
+            myGroups: myGroups
+        });
+    } catch (error) {
+        console.error('Get groups error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get group detail
+app.get('/api/place/groups/:id', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const userId = req.user.id;
+
+        const [groups] = await pool.execute(`
+            SELECT 
+                g.*,
+                gm.role as myRole,
+                gm.is_pinned as isPinned
+            FROM place_groups g
+            LEFT JOIN place_group_members gm ON g.id = gm.group_id AND gm.user_id = ?
+            WHERE g.id = ?
+        `, [userId, groupId]);
+
+        if (groups.length === 0) {
+            return res.status(404).json({ error: 'Nhóm không tồn tại' });
+        }
+
+        const group = groups[0];
+
+        // Get some members for avatar stack
+        const [members] = await pool.execute(`
+            SELECT u.id, u.name, u.avatar
+            FROM place_group_members gm
+            JOIN users u ON gm.user_id = u.id
+            WHERE gm.group_id = ?
+            ORDER BY gm.role = 'admin' DESC, gm.joined_at ASC
+            LIMIT 5
+        `, [groupId]);
+
+        res.json({
+            id: group.id,
+            name: group.name,
+            description: group.description,
+            avatar: group.avatar,
+            coverImage: group.cover_image,
+            privacy: group.privacy,
+            memberCount: group.member_count,
+            createdAt: group.created_at,
+            isMember: !!group.myRole,
+            myRole: group.myRole,
+            isPinned: !!group.isPinned,
+            previewMembers: members
+        });
+    } catch (error) {
+        console.error('Get group detail error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Create group
+app.post('/api/place/groups', authenticateToken, async (req, res) => {
+    try {
+        const { name, description, privacy } = req.body;
+        const userId = req.user.id;
+
+        if (!name || name.trim().length === 0) {
+            return res.status(400).json({ error: 'Tên nhóm không được để trống' });
+        }
+
+        const groupId = uuidv4();
+        const memberId = uuidv4();
+
+        // Create group
+        await pool.execute(
+            'INSERT INTO place_groups (id, name, description, privacy, created_by) VALUES (?, ?, ?, ?, ?)',
+            [groupId, name, description || '', privacy || 'public', userId]
+        );
+
+        // Add creator as admin
+        await pool.execute(
+            'INSERT INTO place_group_members (id, group_id, user_id, role) VALUES (?, ?, ?, ?)',
+            [memberId, groupId, userId, 'admin']
+        );
+
+        res.json({
+            id: groupId,
+            name,
+            description: description || '',
+            privacy: privacy || 'public',
+            memberCount: 1,
+            isMember: true,
+            myRole: 'admin'
+        });
+    } catch (error) {
+        console.error('Create group error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Join group
+app.post('/api/place/groups/:id/join', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const userId = req.user.id;
+
+        // Check if already member
+        const [existing] = await pool.execute(
+            'SELECT id FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+
+        if (existing.length > 0) {
+            return res.json({ success: true, message: 'Đã là thành viên' });
+        }
+
+        const memberId = uuidv4();
+        await pool.execute(
+            'INSERT INTO place_group_members (id, group_id, user_id, role) VALUES (?, ?, ?, ?)',
+            [memberId, groupId, userId, 'member']
+        );
+
+        // Update member count
+        await pool.execute(
+            'UPDATE place_groups SET member_count = member_count + 1 WHERE id = ?',
+            [groupId]
+        );
+
+        res.json({ success: true, message: 'Đã tham gia nhóm' });
+    } catch (error) {
+        console.error('Join group error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Leave group
+app.post('/api/place/groups/:id/leave', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const userId = req.user.id;
+
+        await pool.execute(
+            'DELETE FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+
+        // Update member count
+        await pool.execute(
+            'UPDATE place_groups SET member_count = GREATEST(member_count - 1, 0) WHERE id = ?',
+            [groupId]
+        );
+
+        res.json({ success: true, message: 'Đã rời khỏi nhóm' });
+    } catch (error) {
+        console.error('Leave group error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Toggle pin group
+app.post('/api/place/groups/:id/pin', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const userId = req.user.id;
+        const { pin } = req.body;
+
+        await pool.execute(
+            'UPDATE place_group_members SET is_pinned = ? WHERE group_id = ? AND user_id = ?',
+            [pin ? 1 : 0, groupId, userId]
+        );
+
+        res.json({ success: true, isPinned: pin });
+    } catch (error) {
+        console.error('Pin group error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Helper to fix localhost URLs for mobile access
+const fixImageUrl = (url, currentHost) => {
+    if (!url) return null;
+    // Nếu URL chứa /uploads/, ta sẽ ép nó dùng host hiện tại
+    if (url.includes('/uploads/')) {
+        const path = url.split('/uploads/')[1];
+        return `http://${currentHost}/uploads/${path}`;
+    }
+    // Fallback cho các trường hợp khác (nếu có)
+    return url.replace(/localhost:3001/g, currentHost).replace(/127.0.0.1:3001/g, currentHost);
+};
+
+// Get group posts
+app.get('/api/place/groups/:id/posts', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const userId = req.user.id;
+        const host = req.headers.host || 'localhost:3001';
+
+        const [posts] = await pool.execute(`
+            SELECT 
+                p.id, 
+                p.content, 
+                p.image_url as image, 
+                p.created_at as createdAt,
+                u.id as author_id,
+                u.name as author_name,
+                u.avatar as author_avatar,
+                (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes,
+                (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) as comments,
+                (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ?) as isLiked
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.group_id = ?
+            ORDER BY p.created_at DESC
+            LIMIT 50
+        `, [userId, groupId]);
+
+        const formattedPosts = posts.map(p => {
+            let images = [];
+            if (p.image) {
+                try {
+                    const parsed = JSON.parse(p.image);
+                    images = Array.isArray(parsed)
+                        ? parsed.map(url => fixImageUrl(url, host))
+                        : [fixImageUrl(p.image, host)];
+                } catch {
+                    images = [fixImageUrl(p.image, host)];
+                }
+            }
+
+            return {
+                id: p.id,
+                author: {
+                    id: p.author_id,
+                    name: p.author_name,
+                    avatar: p.author_avatar
+                },
+                content: p.content,
+                image: images.length > 0 ? images[0] : null,
+                images: images,
+                groupId: groupId,
+                createdAt: p.createdAt,
+                likes: p.likes,
+                isLiked: p.isLiked > 0,
+                comments: p.comments
+            };
+        });
+
+        res.json(formattedPosts);
+    } catch (error) {
+        console.error('Get group posts error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Create post in group
+app.post('/api/place/groups/:id/posts', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const userId = req.user.id;
+        const { content, images } = req.body;
+
+        if (!content || content.trim().length === 0) {
+            return res.status(400).json({ error: 'Nội dung không được để trống' });
+        }
+
+        const postId = uuidv4();
+        let imageToSave = null;
+        if (images && Array.isArray(images) && images.length > 0) {
+            imageToSave = JSON.stringify(images);
+        }
+
+        await pool.execute(
+            'INSERT INTO posts (id, user_id, content, image_url, group_id) VALUES (?, ?, ?, ?, ?)',
+            [postId, userId, content, imageToSave, groupId]
+        );
+
+        const [users] = await pool.execute('SELECT name, avatar FROM users WHERE id = ?', [userId]);
+        const user = users[0];
+
+        const [groups] = await pool.execute('SELECT name FROM place_groups WHERE id = ?', [groupId]);
+        const groupName = groups[0]?.name || '';
+
+        res.json({
+            id: postId,
+            author: {
+                id: userId,
+                name: user.name,
+                avatar: user.avatar
+            },
+            content,
+            images: images || [],
+            groupId: groupId,
+            groupName: groupName,
+            createdAt: new Date().toISOString(),
+            likes: 0,
+            isLiked: false,
+            comments: 0
+        });
+    } catch (error) {
+        console.error('Create group post error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Initialize groups tables on startup
+initGroupsTables();
 
 // Start server
 const PORT = process.env.PORT || 3001;

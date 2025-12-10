@@ -28,6 +28,11 @@ import PhotoGrid from '../components/PhotoGrid';
 import PlaceBottomBar, { PlaceTabType } from '../components/PlaceBottomBar';
 import PlaceNotificationsScreen from './PlaceNotificationsScreen';
 import PlaceMenuScreen from './PlaceMenuScreen';
+import PlaceGroupsScreen from './PlaceGroupsScreen';
+import PlaceGroupDetailScreen from './PlaceGroupDetailScreen';
+import InAppBrowser from '../components/InAppBrowser';
+import TextWithSeeMore from '../components/TextWithSeeMore';
+import VideoPlayer from '../components/VideoPlayer';
 
 const { width } = Dimensions.get('window');
 
@@ -61,6 +66,10 @@ const getAvatarUri = (avatar: string | undefined, name: string = 'User'): string
     return `data:image/jpeg;base64,${avatar}`;
 };
 
+const isVideo = (url: string) => {
+    return url?.match(/\.(mp4|mov|avi|wmv|flv|webm|m4v|3gp)$/i);
+};
+
 const REACTIONS = [
     { id: 'like', emoji: '👍', bgColor: '#1877F2', label: 'Thích', color: '#1877F2' },
     { id: 'love', emoji: '❤️', bgColor: '#F33E58', label: 'Yêu thích', color: '#F33E58' },
@@ -70,28 +79,6 @@ const REACTIONS = [
     { id: 'sad', emoji: '😢', bgColor: '#F7B928', label: 'Buồn', color: '#F7B928' },
     { id: 'angry', emoji: '😠', bgColor: '#E9710F', label: 'Phẫn nộ', color: '#E9710F' },
 ];
-
-const TextWithSeeMore = ({ text }: { text: string }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const maxLength = 150;
-
-    if (!text) return null;
-
-    if (text.length <= maxLength) {
-        return <Text style={styles.postText}>{text}</Text>;
-    }
-
-    return (
-        <TouchableOpacity activeOpacity={0.8} onPress={() => setIsExpanded(!isExpanded)}>
-            <Text style={styles.postText}>
-                {isExpanded ? text : `${text.substring(0, maxLength)}...`}
-            </Text>
-            <Text style={[styles.seeMoreText, { marginTop: 4 }]}>
-                {isExpanded ? 'Thu gọn' : 'Xem thêm'}
-            </Text>
-        </TouchableOpacity>
-    );
-};
 
 interface PlaceScreenProps {
     user: any;
@@ -106,6 +93,15 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     const navigation = useNavigation<any>();
     const [posts, setPosts] = useState<Post[]>([]);
     const [isImageViewerVisible, setIsImageViewerVisible] = useState(false);
+
+    // Browser State
+    const [browserUrl, setBrowserUrl] = useState<string | null>(null);
+    const [isBrowserVisible, setBrowserVisible] = useState(false);
+
+    const openLink = (url: string) => {
+        setBrowserUrl(url);
+        setBrowserVisible(true);
+    };
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
     const [selectedPost, setSelectedPost] = useState<Post | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -121,6 +117,8 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     const [postToShare, setPostToShare] = useState<Post | null>(null);
     // Place Bottom Tab State
     const [placeActiveTab, setPlaceActiveTab] = useState<PlaceTabType>('HOME');
+    // Group Navigation State
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
     useEffect(() => {
         loadPosts();
@@ -145,13 +143,13 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     };
 
     const handlePickImage = async () => {
-        // Allow selecting up to 10 images
-        const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8, selectionLimit: 10 });
+        // Allow selecting up to 10 images or mixed media
+        const result = await launchImageLibrary({ mediaType: 'mixed', quality: 0.8, selectionLimit: 10 });
         if (!result.didCancel && !result.error && result.assets) {
             const uris = result.assets.map((a: any) => a.uri);
             setNewPostImages(prev => [...prev, ...uris]);
         } else if (result.error) {
-            Alert.alert('Lỗi', 'Không thể chọn ảnh');
+            Alert.alert('Lỗi', 'Không thể chọn ảnh/video');
         }
     };
 
@@ -340,10 +338,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
             {/* Post Content */}
             <View style={styles.postContent}>
-                <TextWithSeeMore text={item.content} />
+                <TextWithSeeMore text={item.content} onLinkPress={openLink} />
             </View>
 
-            {/* Post Image */}
+            {/* Post Image/Video */}
             {/* Post Images Grid OR Shared Post Content */}
             {item.originalPost ? (
                 // SHARED POST VIEW
@@ -367,10 +365,17 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 </View>
             ) : (
                 // NORMAL POST VIEW
-                <PhotoGrid
-                    images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
-                    onPressImage={(index) => openImageViewer(item, index)}
-                />
+                <View style={styles.postImagesContainer}>
+                    {/* Check if single video */}
+                    {(item.images?.length === 1 || (!item.images?.length && item.image)) && isVideo(item.images?.[0] || item.image || '') ? (
+                        <VideoPlayer source={item.images?.[0] || item.image || ''} style={{ width: '100%' }} />
+                    ) : (
+                        <PhotoGrid
+                            images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
+                            onPressImage={(index) => openImageViewer(item, index)}
+                        />
+                    )}
+                </View>
             )}
 
             {/* Post Stats */}
@@ -476,6 +481,11 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     </View>
                 )}
                 contentContainerStyle={{ paddingBottom: 100 }}
+                removeClippedSubviews={Platform.OS === 'android'}
+                initialNumToRender={5}
+                maxToRenderPerBatch={5}
+                windowSize={5}
+                showsVerticalScrollIndicator={false}
                 ListEmptyComponent={() => (
                     <View style={{ padding: 20, alignItems: 'center' }}>
                         {isLoading ? <ActivityIndicator color="#0068FF" /> : <Text style={{ color: '#666' }}>Chưa có bài viết nào</Text>}
@@ -527,7 +537,13 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                 <ScrollView horizontal style={styles.previewContainer} contentContainerStyle={{ paddingRight: 10, alignItems: 'center' }}>
                                     {newPostImages.map((uri, index) => (
                                         <View key={index} style={{ marginRight: 10, position: 'relative' }}>
-                                            <Image source={{ uri }} style={styles.previewImage} resizeMode="cover" />
+                                            {isVideo(uri) ? (
+                                                <View style={[styles.previewImage, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+                                                    <Ionicons name="videocam" size={24} color="white" />
+                                                </View>
+                                            ) : (
+                                                <Image source={{ uri }} style={styles.previewImage} resizeMode="cover" />
+                                            )}
                                             <TouchableOpacity
                                                 style={styles.removeImageBtn}
                                                 onPress={() => setNewPostImages(prev => prev.filter((_, i) => i !== index))}
@@ -624,6 +640,12 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 />
             )}
 
+            <InAppBrowser
+                visible={isBrowserVisible}
+                url={browserUrl}
+                onClose={() => setBrowserVisible(false)}
+            />
+
             {/* Place Bottom Bar */}
             <PlaceBottomBar
                 activeTab={placeActiveTab}
@@ -664,7 +686,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         navigation.navigate('Settings');
                     }}
                     onGoToGroups={() => {
-                        // TODO: Groups feature
+                        setPlaceActiveTab('GROUPS');
                     }}
                     onGoToDrafts={() => {
                         // TODO: Drafts feature
@@ -677,6 +699,39 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 <PlaceBottomBar
                     activeTab={placeActiveTab}
                     onTabChange={setPlaceActiveTab}
+                />
+            </View>
+        );
+    }
+
+    // Render Groups List Screen if tab is GROUPS
+    if (placeActiveTab === 'GROUPS') {
+        // If a group is selected, show group detail
+        if (selectedGroupId) {
+            return (
+                <PlaceGroupDetailScreen
+                    groupId={selectedGroupId}
+                    onBack={() => setSelectedGroupId(null)}
+                />
+            );
+        }
+
+        // Otherwise show groups list
+        return (
+            <View style={{ flex: 1 }}>
+                <PlaceGroupsScreen
+                    onBack={() => setPlaceActiveTab('HOME')}
+                    onOpenGroup={(groupId) => setSelectedGroupId(groupId)}
+                    onCreateGroup={() => {
+                        // TODO: Create group modal
+                    }}
+                />
+                <PlaceBottomBar
+                    activeTab={placeActiveTab}
+                    onTabChange={(tab) => {
+                        setSelectedGroupId(null); // Clear selected group when changing tabs
+                        setPlaceActiveTab(tab);
+                    }}
                 />
             </View>
         );
@@ -1096,5 +1151,8 @@ const styles = StyleSheet.create({
     shareOptionSub: {
         fontSize: 12,
         color: '#666',
+    },
+    postImagesContainer: {
+        marginTop: 8,
     },
 });

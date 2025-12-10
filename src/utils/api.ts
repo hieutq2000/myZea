@@ -24,7 +24,7 @@ export async function removeToken(): Promise<void> {
 
 // ============ API HELPERS ============
 
-async function apiRequest<T>(
+export async function apiRequest<T>(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<T> {

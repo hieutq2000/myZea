@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Image, StyleSheet, TouchableOpacity, Text, Dimensions } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -9,15 +9,29 @@ interface PhotoGridProps {
 }
 
 export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
+    const [aspectRatio, setAspectRatio] = useState(1.5); // Default ratio
+
+    useEffect(() => {
+        if (images && images.length === 1) {
+            Image.getSize(images[0], (width, height) => {
+                if (height > 0) setAspectRatio(width / height);
+            }, (error) => console.log('Image getSize error:', error));
+        }
+    }, [images]);
+
     if (!images || images.length === 0) return null;
 
     const count = images.length;
 
-    // 1 Image (Full Width)
+    // 1 Image (Full Width, Dynamic Height)
     if (count === 1) {
         return (
             <TouchableOpacity onPress={() => onPressImage(0)} activeOpacity={0.9}>
-                <Image source={{ uri: images[0] }} style={styles.imageFull} resizeMode="cover" />
+                <Image
+                    source={{ uri: images[0] }}
+                    style={{ width: '100%', aspectRatio: aspectRatio, maxHeight: 600 }}
+                    resizeMode="contain"
+                />
             </TouchableOpacity>
         );
     }
