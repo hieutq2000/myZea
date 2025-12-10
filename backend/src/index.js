@@ -1102,14 +1102,21 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
             LIMIT 50
         `, [userId]);
 
+        // Helper to fix localhost URLs to actual IP
+        const fixImageUrl = (url) => {
+            if (!url) return url;
+            const host = req.headers.host || 'localhost:3001';
+            return url.replace(/localhost:3001/g, host);
+        };
+
         const formattedPosts = posts.map(p => {
             // Parse images locally for main post
             let images = [];
             if (p.image) {
                 try {
                     const parsed = JSON.parse(p.image);
-                    images = Array.isArray(parsed) ? parsed : [p.image];
-                } catch { images = [p.image]; }
+                    images = Array.isArray(parsed) ? parsed.map(fixImageUrl) : [fixImageUrl(p.image)];
+                } catch { images = [fixImageUrl(p.image)]; }
             }
 
             // Parse images locally for original post (if exists)
@@ -1120,8 +1127,8 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 if (p.op_image) {
                     try {
                         const parsedOp = JSON.parse(p.op_image);
-                        opImages = Array.isArray(parsedOp) ? parsedOp : [p.op_image];
-                    } catch { opImages = [p.op_image]; }
+                        opImages = Array.isArray(parsedOp) ? parsedOp.map(fixImageUrl) : [fixImageUrl(p.op_image)];
+                    } catch { opImages = [fixImageUrl(p.op_image)]; }
                 }
 
                 originalPost = {

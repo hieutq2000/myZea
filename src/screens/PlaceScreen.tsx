@@ -26,6 +26,8 @@ import { useNavigation } from '@react-navigation/native';
 import FacebookImageViewer from '../components/FacebookImageViewer';
 import PhotoGrid from '../components/PhotoGrid';
 import PlaceBottomBar, { PlaceTabType } from '../components/PlaceBottomBar';
+import PlaceNotificationsScreen from './PlaceNotificationsScreen';
+import PlaceMenuScreen from './PlaceMenuScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -93,13 +95,14 @@ const TextWithSeeMore = ({ text }: { text: string }) => {
 
 interface PlaceScreenProps {
     user: any;
+    onGoHome?: () => void;
 }
 
 interface LocalPostState {
     [postId: string]: string; // reactionId
 }
 
-export default function PlaceScreen({ user }: PlaceScreenProps) {
+export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     const navigation = useNavigation<any>();
     const [posts, setPosts] = useState<Post[]>([]);
     const [isImageViewerVisible, setIsImageViewerVisible] = useState(false);
@@ -274,7 +277,16 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
                         <Text style={styles.headerTitle}>Zyea Place</Text>
                     </View>
                     <View style={styles.headerIcons}>
-                        <TouchableOpacity style={[styles.circleButton, { backgroundColor: 'rgba(255,255,255,0.5)' }]}>
+                        {/* Home button - go back to main tabs */}
+                        {onGoHome && (
+                            <TouchableOpacity
+                                style={[styles.circleButton, { backgroundColor: 'rgba(255,255,255,0.5)' }]}
+                                onPress={onGoHome}
+                            >
+                                <Ionicons name="home-outline" size={22} color="#333" />
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}>
                             <Ionicons name="search" size={22} color="#333" />
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}>
@@ -441,7 +453,7 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
         </View >
     );
 
-    return (
+    const mainContent = (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
@@ -619,6 +631,58 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
             />
         </View>
     );
+
+    // Render Notifications Screen if tab is NOTIFICATIONS
+    if (placeActiveTab === 'NOTIFICATIONS') {
+        return (
+            <View style={{ flex: 1 }}>
+                <PlaceNotificationsScreen
+                    onBack={() => setPlaceActiveTab('HOME')}
+                    onOpenPost={(postId) => {
+                        // TODO: Navigate to post detail
+                        setPlaceActiveTab('HOME');
+                    }}
+                />
+                <PlaceBottomBar
+                    activeTab={placeActiveTab}
+                    onTabChange={setPlaceActiveTab}
+                />
+            </View>
+        );
+    }
+
+    // Render Menu Screen if tab is MENU
+    if (placeActiveTab === 'MENU') {
+        return (
+            <View style={{ flex: 1 }}>
+                <PlaceMenuScreen
+                    user={user}
+                    onBack={() => setPlaceActiveTab('HOME')}
+                    onGoToSettings={() => {
+                        // Navigate to Settings
+                        if (onGoHome) onGoHome();
+                        navigation.navigate('Settings');
+                    }}
+                    onGoToGroups={() => {
+                        // TODO: Groups feature
+                    }}
+                    onGoToDrafts={() => {
+                        // TODO: Drafts feature
+                    }}
+                    onViewProfile={() => {
+                        // Navigate to Profile
+                        if (onGoHome) onGoHome();
+                    }}
+                />
+                <PlaceBottomBar
+                    activeTab={placeActiveTab}
+                    onTabChange={setPlaceActiveTab}
+                />
+            </View>
+        );
+    }
+
+    return mainContent;
 }
 
 const styles = StyleSheet.create({

@@ -391,7 +391,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         return <HistoryScreen user={user} />;
 
       case 'PLACE':
-        return <PlaceScreen user={user} />;
+        return <PlaceScreen user={user} onGoHome={() => setView('HOME')} />;
 
       case 'HOME':
       default:
