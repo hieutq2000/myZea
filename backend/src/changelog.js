@@ -4,6 +4,19 @@
 
 const CHANGELOG = [
     {
+        version: "1.0.0",
+        date: "11/12/2024",
+        title: "RA MẮT GIAO DIỆN MỚI MYZYEA",
+        changes: [
+            "🎨 Thiết kế lại màn hình Welcome với gradient xanh tím",
+            "🏷️ Logo myZyea mới (my cam + Zyea xanh)",
+            "🌓 Hoàn thiện hệ thống Theme (Sáng/Tối/Theo hệ thống)",
+            "🖼️ Fix lỗi đốm đen trên màn hình đăng nhập",
+            "⚙️ Settings screen hỗ trợ Dark Mode đầy đủ",
+            "🔧 Tối ưu ThemeContext với Appearance listener",
+        ]
+    },
+    {
         version: "3.9",
         date: "09/12/2025",
         title: "TỐI ƯU GIAO DIỆN & TÍNH NĂNG PLACE",

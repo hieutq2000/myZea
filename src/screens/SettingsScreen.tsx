@@ -38,8 +38,8 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
     };
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
 
             {/* Header */}
             <LinearGradient
@@ -160,7 +160,7 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F3F4F6', // Light gray background
+        // backgroundColor handled inline with colors.background
     },
     header: {
         paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,

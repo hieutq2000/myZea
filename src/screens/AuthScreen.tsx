@@ -244,8 +244,6 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
             {/* Bottom Black Section */}
             <View style={styles.bottomSection}>
-                {/* Curve Effect */}
-                <View style={styles.curveOverlay} />
 
                 <View style={styles.bottomContent}>
                     {/* myZyea Logo */}
@@ -610,7 +608,7 @@ const styles = StyleSheet.create({
     // Welcome Screen Styles
     welcomeContainer: {
         flex: 1,
-        backgroundColor: '#111', // Very dark bg
+        backgroundColor: '#5B6BE6', // Match topSection gradient color
     },
     topSection: {
         height: Dimensions.get('window').height * 0.60,
@@ -655,8 +653,8 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
         paddingBottom: 40,
         paddingHorizontal: 24,
-        marginTop: -80,
-        paddingTop: 100,
+        marginTop: -120, // Kéo lên cao hơn để không có khoảng trống
+        paddingTop: 140,
         position: 'relative',
         overflow: 'visible',
     },
