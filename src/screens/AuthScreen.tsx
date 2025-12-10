@@ -100,7 +100,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     // Check server connection
                     const isServerOnline = await checkServerHealth();
                     if (!isServerOnline) {
-                        throw new Error('Không thể kết nối đến server.');
+                        throw new Error('Không thể kết nối đến server, hoặc kiểm tra lại internet của bạn ');
                     }
 
                     // Retrieve saved credentials directly
@@ -232,17 +232,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     </View>
                 </SafeAreaView>
 
-                {/* Team Image - People cutout style */}
+                {/* Team Image */}
                 <View style={styles.teamImageContainer}>
                     <Image
-                        source={{ uri: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&q=80' }}
-                        style={styles.teamImagePerson1}
-                        resizeMode="contain"
-                    />
-                    <Image
-                        source={{ uri: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&q=80' }}
-                        style={styles.teamImagePerson2}
-                        resizeMode="contain"
+                        source={{ uri: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&q=80' }}
+                        style={styles.teamImage}
+                        resizeMode="cover"
                     />
                 </View>
             </View>
@@ -320,7 +315,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                             label="Họ và tên"
                             value={name}
                             onChangeText={setName}
-                            placeholder="Nguyễn Văn A"
+                            placeholder="Hoàng Văn A"
                             icon="user"
                         />
                     )}
@@ -331,7 +326,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         onChangeText={setEmail}
                         keyboardType="email-address"
                         autoCapitalize="none"
-                        placeholder="email@example.com"
+                        placeholder="email@zyea.com"
                         icon="user"
                     />
 
@@ -643,22 +638,16 @@ const styles = StyleSheet.create({
     },
     teamImageContainer: {
         position: 'absolute',
-        bottom: 20,
+        bottom: 30,
         left: 0,
         right: 0,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'flex-end',
+        alignItems: 'center',
         zIndex: 10,
     },
-    teamImagePerson1: {
-        width: Dimensions.get('window').width * 0.4,
-        height: 220,
-        marginRight: -30,
-    },
-    teamImagePerson2: {
-        width: Dimensions.get('window').width * 0.4,
+    teamImage: {
+        width: Dimensions.get('window').width * 0.85,
         height: 200,
+        borderRadius: 16,
     },
     bottomSection: {
         flex: 1,
@@ -673,14 +662,14 @@ const styles = StyleSheet.create({
     },
     curveOverlay: {
         position: 'absolute',
-        top: -60,
+        top: -40,
         left: 0,
         right: 0,
-        height: 100,
+        height: 80,
         backgroundColor: '#0D0D0D',
-        borderTopLeftRadius: 60,
-        borderTopRightRadius: 60,
-        zIndex: 5,
+        borderTopLeftRadius: 50,
+        borderTopRightRadius: 50,
+        zIndex: 1, // Đưa xuống dưới hình ảnh
     },
     bottomContent: {
         zIndex: 2,
