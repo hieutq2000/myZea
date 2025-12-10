@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
 const { v4: uuidv4 } = require('uuid');
+const path = require('path');
 
 const app = express();
 const http = require('http');
@@ -24,6 +25,9 @@ app.set('io', io);
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Increase limit for images
+
+// Serve static files from public directory (landing page)
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Safe JSON parse helper
 function safeJsonParse(str, defaultValue = []) {
@@ -996,7 +1000,6 @@ app.post('/api/chat/conversations/:id/read', authenticateToken, async (req, res)
 
 // ============ IMAGE UPLOAD ============
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
 
 // Create uploads directory if not exists

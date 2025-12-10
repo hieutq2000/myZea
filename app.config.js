@@ -2,13 +2,14 @@ module.exports = {
     expo: {
         name: "myZyea",
         slug: "vinalive-ai-mobile",
+        scheme: "zyea", // URL scheme for deep linking
         version: "2.9.0",
         orientation: "portrait",
         icon: "./assets/icon.png",
         userInterfaceStyle: "light",
         newArchEnabled: true,
         splash: {
-            image: "./assets/adaptive-icon.png",
+            image: "./assets/splash.png",
             resizeMode: "contain",
             backgroundColor: "#ffffff"
         },
