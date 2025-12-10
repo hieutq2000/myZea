@@ -62,7 +62,7 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
                 <Image
                     source={{ uri: uri0 }}
                     style={{ width: '100%', height: '100%', maxHeight: 600 }}
-                    resizeMode="contain"
+                    resizeMode="cover"
                 />
             </TouchableOpacity>
         );

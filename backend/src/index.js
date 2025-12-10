@@ -1220,7 +1220,42 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
 // Create post
 app.post('/api/place/posts', authenticateToken, async (req, res) => {
     try {
-        const { content, imageUrl, images, originalPostId } = req.body;
+        let { content, imageUrl, images, originalPostId } = req.body;
+
+        // Auto-fetch Link Preview if no images provided
+        if ((!images || images.length === 0) && !imageUrl && content) {
+            try {
+                // Regex to find URL
+                const urlMatch = content.match(/(https?:\/\/[^\s]+)/);
+                if (urlMatch) {
+                    const url = urlMatch[0];
+                    console.log('🔍 Detecting URL:', url);
+
+                    // Fetch HTML
+                    const response = await fetch(url, {
+                        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }
+                    });
+                    const html = await response.text();
+
+                    // Extract og:image
+                    const ogImageMatch = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i);
+                    const twitterImageMatch = html.match(/<meta\s+(?:property|name)=["']twitter:image["']\s+content=["']([^"']+)["']/i);
+
+                    const foundImage = (ogImageMatch && ogImageMatch[1]) || (twitterImageMatch && twitterImageMatch[1]);
+
+                    if (foundImage) {
+                        console.log('✅ Found OG Image:', foundImage);
+                        // Fix relative URLs if necessary (basic)
+                        if (foundImage.startsWith('http')) {
+                            imageUrl = foundImage;
+                            images = [foundImage];
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('⚠️ Auto-fetch image failed:', err.message);
+            }
+        }
 
         const hasContent = !!content && content.trim().length > 0;
         const hasImages = (images && images.length > 0) || !!imageUrl;
@@ -1250,9 +1285,6 @@ app.post('/api/place/posts', authenticateToken, async (req, res) => {
         const [users] = await pool.execute('SELECT name, avatar FROM users WHERE id = ?', [userId]);
         const user = users[0];
 
-        // Return logic is simplified here, assuming frontend will reload or we build partial object
-        // For 'originalPost', we aren't fetching it here to keep it fast, Frontend usually knows what it just shared.
-
         const returnedImages = images && images.length > 0 ? images : (imageUrl ? [imageUrl] : []);
 
         const newPost = {
@@ -1265,7 +1297,7 @@ app.post('/api/place/posts', authenticateToken, async (req, res) => {
             content,
             image: returnedImages[0] || null,
             images: returnedImages,
-            originalPostId: originalPostId, // signal to frontend
+            originalPostId: originalPostId,
             createdAt: new Date().toISOString(),
             likes: 0,
             isLiked: false,
