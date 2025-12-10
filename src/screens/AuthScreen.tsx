@@ -214,32 +214,35 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         <View style={styles.welcomeContainer}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-            {/* Top Orange Section */}
+            {/* Top Blue Section */}
             <View style={styles.topSection}>
                 <LinearGradient
-                    colors={['#FB923C', '#EA580C']}
+                    colors={['#5B6BE6', '#4F46E5']}
                     style={StyleSheet.absoluteFill}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                 />
-                <View style={styles.wCircle1} />
-                <View style={styles.wCircle2} />
 
                 <SafeAreaView style={{ flex: 1 }}>
                     <View style={styles.headerTextContainer}>
-                        <Text style={styles.wBrandTitle}>Gene ZYEA+</Text>
+                        <Text style={styles.wBrandTitle}>Global Enterprise</Text>
                         <Text style={styles.wSlogan}>
-                            Foster a dynamic, innovative workforce committed to excellence
+                            Be the world-class technology solutions provider for complex business challenger
                         </Text>
                     </View>
                 </SafeAreaView>
 
-                {/* Team Image Overlapping */}
+                {/* Team Image - People cutout style */}
                 <View style={styles.teamImageContainer}>
                     <Image
-                        source={{ uri: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&q=80' }}
-                        style={styles.teamImage}
-                        resizeMode="cover"
+                        source={{ uri: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&q=80' }}
+                        style={styles.teamImagePerson1}
+                        resizeMode="contain"
+                    />
+                    <Image
+                        source={{ uri: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&q=80' }}
+                        style={styles.teamImagePerson2}
+                        resizeMode="contain"
                     />
                 </View>
             </View>
@@ -250,15 +253,16 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 <View style={styles.curveOverlay} />
 
                 <View style={styles.bottomContent}>
+                    {/* myZyea Logo */}
                     <View style={styles.wLogoRow}>
-                        {/* <Text style={styles.wLogoIcon}>🎓</Text> */}
-                        {/* Use FPT/Zyea Logo here, text for now */}
-                        <Text style={[styles.wLogoText, { color: '#F97316' }]}>ZYEA</Text>
-                        {/* Or Image Logo */}
+                        <View style={styles.zyeaLogoContainer}>
+                            <Text style={styles.zyeaMy}>my</Text>
+                            <Text style={styles.zyeaName}>Zyea</Text>
+                        </View>
                     </View>
 
                     <Text style={styles.wWelcomeText}>Chào mừng bạn !</Text>
-                    <Text style={styles.wInstructionText}>Vui lòng nhập email để đăng nhập Zyea Chat</Text>
+                    <Text style={styles.wInstructionText}>Vui lòng nhập email để đăng nhập myZyea</Text>
 
                     <TouchableOpacity
                         style={styles.wLoginButton}
@@ -614,27 +618,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#111', // Very dark bg
     },
     topSection: {
-        height: Dimensions.get('window').height * 0.65, // 65% height
+        height: Dimensions.get('window').height * 0.60,
         position: 'relative',
         zIndex: 1,
-    },
-    wCircle1: {
-        position: 'absolute',
-        top: -50,
-        right: -50,
-        width: 300,
-        height: 300,
-        borderRadius: 150,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-    },
-    wCircle2: {
-        position: 'absolute',
-        top: 100,
-        left: -50,
-        width: 200,
-        height: 200,
-        borderRadius: 100,
-        backgroundColor: 'rgba(255,255,255,0.05)',
     },
     headerTextContainer: {
         paddingHorizontal: 24,
@@ -657,42 +643,44 @@ const styles = StyleSheet.create({
     },
     teamImageContainer: {
         position: 'absolute',
-        bottom: 40, // Push up slightly from the very bottom cut
+        bottom: 20,
         left: 0,
         right: 0,
-        alignItems: 'center',
-        zIndex: 2,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        zIndex: 10,
     },
-    teamImage: {
-        width: Dimensions.get('window').width * 0.9,
-        height: 240,
-        // No specific border radius here, assuming image is cut out or rectangular card
-        // Based on design, it looks like a group of people cut out transparently OR a card.
-        // Let's make it a slight card or transparent if possible.
-        // If placeholder square, give it radius.
-        borderRadius: 20,
+    teamImagePerson1: {
+        width: Dimensions.get('window').width * 0.4,
+        height: 220,
+        marginRight: -30,
+    },
+    teamImagePerson2: {
+        width: Dimensions.get('window').width * 0.4,
+        height: 200,
     },
     bottomSection: {
         flex: 1,
-        backgroundColor: '#111',
+        backgroundColor: '#0D0D0D',
         justifyContent: 'flex-end',
         paddingBottom: 40,
         paddingHorizontal: 24,
-        marginTop: -100, // Pull up more to create overlap with curve
-        paddingTop: 100, // Increase padding to compensate
+        marginTop: -80,
+        paddingTop: 100,
         position: 'relative',
         overflow: 'visible',
     },
     curveOverlay: {
         position: 'absolute',
-        top: -80, // Move higher to create visible curve effect
+        top: -60,
         left: 0,
         right: 0,
-        height: 120,
-        backgroundColor: '#111',
-        borderTopLeftRadius: 80, // Larger curve for more visible effect
-        borderTopRightRadius: 80, // Larger curve for more visible effect
-        zIndex: 3, // Ensure it's above the orange section
+        height: 100,
+        backgroundColor: '#0D0D0D',
+        borderTopLeftRadius: 60,
+        borderTopRightRadius: 60,
+        zIndex: 5,
     },
     bottomContent: {
         zIndex: 2,
@@ -701,6 +689,21 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 16,
+    },
+    zyeaLogoContainer: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+    },
+    zyeaMy: {
+        fontSize: 24,
+        fontWeight: '600',
+        color: '#F97316', // Orange
+        fontStyle: 'italic',
+    },
+    zyeaName: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#5B6BE6', // Blue/Purple matching header
     },
     wLogoText: {
         fontSize: 32,
@@ -715,7 +718,7 @@ const styles = StyleSheet.create({
     },
     wInstructionText: {
         fontSize: 14,
-        color: '#999',
+        color: '#888',
         marginBottom: 32,
     },
     wLoginButton: {

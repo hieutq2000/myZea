@@ -61,6 +61,24 @@ const THEME_KEY = 'user_theme_preference';
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const systemScheme = useColorScheme(); // 'light' or 'dark' from OS
     const [theme, setThemeState] = useState<ThemeType>('system');
+    const [currentSystemScheme, setCurrentSystemScheme] = useState<'light' | 'dark' | null | undefined>(systemScheme);
+
+    // Listen for system appearance changes
+    useEffect(() => {
+        const subscription = Appearance.addChangeListener(({ colorScheme }) => {
+            console.log('System color scheme changed:', colorScheme);
+            setCurrentSystemScheme(colorScheme);
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
+
+    // Update currentSystemScheme when systemScheme from hook changes
+    useEffect(() => {
+        setCurrentSystemScheme(systemScheme);
+    }, [systemScheme]);
 
     // Load saved theme on startup
     useEffect(() => {
@@ -86,10 +104,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     };
 
-    // Determine actual color scheme
-    const effectiveTheme = theme === 'system' ? (systemScheme || 'light') : theme;
+    // Determine actual color scheme - use currentSystemScheme for reactivity
+    const effectiveTheme = theme === 'system' ? (currentSystemScheme || 'light') : theme;
     const isDark = effectiveTheme === 'dark';
     const colors = isDark ? darkColors : lightColors;
+
+    console.log('Theme state:', { theme, currentSystemScheme, effectiveTheme, isDark });
 
     return (
         <ThemeContext.Provider value={{ theme, colors, setTheme, isDark }}>
