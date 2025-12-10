@@ -678,20 +678,21 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
         paddingBottom: 40,
         paddingHorizontal: 24,
-        marginTop: -60, // Pull up to overlap with curve logic
-        paddingTop: 80, // Space for content
+        marginTop: -100, // Pull up more to create overlap with curve
+        paddingTop: 100, // Increase padding to compensate
+        position: 'relative',
+        overflow: 'visible',
     },
     curveOverlay: {
         position: 'absolute',
-        top: 0,
+        top: -80, // Move higher to create visible curve effect
         left: 0,
         right: 0,
-        height: 100,
+        height: 120,
         backgroundColor: '#111',
-        borderTopLeftRadius: 50, // Curve effect - left side
-        borderTopRightRadius: 50, // Curve effect - right side
-        transform: [{ translateY: -50 }], // Move up to cut into orange
-        zIndex: 0,
+        borderTopLeftRadius: 80, // Larger curve for more visible effect
+        borderTopRightRadius: 80, // Larger curve for more visible effect
+        zIndex: 3, // Ensure it's above the orange section
     },
     bottomContent: {
         zIndex: 2,
