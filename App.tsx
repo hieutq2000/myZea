@@ -438,8 +438,8 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     setView(tab as ViewType);
   };
 
-  // Check if should show tab bar
-  const shouldShowTabBar = user && view !== 'AUTH' && view !== 'SESSION';
+  // Check if should show tab bar (hide for PLACE - it has its own bottom bar)
+  const shouldShowTabBar = user && view !== 'AUTH' && view !== 'SESSION' && view !== 'PLACE';
 
   const { colors, isDark } = useTheme();
 

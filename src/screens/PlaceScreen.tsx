@@ -25,6 +25,7 @@ import { launchImageLibrary } from '../utils/imagePicker';
 import { useNavigation } from '@react-navigation/native';
 import FacebookImageViewer from '../components/FacebookImageViewer';
 import PhotoGrid from '../components/PhotoGrid';
+import PlaceBottomBar, { PlaceTabType } from '../components/PlaceBottomBar';
 
 const { width } = Dimensions.get('window');
 
@@ -115,6 +116,8 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
     // Share State
     const [isShareModalVisible, setShareModalVisible] = useState(false);
     const [postToShare, setPostToShare] = useState<Post | null>(null);
+    // Place Bottom Tab State
+    const [placeActiveTab, setPlaceActiveTab] = useState<PlaceTabType>('HOME');
 
     useEffect(() => {
         loadPosts();
@@ -608,6 +611,12 @@ export default function PlaceScreen({ user }: PlaceScreenProps) {
                     }}
                 />
             )}
+
+            {/* Place Bottom Bar */}
+            <PlaceBottomBar
+                activeTab={placeActiveTab}
+                onTabChange={setPlaceActiveTab}
+            />
         </View>
     );
 }
