@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { Video, ResizeMode, AVPlaybackStatus, Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 
 interface VideoPlayerProps {
@@ -15,13 +15,23 @@ export default function VideoPlayer({ source, style, paused = true, useNativeCon
     const [status, setStatus] = useState<AVPlaybackStatus | {}>({});
     const [isLoading, setIsLoading] = useState(true);
     const [isMuted, setIsMuted] = useState(false);
-    const [videoRatio, setVideoRatio] = useState(16 / 9); // Default aspect ratio
+    const [videoRatio, setVideoRatio] = useState(16 / 9); // Default to 16:9
 
-    // Tính toán nếu đang paused từ prop
-    // Nếu source change, component remounts or updates
-
-    // Auto handle play/pause via prop is tricky if user manually paused.
-    // For now, simple implementation: default paused.
+    useEffect(() => {
+        // Enable audio playback in silent mode
+        const enableAudio = async () => {
+            try {
+                await Audio.setAudioModeAsync({
+                    playsInSilentModeIOS: true,
+                    staysActiveInBackground: false,
+                    shouldDuckAndroid: true,
+                });
+            } catch (e) {
+                console.error('Audio setup error:', e);
+            }
+        };
+        enableAudio();
+    }, []);
 
     const handlePlayPause = async () => {
         if (!video.current) return;
@@ -34,7 +44,7 @@ export default function VideoPlayer({ source, style, paused = true, useNativeCon
     };
 
     return (
-        <View style={[styles.container, style, { width: '100%', aspectRatio: videoRatio, maxHeight: 600 }]}>
+        <View style={[styles.container, style, { width: '100%', aspectRatio: videoRatio }]}>
             <Video
                 ref={video}
                 style={styles.video}
@@ -43,10 +53,9 @@ export default function VideoPlayer({ source, style, paused = true, useNativeCon
                 resizeMode={ResizeMode.CONTAIN}
                 isLooping
                 isMuted={isMuted}
+                volume={1.0}
                 shouldPlay={!paused}
-                onPlaybackStatusUpdate={(s) => {
-                    setStatus(s);
-                }}
+                onPlaybackStatusUpdate={(s) => setStatus(s)}
                 onLoad={(status: any) => {
                     // Check naturalSize to adjust aspect ratio
                     if (status.naturalSize && status.naturalSize.height > 0) {

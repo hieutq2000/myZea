@@ -266,21 +266,36 @@ export async function updatePushToken(token: string): Promise<void> {
     });
 }
 
+// ... existing code ...
+
 // Upload generic image
-export async function uploadImage(imageUri: string): Promise<string> {
+export interface UploadResponse {
+    url: string;
+    width: number;
+    height: number;
+}
+
+export async function uploadImage(imageUri: string): Promise<UploadResponse> { // Changed return type
     const token = await getToken();
     const formData = new FormData();
     const fileName = imageUri.split('/').pop() || 'image.jpg';
 
+    // Determine type based on extension
+    let type = 'image/jpeg';
+    if (fileName.toLowerCase().endsWith('.png')) type = 'image/png';
+    else if (fileName.toLowerCase().endsWith('.gif')) type = 'image/gif';
+    else if (fileName.toLowerCase().endsWith('.mp4')) type = 'video/mp4';
+
     formData.append('image', {
         uri: imageUri,
-        type: 'image/jpeg',
+        type: type,
         name: fileName,
     } as any);
 
     const response = await fetch(`${API_URL}/api/upload/image`, {
         method: 'POST',
         headers: {
+            // 'Content-Type': 'multipart/form-data', // Do NOT set this manually, let fetch handle it
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: formData,
@@ -291,7 +306,12 @@ export async function uploadImage(imageUri: string): Promise<string> {
     }
 
     const data = await response.json();
-    return data.url;
+    // Backward compatibility: if backend doesn't return width/height yet
+    return {
+        url: data.url,
+        width: data.width || 0,
+        height: data.height || 0
+    };
 }
 
 // ============ PLACE API ============
@@ -307,6 +327,12 @@ export interface Comment {
     };
 }
 
+export interface ImageObj {
+    uri: string;
+    width?: number;
+    height?: number;
+}
+
 export interface Post {
     id: string;
     author: {
@@ -315,8 +341,8 @@ export interface Post {
         avatar?: string;
     };
     content: string;
-    image?: string;
-    images?: string[]; // New: Multiple images support
+    image?: string | ImageObj; // Can be string or object
+    images?: (string | ImageObj)[]; // Array of strings or objects
     originalPost?: Post; // New: Shared Post Support
     createdAt: string;
     likes: number;
@@ -329,12 +355,18 @@ export async function getPosts(): Promise<Post[]> {
     return apiRequest<Post[]>('/api/place/posts');
 }
 
-export async function createPost(content: string, imageUrl?: string, images?: string[], originalPostId?: string): Promise<Post> {
+export async function createPost(
+    content: string,
+    imageUrl?: string | null,
+    images?: (string | ImageObj)[],
+    originalPostId?: string
+): Promise<Post> {
     return apiRequest<Post>('/api/place/posts', {
         method: 'POST',
         body: JSON.stringify({ content, imageUrl, images, originalPostId }),
     });
 }
+// ... existing code ...
 
 export async function toggleLikePost(postId: string): Promise<{ liked: boolean }> {
     return apiRequest<{ liked: boolean }>(`/api/place/posts/${postId}/like`, {
@@ -350,6 +382,20 @@ export async function createComment(postId: string, content: string): Promise<Co
     return apiRequest<Comment>(`/api/place/posts/${postId}/comments`, {
         method: 'POST',
         body: JSON.stringify({ content }),
+    });
+}
+
+export interface CreateGroupParams {
+    name: string;
+    description?: string;
+    privacy: 'public' | 'private' | 'secret';
+    coverImage?: string;
+}
+
+export async function createGroup(params: CreateGroupParams): Promise<any> {
+    return apiRequest('/api/place/groups', {
+        method: 'POST',
+        body: JSON.stringify(params),
     });
 }
 

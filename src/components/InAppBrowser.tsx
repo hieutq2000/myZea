@@ -13,7 +13,7 @@ const InAppBrowser: React.FC<InAppBrowserProps> = ({ visible, url, onClose }) =>
     const [title, setTitle] = useState('Đang tải...');
     const [canGoBack, setCanGoBack] = useState(false);
     const [canGoForward, setCanGoForward] = useState(false);
-    const [webViewRef, setWebViewRef] = useState<WebView | null>(null);
+    const webViewRef = React.useRef<WebView>(null);
 
     if (!url) return null;
 
@@ -39,13 +39,13 @@ const InAppBrowser: React.FC<InAppBrowserProps> = ({ visible, url, onClose }) =>
                         <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
                         <Text style={styles.headerUrl} numberOfLines={1}>{url}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => webViewRef?.reload()} style={styles.reloadButton}>
+                    <TouchableOpacity onPress={() => webViewRef.current?.reload()} style={styles.reloadButton}>
                         <Ionicons name="refresh" size={20} color="#333" />
                     </TouchableOpacity>
                 </View>
 
                 <WebView
-                    ref={(ref) => setWebViewRef(ref)}
+                    ref={webViewRef}
                     source={{ uri: url }}
                     style={styles.webview}
                     onNavigationStateChange={(navState) => {
@@ -61,13 +61,17 @@ const InAppBrowser: React.FC<InAppBrowserProps> = ({ visible, url, onClose }) =>
                     )}
                     // iOS specific: allow swipe back navigation
                     allowsBackForwardNavigationGestures={true}
+                    onError={(syntheticEvent) => {
+                        const { nativeEvent } = syntheticEvent;
+                        console.warn('WebView error: ', nativeEvent);
+                    }}
                 />
 
                 <View style={styles.footer}>
-                    <TouchableOpacity disabled={!canGoBack} onPress={() => webViewRef?.goBack()}>
+                    <TouchableOpacity disabled={!canGoBack} onPress={() => webViewRef.current?.goBack()}>
                         <Ionicons name="chevron-back" size={24} color={canGoBack ? "#333" : "#CCC"} />
                     </TouchableOpacity>
-                    <TouchableOpacity disabled={!canGoForward} onPress={() => webViewRef?.goForward()}>
+                    <TouchableOpacity disabled={!canGoForward} onPress={() => webViewRef.current?.goForward()}>
                         <Ionicons name="chevron-forward" size={24} color={canGoForward ? "#333" : "#CCC"} />
                     </TouchableOpacity>
                     <View style={{ width: 24 }} />

@@ -1047,6 +1047,12 @@ const upload = multer({
 app.use('/uploads', express.static(uploadsDir));
 
 // Upload image endpoint
+// Import image-size
+const sizeOf = require('image-size');
+
+// ... existing code ...
+
+// Upload image endpoint
 app.post('/api/upload/image', upload.single('image'), (req, res) => {
     try {
         if (!req.file) {
@@ -1058,11 +1064,24 @@ app.post('/api/upload/image', upload.single('image'), (req, res) => {
         const protocol = req.protocol || 'http';
         const imageUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
 
-        console.log('📸 Image uploaded:', imageUrl);
+        // Calculate dimensions
+        let dimensions = { width: 0, height: 0 };
+        try {
+            // Only calculate for images, not videos
+            if (req.file.mimetype.startsWith('image/')) {
+                dimensions = sizeOf(req.file.path);
+            }
+        } catch (err) {
+            console.error('Error calculating image size:', err);
+        }
+
+        console.log('📸 Image uploaded:', imageUrl, dimensions);
         res.json({
             success: true,
             url: imageUrl,
-            filename: req.file.filename
+            filename: req.file.filename,
+            width: dimensions.width,
+            height: dimensions.height
         });
     } catch (error) {
         console.error('Upload error:', error);
@@ -1070,12 +1089,7 @@ app.post('/api/upload/image', upload.single('image'), (req, res) => {
     }
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// ============ PLACE API ============
+// ... existing code ...
 
 // Get posts
 app.get('/api/place/posts', authenticateToken, async (req, res) => {
@@ -1123,27 +1137,45 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
             return url.replace(/localhost:3001/g, host).replace(/127.0.0.1:3001/g, host);
         };
 
+        const processImages = (dbImageString) => {
+            let processedImages = [];
+            if (dbImageString) {
+                try {
+                    const parsed = JSON.parse(dbImageString);
+                    if (Array.isArray(parsed)) {
+                        processedImages = parsed.map(item => {
+                            if (typeof item === 'string') {
+                                return fixImageUrl(item);
+                            } else if (item && typeof item === 'object') {
+                                return {
+                                    ...item,
+                                    uri: fixImageUrl(item.url || item.uri) // standarize to uri
+                                };
+                            }
+                            return item;
+                        });
+                    } else {
+                        // Single string (legacy)
+                        processedImages = [fixImageUrl(dbImageString)];
+                    }
+                } catch {
+                    // Not JSON, just a string URL
+                    processedImages = [fixImageUrl(dbImageString)];
+                }
+            }
+            return processedImages;
+        };
+
         const formattedPosts = posts.map(p => {
             // Parse images locally for main post
-            let images = [];
-            if (p.image) {
-                try {
-                    const parsed = JSON.parse(p.image);
-                    images = Array.isArray(parsed) ? parsed.map(fixImageUrl) : [fixImageUrl(p.image)];
-                } catch { images = [fixImageUrl(p.image)]; }
-            }
+            let images = processImages(p.image);
 
             // Parse images locally for original post (if exists)
             let opImages = [];
             let originalPost = null;
 
             if (p.op_id) {
-                if (p.op_image) {
-                    try {
-                        const parsedOp = JSON.parse(p.op_image);
-                        opImages = Array.isArray(parsedOp) ? parsedOp.map(fixImageUrl) : [fixImageUrl(p.op_image)];
-                    } catch { opImages = [fixImageUrl(p.op_image)]; }
-                }
+                opImages = processImages(p.op_image);
 
                 originalPost = {
                     id: p.op_id,

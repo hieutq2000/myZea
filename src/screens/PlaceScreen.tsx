@@ -33,6 +33,7 @@ import PlaceGroupDetailScreen from './PlaceGroupDetailScreen';
 import InAppBrowser from '../components/InAppBrowser';
 import TextWithSeeMore from '../components/TextWithSeeMore';
 import VideoPlayer from '../components/VideoPlayer';
+import CreateGroupModal from '../components/CreateGroupModal';
 
 const { width } = Dimensions.get('window');
 
@@ -66,9 +67,21 @@ const getAvatarUri = (avatar: string | undefined, name: string = 'User'): string
     return `data:image/jpeg;base64,${avatar}`;
 };
 
-const isVideo = (url: string) => {
-    return url?.match(/\.(mp4|mov|avi|wmv|flv|webm|m4v|3gp)$/i);
+// ... imports
+
+// Helper to get URI from string or ImageObj
+const getUri = (img: string | any | undefined): string => {
+    if (!img) return '';
+    return typeof img === 'string' ? img : img.uri;
 };
+
+const isVideo = (url: string | any) => {
+    const uri = getUri(url);
+    return uri?.match(/\.(mp4|mov|avi|wmv|flv|webm|m4v|3gp)$/i);
+};
+
+// ... existing code ...
+
 
 const REACTIONS = [
     { id: 'like', emoji: '👍', bgColor: '#1877F2', label: 'Thích', color: '#1877F2' },
@@ -119,6 +132,8 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     const [placeActiveTab, setPlaceActiveTab] = useState<PlaceTabType>('HOME');
     // Group Navigation State
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const [isCreateGroupModalVisible, setCreateGroupModalVisible] = useState(false);
+    const [groupsKey, setGroupsKey] = useState(0); // Refresh trigger
 
     useEffect(() => {
         loadPosts();
@@ -157,14 +172,22 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
         if (!newPostContent.trim() && newPostImages.length === 0) return;
         setIsPosting(true);
         try {
-            const uploadedUrls: string[] = [];
+            const uploadedImages: any[] = [];
+
             // Upload all images sequentially (or Promise.all)
             for (const imgUri of newPostImages) {
-                const url = await uploadImage(imgUri);
-                uploadedUrls.push(url);
+                const result = await uploadImage(imgUri);
+                // Result is now { url, width, height }
+                uploadedImages.push({
+                    uri: result.url,
+                    width: result.width,
+                    height: result.height
+                });
             }
 
-            const newPost = await createPost(newPostContent, undefined, uploadedUrls);
+            // Pass the array of image objects directly
+            const newPost = await createPost(newPostContent, undefined, uploadedImages);
+
             setPosts([newPost, ...posts]);
             setNewPostContent('');
             setNewPostImages([]);
@@ -246,7 +269,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
         try {
             await Share.share({
                 message: `Xem bài viết của ${postToShare.author.name} trên Zyea Place:\n${postToShare.content || 'Bài viết thú vị!'}`,
-                url: postToShare.image || '',
+                url: getUri(postToShare.image) || '',
             });
         } catch (error) {
             console.error(error);
@@ -368,7 +391,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 <View style={styles.postImagesContainer}>
                     {/* Check if single video */}
                     {(item.images?.length === 1 || (!item.images?.length && item.image)) && isVideo(item.images?.[0] || item.image || '') ? (
-                        <VideoPlayer source={item.images?.[0] || item.image || ''} style={{ width: '100%' }} />
+                        <VideoPlayer source={getUri(item.images?.[0] || item.image)} style={{ width: '100%' }} />
                     ) : (
                         <PhotoGrid
                             images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
@@ -575,7 +598,11 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             {selectedPost && (
                 <FacebookImageViewer
                     visible={isImageViewerVisible}
-                    images={selectedPost.images && selectedPost.images.length > 0 ? selectedPost.images : (selectedPost.image ? [selectedPost.image] : [])}
+                    images={
+                        selectedPost.images && selectedPost.images.length > 0
+                            ? selectedPost.images.map(getUri)
+                            : (selectedPost.image ? [getUri(selectedPost.image)] : [])
+                    }
                     imageIndex={selectedImageIndex}
                     onClose={() => setIsImageViewerVisible(false)}
                     post={selectedPost}
@@ -628,7 +655,11 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             {selectedPost && (
                 <FacebookImageViewer
                     visible={isImageViewerVisible}
-                    images={selectedPost.images && selectedPost.images.length > 0 ? selectedPost.images : (selectedPost.image ? [selectedPost.image] : [])}
+                    images={
+                        selectedPost.images && selectedPost.images.length > 0
+                            ? selectedPost.images.map(getUri)
+                            : (selectedPost.image ? [getUri(selectedPost.image)] : [])
+                    }
                     imageIndex={selectedImageIndex}
                     onClose={() => setIsImageViewerVisible(false)}
                     post={selectedPost}
@@ -720,10 +751,17 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
         return (
             <View style={{ flex: 1 }}>
                 <PlaceGroupsScreen
+                    key={groupsKey} // Force re-render/refetch on change
                     onBack={() => setPlaceActiveTab('HOME')}
                     onOpenGroup={(groupId) => setSelectedGroupId(groupId)}
-                    onCreateGroup={() => {
-                        // TODO: Create group modal
+                    onCreateGroup={() => setCreateGroupModalVisible(true)}
+                />
+                <CreateGroupModal
+                    visible={isCreateGroupModalVisible}
+                    onClose={() => setCreateGroupModalVisible(false)}
+                    onGroupCreated={() => {
+                        setCreateGroupModalVisible(false);
+                        setGroupsKey(prev => prev + 1); // Trigger refresh
                     }}
                 />
                 <PlaceBottomBar
