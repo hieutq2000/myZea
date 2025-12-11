@@ -14,6 +14,7 @@ import {
     Dimensions,
     StatusBar,
     SafeAreaView,
+    FlatList,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -43,6 +44,22 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [faceIdEnabled, setFaceIdEnabled] = useState(false);
     const [hasBiometrics, setHasBiometrics] = useState(false);
     const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
+
+    // Carousel State
+    const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+    const flatListRef = React.useRef<any>(null);
+
+    useEffect(() => {
+        if (showLoginForm) return;
+        const interval = setInterval(() => {
+            setCurrentSlideIndex((prev) => {
+                const next = prev === 2 ? 0 : prev + 1; // 3 slides (0, 1, 2)
+                flatListRef.current?.scrollToIndex({ index: next, animated: true });
+                return next;
+            });
+        }, 3500);
+        return () => clearInterval(interval);
+    }, [showLoginForm]);
 
     // Load saved credentials and Face ID setting on mount
     useEffect(() => {
@@ -214,41 +231,76 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         <View style={styles.welcomeContainer}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-            {/* Top Blue Section */}
-            <View style={styles.topSection}>
-                <LinearGradient
-                    colors={['#1a45a0', '#0d2860']} // Darker blue gradient like FPT style
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
+            {/* Slider Section */}
+            <View style={styles.sliderContainer}>
+                <FlatList
+                    ref={flatListRef}
+                    data={[
+                        {
+                            id: '1',
+                            colors: ['#FF9966', '#FF5E62'], // Orange
+                            title: 'Gene MyZyea',
+                            slogan: 'Administer a dynamic, innovative workforce committed to excellence',
+                            image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&q=80'
+                        },
+                        {
+                            id: '2',
+                            colors: ['#56ab2f', '#a8e063'], // Green
+                            title: 'MyZyea DC-135',
+                            slogan: 'Happy working environment, respect, trust and development opportunities',
+                            image: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=800&q=80'
+                        },
+                        {
+                            id: '3',
+                            colors: ['#1a45a0', '#0d2860'], // Blue
+                            title: 'Global Enterprise',
+                            slogan: 'Be the world-class technology solutions provider for complex business challenger',
+                            image: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&q=80'
+                        }
+                    ]}
+                    keyExtractor={(item) => item.id}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    scrollEnabled={false}
+                    renderItem={({ item }) => (
+                        <View style={{ width: Dimensions.get('window').width, height: '100%', position: 'relative' }}>
+                            <LinearGradient
+                                colors={item.colors as [string, string]}
+                                style={StyleSheet.absoluteFill}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            />
+
+                            <View style={[styles.bgCircle, { top: -50, right: -50, width: 200, height: 200 }]} />
+                            <View style={[styles.bgCircle, { top: 100, left: -20, width: 100, height: 100 }]} />
+
+                            <SafeAreaView style={{ flex: 1 }}>
+                                <View style={styles.headerTextContainer}>
+                                    <Text style={styles.wBrandTitle}>{item.title}</Text>
+                                    <Text style={styles.wSlogan}>{item.slogan}</Text>
+                                </View>
+                            </SafeAreaView>
+
+                            {/* Team Image */}
+                            <View style={styles.teamImageContainer}>
+                                <Image
+                                    source={{ uri: item.image }}
+                                    style={styles.teamImage}
+                                    resizeMode="contain"
+                                />
+                            </View>
+                        </View>
+                    )}
+                    onMomentumScrollEnd={(ev) => {
+                        const index = Math.round(ev.nativeEvent.contentOffset.x / Dimensions.get('window').width);
+                        setCurrentSlideIndex(index);
+                    }}
                 />
-
-                {/* Background Pattern (Optional opacity circles) */}
-                <View style={[styles.bgCircle, { top: -50, right: -50, width: 200, height: 200 }]} />
-                <View style={[styles.bgCircle, { top: 100, left: -20, width: 100, height: 100 }]} />
-
-                <SafeAreaView style={{ flex: 1 }}>
-                    <View style={styles.headerTextContainer}>
-                        <Text style={styles.wBrandTitle}>Global Enterprise</Text>
-                        <Text style={styles.wSlogan}>
-                            Be the world-class technology solutions provider for complex business challenger
-                        </Text>
-                    </View>
-                </SafeAreaView>
             </View>
 
             {/* Curved Separator */}
             <View style={styles.curveSeparator} />
-
-            {/* Team Image - Overlapping Top and Bottom */}
-            <View style={styles.teamImageContainer}>
-                <Image
-                    // Placeholder for business couple
-                    source={{ uri: 'https://png.pngtree.com/png-vector/20230906/ourmid/pngtree-business-man-and-woman-png-image_9962291.png' }}
-                    style={styles.teamImage}
-                    resizeMode="contain"
-                />
-            </View>
 
             {/* Bottom Black Section */}
             <View style={styles.bottomSection}>
@@ -620,11 +672,17 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#121212', // Black background base
     },
-    topSection: {
-        height: Dimensions.get('window').height * 0.65, // Increased height for blue part
+    sliderContainer: {
+        height: Dimensions.get('window').height * 0.65, // Match topSection height logic
         position: 'relative',
         zIndex: 1,
-        overflow: 'hidden', // Contain the circles
+    },
+    topSection: {
+        // Deprecated, replaced by sliderContainer but kept if needed for reference
+        height: Dimensions.get('window').height * 0.65,
+        position: 'relative',
+        zIndex: 1,
+        overflow: 'hidden',
     },
     bgCircle: {
         position: 'absolute',
