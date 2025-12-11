@@ -20,7 +20,7 @@ export default function HistoryScreen({ user }: HistoryScreenProps) {
     const [refreshing, setRefreshing] = useState(false);
 
     // Mock data - later can be fetched from API
-    const examHistory: ExamResult[] = user.examHistory || [];
+    const examHistory: ExamResult[] = user.history || [];
 
     const onRefresh = async () => {
         setRefreshing(true);
