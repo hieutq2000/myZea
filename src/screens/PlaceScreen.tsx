@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -148,6 +148,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     // Tag People State
     const [taggedUsers, setTaggedUsers] = useState<{ id: string; name: string; avatar?: string }[]>([]);
     const [isTagModalVisible, setTagModalVisible] = useState(false);
+
+    // Auto-scroll and refresh logic
+    const flatListRef = useRef<FlatList>(null);
+    const scrollY = useRef(0);
     const [tagSearchQuery, setTagSearchQuery] = useState('');
     const [tagSearchResults, setTagSearchResults] = useState<{ id: string; name: string; avatar?: string }[]>([]);
 
@@ -556,6 +560,9 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             {renderHeaderAndComposer()}
 
             <FlatList
+                ref={flatListRef}
+                onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
+                scrollEventThrottle={16}
                 data={posts}
                 keyExtractor={item => item.id}
                 renderItem={renderPost}
@@ -860,70 +867,13 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 </View>
             </Modal>
 
-            {/* Facebook Image Viewer */}
+
             {selectedPost && (
                 <FacebookImageViewer
                     visible={isImageViewerVisible}
                     images={
                         selectedPost.images && selectedPost.images.length > 0
-                            ? selectedPost.images.map(getUri)
-                            : (selectedPost.image ? [getUri(selectedPost.image)] : [])
-                    }
-                    imageIndex={selectedImageIndex}
-                    onClose={() => setIsImageViewerVisible(false)}
-                    post={selectedPost}
-                    onLike={() => handleReaction(selectedPost.id, 'like')}
-                    onComment={() => {
-                        setIsImageViewerVisible(false); // Close viewer to navigate
-                        navigation.navigate('PostDetail', { postId: selectedPost.id, post: selectedPost });
-                    }}
-                />
-            )}
-
-            {/* Share Options Modal (Bottom Sheet Style) */}
-            <Modal
-                visible={isShareModalVisible}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setShareModalVisible(false)}
-            >
-                <TouchableOpacity
-                    style={styles.shareOverlay}
-                    activeOpacity={1}
-                    onPress={() => setShareModalVisible(false)}
-                >
-                    <View style={styles.shareSheet}>
-                        <View style={styles.shareIndicator} />
-                        <Text style={styles.shareTitle}>Chia sẻ bài viết này</Text>
-
-                        <TouchableOpacity style={styles.shareOption} onPress={onShareNow}>
-                            <View style={[styles.shareIconParams, { backgroundColor: '#E7F3FF' }]}>
-                                <MaterialIcons name="share" size={24} color="#1877F2" />
-                            </View>
-                            <View>
-                                <Text style={styles.shareOptionTitle}>Chia sẻ ngay</Text>
-                                <Text style={styles.shareOptionSub}>Đăng ngay lên dòng thời gian của bạn</Text>
-                            </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.shareOption} onPress={onShareExternal}>
-                            <View style={[styles.shareIconParams, { backgroundColor: '#F0F2F5' }]}>
-                                <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
-                            </View>
-                            <View>
-                                <Text style={styles.shareOptionTitle}>Tùy chọn khác...</Text>
-                                <Text style={styles.shareOptionSub}>Gửi qua Zalo, Messenger, v.v.</Text>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
-            {selectedPost && (
-                <FacebookImageViewer
-                    visible={isImageViewerVisible}
-                    images={
-                        selectedPost.images && selectedPost.images.length > 0
-                            ? selectedPost.images.map(getUri)
+                            ? selectedPost.images.map(img => getUri(img))
                             : (selectedPost.image ? [getUri(selectedPost.image)] : [])
                     }
                     imageIndex={selectedImageIndex}
@@ -946,7 +896,21 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             {/* Place Bottom Bar */}
             <PlaceBottomBar
                 activeTab={placeActiveTab}
-                onTabChange={setPlaceActiveTab}
+                onTabChange={(tab) => {
+                    if (tab === 'HOME') {
+                        if (placeActiveTab === 'HOME') {
+                            if (scrollY.current > 50) { // If scrolled down > 50px
+                                flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                            } else {
+                                handleRefresh();
+                            }
+                        } else {
+                            setPlaceActiveTab('HOME');
+                        }
+                    } else {
+                        setPlaceActiveTab(tab);
+                    }
+                }}
             />
         </View>
     );
