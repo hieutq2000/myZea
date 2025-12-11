@@ -206,7 +206,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     };
 
     const renderFooter = () => {
-        if (!isLoadingMore) return <View style={{ height: 20 }} />;
+        if (!isLoadingMore || posts.length === 0) return <View style={{ height: 20 }} />;
         return (
             <View style={{ paddingVertical: 20 }}>
                 <ActivityIndicator size="small" color="#666" />
@@ -442,7 +442,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         {/* Avatar Container for Group */}
                         <View style={{ marginRight: 12 }}>
                             {/* Group Avatar (Main) */}
-                            <TouchableOpacity onPress={() => {/* TODO: Navigate to group */ }}>
+                            <TouchableOpacity onPress={() => {
+                                setSelectedGroupId(item.group!.id);
+                                setPlaceActiveTab('GROUPS');
+                            }}>
                                 <Image
                                     source={{ uri: item.group.avatar || `https://ui-avatars.com/api/?name=${item.group.name}&rounded=true&background=random` }}
                                     style={{ width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: '#eee' }}
@@ -467,7 +470,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         {/* Info Section */}
                         <View style={{ flex: 1 }}>
                             {/* Group Name */}
-                            <TouchableOpacity onPress={() => {/* TODO: Navigate to group */ }}>
+                            <TouchableOpacity onPress={() => {
+                                setSelectedGroupId(item.group!.id);
+                                setPlaceActiveTab('GROUPS');
+                            }}>
                                 <Text style={[styles.postAuthor, { fontSize: 16 }]}>{item.group.name}</Text>
                             </TouchableOpacity>
 
@@ -1417,6 +1423,10 @@ const styles = StyleSheet.create({
         marginLeft: 8,
         color: '#333',
         fontWeight: '500',
+    },
+    moreButton: {
+        marginLeft: 'auto',
+        padding: 4,
     },
     reactionDock: {
         position: 'absolute',

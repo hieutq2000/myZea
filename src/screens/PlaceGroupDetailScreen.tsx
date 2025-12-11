@@ -208,15 +208,19 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                     <TextWithSeeMore text={item.content} onLinkPress={openLink} />
                 </View>
 
-                {
-                    item.images && item.images.length > 0 && (
-                        (isVideo(item.images[0])) ? (
-                            <VideoPlayer source={getUri(item.images[0])} style={{ width: '100%', height: 350, marginTop: 8 }} />
-                        ) : (
-                            <Image source={{ uri: getUri(item.images[0]) }} style={styles.postImage} resizeMode="cover" />
-                        )
-                    )
-                }
+                {item.images && item.images.length > 0 && (
+                    <View style={{ marginTop: 8 }}>
+                        {item.images.map((img, index) => (
+                            <View key={index} style={{ marginBottom: 4 }}>
+                                {isVideo(img) ? (
+                                    <VideoPlayer source={getUri(img)} style={{ width: '100%', height: 350 }} />
+                                ) : (
+                                    <Image source={{ uri: getUri(img) }} style={{ width: '100%', height: 350, borderRadius: 8 }} resizeMode="cover" />
+                                )}
+                            </View>
+                        ))}
+                    </View>
+                )}
 
                 <View style={styles.postStats}>
                     <Text style={styles.statsText}>{item.likes} lượt thích</Text>
