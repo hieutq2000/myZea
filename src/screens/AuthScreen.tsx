@@ -330,185 +330,126 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         </View>
     );
 
-    if (!showLoginForm) {
-        return renderWelcome();
-    }
+    // If showing login form, render the "Bottom Sheet" style form (FPT Next style)
+    if (showLoginForm) {
+        return (
+            <View style={{ flex: 1 }}>
+                <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-    return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
-            >
-                <TouchableOpacity
-                    style={{ position: 'absolute', top: 50, left: 20, zIndex: 10, padding: 8 }}
-                    onPress={() => setShowLoginForm(false)}
-                >
-                    <Feather name="arrow-left" size={24} color={COLORS.text} />
-                </TouchableOpacity>
+                {/* Full Screen Background - Orange Theme to match request */}
+                <LinearGradient
+                    colors={['#FF9966', '#FF5E62', '#da2e66']}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                />
 
-                {/* Header */}
-                <View style={styles.header}>
-                    <Text style={styles.logo}>🎓</Text>
-                    <Text style={styles.title}>Zyea</Text>
-                    <Text style={styles.subtitle}>Trợ lý học tập AI cá nhân</Text>
+                {/* Abstract Background Decoration */}
+                <View style={{ position: 'absolute', top: 100, alignSelf: 'center', opacity: 0.8 }}>
+                    <View style={{ width: 300, height: 300, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 150 }} />
                 </View>
 
-                {/* Form Card */}
-                <View style={styles.card}>
-                    <Text style={styles.cardTitle}>
-                        {view === AuthView.LOGIN ? 'Đăng Nhập' : 'Đăng Ký'}
-                    </Text>
+                <KeyboardAvoidingView
+                    style={{ flex: 1, justifyContent: 'flex-end' }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                    {/* The Bottom Sheet */}
+                    <View style={styles.bottomSheet}>
 
-                    {error && (
-                        <View style={styles.errorBox}>
-                            <Text style={styles.errorText}>⚠️ {error}</Text>
+                        {/* Drag Handle / Decoration */}
+                        <View style={{ alignSelf: 'center', width: 40, height: 4, backgroundColor: '#E0E0E0', borderRadius: 2, marginBottom: 20 }} />
+
+                        {/* Close Button */}
+                        <TouchableOpacity
+                            style={{ position: 'absolute', top: 20, right: 20, zIndex: 10, padding: 4 }}
+                            onPress={() => setShowLoginForm(false)}
+                        >
+                            <Feather name="x" size={24} color="#999" />
+                        </TouchableOpacity>
+
+                        {/* Header: Logo & Title */}
+                        <View style={{ marginBottom: 24 }}>
+                            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+                                <Text style={{ fontSize: 24, fontWeight: '900', color: '#F27125' }}>my</Text>
+                                <Text style={{ fontSize: 24, fontWeight: '900', color: '#27A844' }}>Z</Text>
+                                <Text style={{ fontSize: 24, fontWeight: '900', color: '#1a45a0' }}>yea</Text>
+                            </View>
+                            <Text style={styles.sheetTitle}>
+                                Chào mừng bạn trở lại{'\n'}myZyea Chat!
+                            </Text>
                         </View>
-                    )}
 
-                    {view === AuthView.REGISTER && (
-                        <FloatingLabelInput
-                            label="Họ và tên"
-                            value={name}
-                            onChangeText={setName}
-                            placeholder="Hoàng Văn A"
-                            icon="user"
-                        />
-                    )}
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                            {error && (
+                                <Text style={{ color: 'red', marginBottom: 10 }}>{error}</Text>
+                            )}
 
-                    <FloatingLabelInput
-                        label="Email"
-                        value={email}
-                        onChangeText={setEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        placeholder="email@zyea.com"
-                        icon="user"
-                    />
+                            {view === AuthView.REGISTER && (
+                                <View style={{ marginBottom: 16 }}>
+                                    <TextInput
+                                        style={styles.sheetInput}
+                                        placeholder="Họ và tên"
+                                        value={name}
+                                        onChangeText={setName}
+                                        placeholderTextColor="#999"
+                                    />
+                                </View>
+                            )}
 
-                    <FloatingLabelInput
-                        label="Mật khẩu"
-                        value={password}
-                        onChangeText={setPassword}
-                        isPassword
-                        placeholder="••••••••"
-                        icon="lock"
-                    />
+                            <View style={{ marginBottom: 16 }}>
+                                <TextInput
+                                    style={styles.sheetInput}
+                                    placeholder="Nhập email của bạn"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    placeholderTextColor="#999"
+                                />
+                            </View>
 
-                    {view === AuthView.REGISTER && (
-                        <>
-                            <FloatingLabelInput
-                                label="Nhập lại mật khẩu"
-                                value={confirmPassword}
-                                onChangeText={setConfirmPassword}
-                                isPassword
-                                placeholder="••••••••"
-                                icon="lock"
-                            />
+                            <View style={{ marginBottom: 20 }}>
+                                <TextInput
+                                    style={styles.sheetInput}
+                                    placeholder="Mật khẩu"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry
+                                    placeholderTextColor="#999"
+                                />
+                            </View>
 
                             <TouchableOpacity
-                                style={styles.termsContainer}
-                                onPress={() => setAgreeToTerms(!agreeToTerms)}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[
-                                    styles.checkbox,
-                                    agreeToTerms && styles.checkboxChecked
-                                ]}>
-                                    {agreeToTerms && <Feather name="check" size={14} color={COLORS.white} />}
-                                </View>
-                                <Text style={styles.termsText}>
-                                    Tôi đồng ý với <Text style={styles.linkText}>Điều khoản sử dụng</Text> và <Text style={styles.linkText}>Chính sách bảo mật</Text>
-                                </Text>
-                            </TouchableOpacity>
-                        </>
-                    )}
-
-                    {/* Login Button Row with Face ID */}
-                    <View style={styles.loginRow}>
-                        <TouchableOpacity
-                            style={styles.submitButton}
-                            onPress={handleSubmit}
-                            disabled={loading}
-                            activeOpacity={0.8}
-                        >
-                            <LinearGradient
-                                colors={COLORS.gradientPrimary as [string, string]}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={styles.gradientButton}
+                                style={styles.sheetButton}
+                                onPress={handleSubmit}
+                                disabled={loading}
                             >
                                 {loading ? (
-                                    <ActivityIndicator color={COLORS.white} />
+                                    <ActivityIndicator color="#fff" />
                                 ) : (
-                                    <Text style={styles.submitText}>
-                                        {view === AuthView.LOGIN ? 'Đăng Nhập' : 'Đăng Ký'}
+                                    <Text style={styles.sheetButtonText}>
+                                        {view === AuthView.LOGIN ? 'Tiếp tục' : 'Đăng ký'}
                                     </Text>
                                 )}
-                            </LinearGradient>
-                        </TouchableOpacity>
-
-                        {/* Face ID Button - Icon only, next to login button */}
-                        {view === AuthView.LOGIN && faceIdEnabled && hasBiometrics && hasSavedCredentials && (
-                            <TouchableOpacity
-                                style={styles.faceIdIconButton}
-                                onPress={handleFaceIdLogin}
-                                activeOpacity={0.8}
-                            >
-                                <View style={styles.faceIdIconContainer}>
-                                    <Ionicons name="scan-outline" size={28} color={COLORS.primary} />
-                                </View>
                             </TouchableOpacity>
-                        )}
+
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
+                                <TouchableOpacity onPress={() => { }}>
+                                    <Text style={{ color: '#666' }}>Quên mật khẩu?</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity onPress={() => setView(view === AuthView.LOGIN ? AuthView.REGISTER : AuthView.LOGIN)}>
+                                    <Text style={{ color: '#F27125', fontWeight: 'bold' }}>
+                                        {view === AuthView.LOGIN ? 'Đăng ký ngay' : 'Đăng nhập'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </ScrollView>
                     </View>
-
-                    {/* Forgot Password - only show in login mode */}
-                    {view === AuthView.LOGIN && (
-                        <TouchableOpacity
-                            style={styles.forgotPasswordButton}
-                            onPress={() => Alert.alert(
-                                'Quên mật khẩu',
-                                'Vui lòng liên hệ admin để được hỗ trợ reset mật khẩu.\n\nEmail: support@zyea.ai',
-                                [{ text: 'Đóng' }]
-                            )}
-                        >
-                            <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                        style={styles.switchButton}
-                        onPress={() => {
-                            setView(view === AuthView.LOGIN ? AuthView.REGISTER : AuthView.LOGIN);
-                            setError(null);
-                            // Clear form data when switching views
-                            setEmail('');
-                            setPassword('');
-                            setName('');
-                            setConfirmPassword('');
-                            setAgreeToTerms(false);
-                        }}
-                    >
-                        <Text style={styles.switchText}>
-                            {view === AuthView.LOGIN
-                                ? 'Chưa có tài khoản? Đăng ký ngay'
-                                : 'Đã có tài khoản? Đăng nhập'}
-                        </Text>
-                    </TouchableOpacity>
-
-
-                </View>
-            </ScrollView>
-
-            {/* Version Badge - Bottom Right */}
-            <View style={styles.versionBadge}>
-                <Text style={styles.versionText}>v{getLatestChangelog()?.version || '?'}</Text>
+                </KeyboardAvoidingView>
             </View>
-        </KeyboardAvoidingView>
-    );
+        );
+    }
 }
 
 const styles = StyleSheet.create({
@@ -772,5 +713,42 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         textTransform: 'uppercase',
+    },
+    // Styles for "Bottom Sheet" FPT Next Style
+    bottomSheet: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        paddingBottom: 40,
+        width: '100%',
+    },
+    sheetTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#333',
+        marginTop: 8,
+        lineHeight: 30,
+    },
+    sheetInput: {
+        borderWidth: 1,
+        borderColor: '#eee',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        fontSize: 16,
+        backgroundColor: '#FCFCFC',
+    },
+    sheetButton: {
+        backgroundColor: '#EAEAEA', // Default disabled-like look, could be orange if we wanted
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    sheetButtonText: {
+        color: '#666',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "1.0.1",
+        date: "12/12/2024",
+        title: "LÀM MỚI GIAO DIỆN ĐĂNG NHẬP",
+        changes: [
+            "✨ Giao diện Đăng nhập dạng Bottom Sheet hiện đại",
+            "🎨 Nền Gradient Cam chủ đạo ",
+            "🔄 Slide tự động giới thiệu văn hóa doanh nghiệp",
+            "📱 Tối ưu trải nghiệm người dùng myZyea Chat"
+        ]
+    },
+    {
         version: "1.0.0",
         date: "11/12/2024",
         title: "RA MẮT GIAO DIỆN MỚI MYZYEA",
