@@ -618,6 +618,11 @@ const styles = StyleSheet.create({
         position: 'relative',
         zIndex: 1,
     },
+    sliderContainer: {
+        height: Dimensions.get('window').height * 0.65,
+        position: 'relative',
+        zIndex: 1,
+    },
     topSection: {
         // Deprecated, replaced by sliderContainer but kept if needed for reference
         height: Dimensions.get('window').height * 0.65,
