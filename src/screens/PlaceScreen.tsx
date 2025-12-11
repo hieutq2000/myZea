@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getPosts, createPost, toggleLikePost, Post, uploadImage } from '../utils/api';
+import { getPosts, createPost, toggleLikePost, Post, uploadImage, trackPostView, searchUsers } from '../utils/api';
 import { launchImageLibrary } from '../utils/imagePicker';
 import { useNavigation } from '@react-navigation/native';
 import FacebookImageViewer from '../components/FacebookImageViewer';
@@ -30,6 +30,7 @@ import PlaceNotificationsScreen from './PlaceNotificationsScreen';
 import PlaceMenuScreen from './PlaceMenuScreen';
 import PlaceGroupsScreen from './PlaceGroupsScreen';
 import PlaceGroupDetailScreen from './PlaceGroupDetailScreen';
+import PlaceProfileScreen from './PlaceProfileScreen';
 import InAppBrowser from '../components/InAppBrowser';
 import TextWithSeeMore from '../components/TextWithSeeMore';
 import VideoPlayer from '../components/VideoPlayer';
@@ -134,6 +135,12 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [isCreateGroupModalVisible, setCreateGroupModalVisible] = useState(false);
     const [groupsKey, setGroupsKey] = useState(0); // Refresh trigger
+    const [showProfileScreen, setShowProfileScreen] = useState(false);
+    // Tag People State
+    const [taggedUsers, setTaggedUsers] = useState<{ id: string; name: string; avatar?: string }[]>([]);
+    const [isTagModalVisible, setTagModalVisible] = useState(false);
+    const [tagSearchQuery, setTagSearchQuery] = useState('');
+    const [tagSearchResults, setTagSearchResults] = useState<{ id: string; name: string; avatar?: string }[]>([]);
 
     useEffect(() => {
         loadPosts();
@@ -168,6 +175,34 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
         }
     };
 
+    const handleSearchUsers = async (query: string) => {
+        setTagSearchQuery(query);
+        if (query.length < 2) {
+            setTagSearchResults([]);
+            return;
+        }
+        try {
+            const results = await searchUsers(query);
+            // Filter out already tagged users
+            const filtered = results.filter(u => !taggedUsers.find(t => t.id === u.id));
+            setTagSearchResults(filtered);
+        } catch (e) {
+            console.error('Search users error:', e);
+        }
+    };
+
+    const handleTagUser = (user: { id: string; name: string; avatar?: string }) => {
+        if (!taggedUsers.find(u => u.id === user.id)) {
+            setTaggedUsers([...taggedUsers, user]);
+        }
+        setTagSearchQuery('');
+        setTagSearchResults([]);
+    };
+
+    const handleRemoveTag = (userId: string) => {
+        setTaggedUsers(taggedUsers.filter(u => u.id !== userId));
+    };
+
     const handleCreatePost = async () => {
         if (!newPostContent.trim() && newPostImages.length === 0) return;
         setIsPosting(true);
@@ -185,12 +220,14 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 });
             }
 
-            // Pass the array of image objects directly
-            const newPost = await createPost(newPostContent, undefined, uploadedImages);
+            // Pass the array of image objects directly + tagged users
+            const taggedUserIds = taggedUsers.map(u => u.id);
+            const newPost = await createPost(newPostContent, undefined, uploadedImages, undefined, taggedUserIds);
 
             setPosts([newPost, ...posts]);
             setNewPostContent('');
             setNewPostImages([]);
+            setTaggedUsers([]); // Reset tagged users
             setPostModalVisible(false);
         } catch (error) {
             console.error('Create post error:', error);
@@ -339,7 +376,13 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
 
     const renderPost = ({ item }: { item: Post }) => (
-        <View style={styles.postCard}>
+        <View
+            style={styles.postCard}
+            onLayout={() => {
+                // Track view when post becomes visible
+                trackPostView(item.id);
+            }}
+        >
             {/* Post Header */}
             <View style={styles.postHeader}>
                 <Image
@@ -347,7 +390,21 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     style={styles.postAvatar}
                 />
                 <View style={styles.postInfo}>
-                    <Text style={styles.postAuthor}>{item.author.name}</Text>
+                    <Text style={styles.postAuthor}>
+                        {item.author.name}
+                        {item.taggedUsers && item.taggedUsers.length > 0 && (
+                            <Text style={{ fontWeight: '400', color: '#333' }}>
+                                {' cùng với '}
+                                <Text style={{ fontWeight: '600' }}>{item.taggedUsers[0].name}</Text>
+                                {item.taggedUsers.length > 1 && (
+                                    <Text style={{ fontWeight: '400' }}>
+                                        {' và '}
+                                        <Text style={{ fontWeight: '600' }}>{item.taggedUsers.length - 1} người khác</Text>
+                                    </Text>
+                                )}
+                            </Text>
+                        )}
+                    </Text>
                     <View style={styles.postMeta}>
                         <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
                         <Text style={styles.dot}>•</Text>
@@ -420,8 +477,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     {item.comments > 0 && (
                         <Text style={styles.statsText}>{item.comments} bình luận</Text>
                     )}
-                    {item.comments > 0 && <Text style={styles.statsText}> • </Text>}
-                    <Text style={styles.statsText}>{item.likes * 12 + 50 + item.comments * 5} người đã xem</Text>
+                    {item.comments > 0 && item.views > 0 && <Text style={styles.statsText}> • </Text>}
+                    {item.views > 0 && (
+                        <Text style={styles.statsText}>{item.views} người đã xem</Text>
+                    )}
                 </View>
             </View>
 
@@ -522,19 +581,61 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 visible={isPostModalVisible}
                 animationType="slide"
                 transparent={true}
-                onRequestClose={() => setPostModalVisible(false)}
+                onRequestClose={() => {
+                    // Show confirmation if there's content
+                    if (newPostContent.trim() || newPostImages.length > 0) {
+                        Alert.alert(
+                            'Bạn có muốn lưu bài viết để hoàn thành sau không?',
+                            '',
+                            [
+                                {
+                                    text: 'Bỏ bài viết', style: 'destructive', onPress: () => {
+                                        setNewPostContent('');
+                                        setNewPostImages([]);
+                                        setPostModalVisible(false);
+                                    }
+                                },
+                                { text: 'Lưu bản nháp', onPress: () => setPostModalVisible(false) },
+                                { text: 'Tiếp tục chỉnh sửa', style: 'cancel' },
+                            ]
+                        );
+                    } else {
+                        setPostModalVisible(false);
+                    }
+                }}
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <TouchableOpacity onPress={() => setPostModalVisible(false)}>
-                                <Ionicons name="close" size={24} color="#333" />
+                            <TouchableOpacity onPress={() => {
+                                // Show confirmation if there's content
+                                if (newPostContent.trim() || newPostImages.length > 0) {
+                                    Alert.alert(
+                                        'Bạn có muốn lưu bài viết để hoàn thành sau không?',
+                                        '',
+                                        [
+                                            {
+                                                text: 'Bỏ bài viết', style: 'destructive', onPress: () => {
+                                                    setNewPostContent('');
+                                                    setNewPostImages([]);
+                                                    setPostModalVisible(false);
+                                                }
+                                            },
+                                            { text: 'Lưu bản nháp', onPress: () => setPostModalVisible(false) },
+                                            { text: 'Tiếp tục chỉnh sửa', style: 'cancel' },
+                                        ]
+                                    );
+                                } else {
+                                    setPostModalVisible(false);
+                                }
+                            }}>
+                                <Ionicons name="arrow-back" size={24} color="#333" />
                             </TouchableOpacity>
                             <Text style={styles.modalTitle}>Tạo bài viết</Text>
                             <TouchableOpacity
                                 onPress={handleCreatePost}
-                                disabled={isPosting || !newPostContent.trim()}
-                                style={[styles.postButton, (!newPostContent.trim() || isPosting) && styles.postButtonDisabled]}
+                                disabled={isPosting || (!newPostContent.trim() && newPostImages.length === 0)}
+                                style={[styles.postButton, (!newPostContent.trim() && newPostImages.length === 0 || isPosting) && styles.postButtonDisabled]}
                             >
                                 {isPosting ? <ActivityIndicator color="white" size="small" /> : <Text style={styles.postButtonText}>Đăng</Text>}
                             </TouchableOpacity>
@@ -556,26 +657,75 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                 value={newPostContent}
                                 onChangeText={setNewPostContent}
                             />
+
+                            {/* Image Preview Grid */}
                             {newPostImages.length > 0 && (
-                                <ScrollView horizontal style={styles.previewContainer} contentContainerStyle={{ paddingRight: 10, alignItems: 'center' }}>
+                                <View style={{
+                                    flexDirection: 'row',
+                                    flexWrap: 'wrap',
+                                    marginTop: 12,
+                                    gap: 8,
+                                }}>
                                     {newPostImages.map((uri, index) => (
-                                        <View key={index} style={{ marginRight: 10, position: 'relative' }}>
+                                        <View key={index} style={{
+                                            width: newPostImages.length === 1 ? '100%' : '48%',
+                                            aspectRatio: newPostImages.length === 1 ? 16 / 9 : 1,
+                                            borderRadius: 8,
+                                            overflow: 'hidden',
+                                            position: 'relative',
+                                        }}>
                                             {isVideo(uri) ? (
-                                                <View style={[styles.previewImage, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
-                                                    <Ionicons name="videocam" size={24} color="white" />
+                                                <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Ionicons name="videocam" size={32} color="white" />
+                                                    <Text style={{ color: 'white', marginTop: 4, fontSize: 12 }}>Video</Text>
                                                 </View>
                                             ) : (
-                                                <Image source={{ uri }} style={styles.previewImage} resizeMode="cover" />
+                                                <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                                             )}
                                             <TouchableOpacity
-                                                style={styles.removeImageBtn}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 6,
+                                                    right: 6,
+                                                    backgroundColor: 'rgba(0,0,0,0.6)',
+                                                    borderRadius: 12,
+                                                    width: 24,
+                                                    height: 24,
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
+                                                }}
                                                 onPress={() => setNewPostImages(prev => prev.filter((_, i) => i !== index))}
                                             >
                                                 <Ionicons name="close" size={16} color="white" />
                                             </TouchableOpacity>
                                         </View>
                                     ))}
-                                </ScrollView>
+                                </View>
+                            )}
+
+                            {/* Tagged Users Display */}
+                            {taggedUsers.length > 0 && (
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 8 }}>
+                                    {taggedUsers.map(user => (
+                                        <View key={user.id} style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            backgroundColor: '#E4E6EB',
+                                            borderRadius: 16,
+                                            paddingHorizontal: 10,
+                                            paddingVertical: 6,
+                                        }}>
+                                            <Image
+                                                source={{ uri: user.avatar || `https://ui-avatars.com/api/?name=${user.name}` }}
+                                                style={{ width: 20, height: 20, borderRadius: 10, marginRight: 6 }}
+                                            />
+                                            <Text style={{ fontSize: 13, color: '#333' }}>{user.name}</Text>
+                                            <TouchableOpacity onPress={() => handleRemoveTag(user.id)} style={{ marginLeft: 6 }}>
+                                                <Ionicons name="close-circle" size={16} color="#666" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
                             )}
                         </View>
 
@@ -585,11 +735,106 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                 <Ionicons name="image-outline" size={24} color="#45BD62" />
                                 <Text style={styles.footerButtonText}>Ảnh/Video</Text>
                             </TouchableOpacity>
+                            <TouchableOpacity style={styles.footerButton} onPress={() => setTagModalVisible(true)}>
+                                <Ionicons name="person-add-outline" size={24} color="#1877F2" />
+                                <Text style={styles.footerButtonText}>Gắn thẻ</Text>
+                            </TouchableOpacity>
                             <TouchableOpacity style={styles.footerButton}>
                                 <Ionicons name="happy-outline" size={24} color="#F7B928" />
                                 <Text style={styles.footerButtonText}>Cảm xúc</Text>
                             </TouchableOpacity>
                         </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Tag People Modal */}
+            <Modal
+                visible={isTagModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setTagModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+                        <View style={styles.modalHeader}>
+                            <TouchableOpacity onPress={() => setTagModalVisible(false)}>
+                                <Ionicons name="arrow-back" size={24} color="#333" />
+                            </TouchableOpacity>
+                            <Text style={styles.modalTitle}>Gắn thẻ người khác</Text>
+                            <TouchableOpacity onPress={() => setTagModalVisible(false)}>
+                                <Text style={{ color: '#1877F2', fontWeight: '600' }}>Xong</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Search Input */}
+                        <View style={{ padding: 16 }}>
+                            <View style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: '#F0F2F5',
+                                borderRadius: 20,
+                                paddingHorizontal: 16,
+                            }}>
+                                <Ionicons name="search" size={20} color="#65676B" />
+                                <TextInput
+                                    style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 10, fontSize: 15 }}
+                                    placeholder="Tìm kiếm bạn bè..."
+                                    value={tagSearchQuery}
+                                    onChangeText={handleSearchUsers}
+                                    autoFocus
+                                />
+                            </View>
+                        </View>
+
+                        {/* Search Results */}
+                        <ScrollView style={{ flex: 1 }}>
+                            {tagSearchResults.map(user => (
+                                <TouchableOpacity
+                                    key={user.id}
+                                    onPress={() => handleTagUser(user)}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        padding: 12,
+                                        borderBottomWidth: 1,
+                                        borderBottomColor: '#E4E6EB',
+                                    }}
+                                >
+                                    <Image
+                                        source={{ uri: user.avatar || `https://ui-avatars.com/api/?name=${user.name}` }}
+                                        style={{ width: 44, height: 44, borderRadius: 22, marginRight: 12 }}
+                                    />
+                                    <Text style={{ fontSize: 15, fontWeight: '500' }}>{user.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+
+                            {/* Already Tagged Users */}
+                            {taggedUsers.length > 0 && (
+                                <View style={{ padding: 16 }}>
+                                    <Text style={{ fontSize: 13, color: '#65676B', marginBottom: 8 }}>Đã gắn thẻ</Text>
+                                    {taggedUsers.map(user => (
+                                        <View key={user.id} style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            padding: 8,
+                                            backgroundColor: '#E7F3FF',
+                                            borderRadius: 8,
+                                            marginBottom: 6,
+                                        }}>
+                                            <Image
+                                                source={{ uri: user.avatar || `https://ui-avatars.com/api/?name=${user.name}` }}
+                                                style={{ width: 32, height: 32, borderRadius: 16, marginRight: 10 }}
+                                            />
+                                            <Text style={{ flex: 1, fontSize: 14, fontWeight: '500' }}>{user.name}</Text>
+                                            <TouchableOpacity onPress={() => handleRemoveTag(user.id)}>
+                                                <Ionicons name="close-circle" size={20} color="#1877F2" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </ScrollView>
                     </View>
                 </View>
             </Modal>
@@ -706,6 +951,20 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
     // Render Menu Screen if tab is MENU
     if (placeActiveTab === 'MENU') {
+        // If showing profile screen
+        if (showProfileScreen) {
+            return (
+                <PlaceProfileScreen
+                    user={user}
+                    onBack={() => setShowProfileScreen(false)}
+                    onEditProfile={() => {
+                        // Navigate to main Profile settings
+                        if (onGoHome) onGoHome();
+                    }}
+                />
+            );
+        }
+
         return (
             <View style={{ flex: 1 }}>
                 <PlaceMenuScreen
@@ -723,8 +982,8 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         // TODO: Drafts feature
                     }}
                     onViewProfile={() => {
-                        // Navigate to Profile
-                        if (onGoHome) onGoHome();
+                        // Show Place Profile Screen
+                        setShowProfileScreen(true);
                     }}
                 />
                 <PlaceBottomBar

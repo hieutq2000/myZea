@@ -43,8 +43,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
 
             {/* Bottom section */}
             <View style={styles.bottomSection}>
-                <Text style={styles.slogan}>Trợ lý học tập AI cá nhân</Text>
-                <Text style={styles.copyright}>© Zyea v{getLatestChangelog()?.version || '2.0'}</Text>
+                <Text style={styles.copyright}>© Zyea Corporation v{getLatestChangelog()?.version || '2.0'}</Text>
             </View>
         </LinearGradient>
     );

@@ -348,22 +348,34 @@ export interface Post {
     likes: number;
     isLiked: boolean;
     comments: number;
+    views: number;
     shares: number;
+    taggedUsers?: { id: string; name: string; avatar?: string }[];
 }
 
 export async function getPosts(): Promise<Post[]> {
     return apiRequest<Post[]>('/api/place/posts');
 }
 
+// Track post view (call when user sees a post in feed)
+export async function trackPostView(postId: string): Promise<void> {
+    try {
+        await apiRequest(`/api/place/posts/${postId}/view`, { method: 'POST' });
+    } catch (e) {
+        // Silently fail - don't interrupt user experience
+    }
+}
+
 export async function createPost(
     content: string,
     imageUrl?: string | null,
     images?: (string | ImageObj)[],
-    originalPostId?: string
+    originalPostId?: string,
+    taggedUserIds?: string[]
 ): Promise<Post> {
     return apiRequest<Post>('/api/place/posts', {
         method: 'POST',
-        body: JSON.stringify({ content, imageUrl, images, originalPostId }),
+        body: JSON.stringify({ content, imageUrl, images, originalPostId, taggedUserIds }),
     });
 }
 // ... existing code ...

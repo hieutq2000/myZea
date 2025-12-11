@@ -1109,6 +1109,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes,
                 (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) as comments,
                 (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ?) as isLiked,
+                0 as views,
                 -- Original Post Info (Self Join)
                 op.id as op_id,
                 op.content as op_content,
@@ -1206,9 +1207,42 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 likes: p.likes,
                 isLiked: p.isLiked > 0,
                 comments: p.comments,
-                shares: 0
+                views: p.views || 0,
+                shares: 0,
+                taggedUsers: [] // Will be populated below
             };
         });
+
+        // Fetch tagged users for all posts in one query
+        const postIds = formattedPosts.map(p => p.id);
+        if (postIds.length > 0) {
+            try {
+                const [taggedRows] = await pool.execute(`
+                    SELECT pt.post_id, u.id, u.name, u.avatar
+                    FROM post_tags pt
+                    JOIN users u ON pt.user_id = u.id
+                    WHERE pt.post_id IN (${postIds.map(() => '?').join(',')})
+                `, postIds);
+
+                // Group tagged users by post
+                const tagsByPost = {};
+                taggedRows.forEach(row => {
+                    if (!tagsByPost[row.post_id]) tagsByPost[row.post_id] = [];
+                    tagsByPost[row.post_id].push({
+                        id: row.id,
+                        name: row.name,
+                        avatar: row.avatar
+                    });
+                });
+
+                // Attach to posts
+                formattedPosts.forEach(post => {
+                    post.taggedUsers = tagsByPost[post.id] || [];
+                });
+            } catch (e) {
+                // Table might not exist yet, ignore
+            }
+        }
 
         res.json(formattedPosts);
     } catch (error) {
@@ -1220,7 +1254,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
 // Create post
 app.post('/api/place/posts', authenticateToken, async (req, res) => {
     try {
-        let { content, imageUrl, images, originalPostId } = req.body;
+        let { content, imageUrl, images, originalPostId, taggedUserIds } = req.body;
 
         // Auto-fetch Link Preview if no images provided
         if ((!images || images.length === 0) && !imageUrl && content) {
@@ -1281,6 +1315,27 @@ app.post('/api/place/posts', authenticateToken, async (req, res) => {
             [postId, userId, content, imageToSave, originalPostId || null]
         );
 
+        // Save tagged users
+        let taggedUsers = [];
+        if (taggedUserIds && Array.isArray(taggedUserIds) && taggedUserIds.length > 0) {
+            for (const tagUserId of taggedUserIds) {
+                try {
+                    await pool.execute(
+                        'INSERT INTO post_tags (id, post_id, user_id) VALUES (?, ?, ?)',
+                        [uuidv4(), postId, tagUserId]
+                    );
+                } catch (e) {
+                    // Ignore duplicate or errors
+                }
+            }
+
+            // Fetch tagged user details
+            const [taggedRows] = await pool.execute(`
+                SELECT id, name, avatar FROM users WHERE id IN (${taggedUserIds.map(() => '?').join(',')})
+            `, taggedUserIds);
+            taggedUsers = taggedRows;
+        }
+
         // Fetch user info to return complete post object (Simplified for speed)
         const [users] = await pool.execute('SELECT name, avatar FROM users WHERE id = ?', [userId]);
         const user = users[0];
@@ -1302,7 +1357,9 @@ app.post('/api/place/posts', authenticateToken, async (req, res) => {
             likes: 0,
             isLiked: false,
             comments: 0,
-            shares: 0
+            views: 0,
+            shares: 0,
+            taggedUsers: taggedUsers
         };
 
         res.json(newPost);
@@ -1346,6 +1403,39 @@ app.post('/api/place/posts/:id/like', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Toggle like error:', error);
         res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Track post view
+app.post('/api/place/posts/:id/view', authenticateToken, async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const userId = req.user.id;
+
+        // Check if already viewed by this user
+        const [existing] = await pool.execute(
+            'SELECT id FROM post_views WHERE post_id = ? AND user_id = ?',
+            [postId, userId]
+        );
+
+        if (existing.length === 0) {
+            // Insert new view record
+            await pool.execute(
+                'INSERT INTO post_views (id, post_id, user_id) VALUES (?, ?, ?)',
+                [uuidv4(), postId, userId]
+            );
+
+            // Increment views counter on post
+            await pool.execute(
+                'UPDATE posts SET views = IFNULL(views, 0) + 1 WHERE id = ?',
+                [postId]
+            );
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Track view error:', error);
+        res.json({ success: false }); // Don't fail silently
     }
 });
 
@@ -1438,6 +1528,38 @@ const optimizeDatabase = async () => {
         // Index for counting likes and comments faster
         try { await pool.execute('CREATE INDEX idx_post_likes_post_id ON post_likes(post_id)'); } catch (e) { }
         try { await pool.execute('CREATE INDEX idx_post_comments_post_id ON post_comments(post_id)'); } catch (e) { }
+
+        // Add views column to posts if not exists
+        try { await pool.execute('ALTER TABLE posts ADD COLUMN views INT DEFAULT 0'); } catch (e) { }
+
+        // Create post_views table for tracking unique views
+        try {
+            await pool.execute(`
+                CREATE TABLE IF NOT EXISTS post_views (
+                    id VARCHAR(36) PRIMARY KEY,
+                    post_id VARCHAR(36) NOT NULL,
+                    user_id VARCHAR(36) NOT NULL,
+                    viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_view (post_id, user_id),
+                    INDEX idx_post_views_post_id (post_id)
+                )
+            `);
+        } catch (e) { }
+
+        // Create post_tags table for tagging users in posts
+        try {
+            await pool.execute(`
+                CREATE TABLE IF NOT EXISTS post_tags (
+                    id VARCHAR(36) PRIMARY KEY,
+                    post_id VARCHAR(36) NOT NULL,
+                    user_id VARCHAR(36) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_tag (post_id, user_id),
+                    INDEX idx_post_tags_post_id (post_id),
+                    INDEX idx_post_tags_user_id (user_id)
+                )
+            `);
+        } catch (e) { }
 
         console.log('✅ Database indexes optimized for performance');
     } catch (error) {
