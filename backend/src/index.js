@@ -1131,7 +1131,8 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 opu.avatar as op_author_avatar,
                 -- Group Info
                 pg.id as group_id,
-                pg.name as group_name
+                pg.name as group_name,
+                pg.avatar as group_avatar
             FROM posts p
             JOIN users u ON p.user_id = u.id
             LEFT JOIN posts op ON p.original_post_id = op.id
@@ -1227,7 +1228,8 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 taggedUsers: [], // Will be populated below
                 group: p.group_id ? {
                     id: p.group_id,
-                    name: p.group_name
+                    name: p.group_name,
+                    avatar: fixImageUrl(p.group_avatar)
                 } : null
             };
         });

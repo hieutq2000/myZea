@@ -434,45 +434,95 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             }}
         >
             {/* Post Header */}
+            {/* Post Header */}
             <View style={styles.postHeader}>
-                <Image
-                    source={{ uri: item.author.avatar || `https://ui-avatars.com/api/?name=${item.author.name}` }}
-                    style={styles.postAvatar}
-                />
-                <View style={styles.postInfo}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Text style={styles.postAuthor}>{item.author.name}</Text>
-                        {item.group && (
-                            <>
-                                <Ionicons name="caret-forward" size={14} color="#666" style={{ marginHorizontal: 4 }} />
-                                <TouchableOpacity onPress={() => {/* TODO: Navigate to group */ }}>
-                                    <Text style={[styles.postAuthor, { color: '#1877F2' }]}>{item.group.name}</Text>
-                                </TouchableOpacity>
-                            </>
-                        )}
-                        {item.taggedUsers && item.taggedUsers.length > 0 && (
-                            <Text style={{ fontWeight: '400', color: '#333' }}>
-                                {' cùng với '}
-                                <Text style={{ fontWeight: '600' }}>{item.taggedUsers[0].name}</Text>
-                                {item.taggedUsers.length > 1 && (
-                                    <Text style={{ fontWeight: '400' }}>
-                                        {' và '}
-                                        <Text style={{ fontWeight: '600' }}>{item.taggedUsers.length - 1} người khác</Text>
+                {item.group ? (
+                    // GROUP POST HEADER STYLE
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        {/* Avatar Container for Group */}
+                        <View style={{ marginRight: 12 }}>
+                            {/* Group Avatar (Main) */}
+                            <TouchableOpacity onPress={() => {/* TODO: Navigate to group */ }}>
+                                <Image
+                                    source={{ uri: item.group.avatar || `https://ui-avatars.com/api/?name=${item.group.name}&rounded=true&background=random` }}
+                                    style={{ width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: '#eee' }}
+                                />
+                            </TouchableOpacity>
+                            {/* User Avatar (Small Overlay) */}
+                            <Image
+                                source={{ uri: item.author.avatar || `https://ui-avatars.com/api/?name=${item.author.name}` }}
+                                style={{
+                                    width: 20,
+                                    height: 20,
+                                    borderRadius: 10,
+                                    position: 'absolute',
+                                    bottom: -2,
+                                    right: -4,
+                                    borderWidth: 1.5,
+                                    borderColor: 'white'
+                                }}
+                            />
+                        </View>
+
+                        {/* Info Section */}
+                        <View style={{ flex: 1 }}>
+                            {/* Group Name */}
+                            <TouchableOpacity onPress={() => {/* TODO: Navigate to group */ }}>
+                                <Text style={[styles.postAuthor, { fontSize: 16 }]}>{item.group.name}</Text>
+                            </TouchableOpacity>
+
+                            {/* User Name & Time */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 1 }}>
+                                <Text style={{ fontSize: 12, color: '#65676B', fontWeight: '500' }}>
+                                    {item.author.name}
+                                </Text>
+                                <Text style={styles.dot}>•</Text>
+                                <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
+                                <Text style={styles.dot}>•</Text>
+                                <Ionicons name="earth" size={12} color="#65676B" />
+                            </View>
+                        </View>
+
+                        <TouchableOpacity style={styles.moreButton}>
+                            <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    // NORMAL POST HEADER STYLE
+                    <>
+                        <Image
+                            source={{ uri: item.author.avatar || `https://ui-avatars.com/api/?name=${item.author.name}` }}
+                            style={styles.postAvatar}
+                        />
+                        <View style={styles.postInfo}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <Text style={styles.postAuthor}>{item.author.name}</Text>
+                                {item.taggedUsers && item.taggedUsers.length > 0 && (
+                                    <Text style={{ fontWeight: '400', color: '#333' }}>
+                                        {' cùng với '}
+                                        <Text style={{ fontWeight: '600' }}>{item.taggedUsers[0].name}</Text>
+                                        {item.taggedUsers.length > 1 && (
+                                            <Text style={{ fontWeight: '400' }}>
+                                                {' và '}
+                                                <Text style={{ fontWeight: '600' }}>{item.taggedUsers.length - 1} người khác</Text>
+                                            </Text>
+                                        )}
                                     </Text>
                                 )}
-                            </Text>
-                        )}
-                    </View>
-                    <View style={styles.postMeta}>
-                        <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
-                        <Text style={styles.dot}>•</Text>
-                        <Ionicons name="earth" size={12} color="#666" />
-                    </View>
-                </View>
-                <TouchableOpacity>
-                    <Feather name="more-horizontal" size={20} color="#666" />
-                </TouchableOpacity>
+                            </View>
+                            <View style={styles.postMeta}>
+                                <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
+                                <Text style={styles.dot}>•</Text>
+                                <Ionicons name="earth" size={12} color="#666" />
+                            </View>
+                        </View>
+                        <TouchableOpacity style={styles.moreButton}>
+                            <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
+                        </TouchableOpacity>
+                    </>
+                )}
             </View>
+
 
             {/* Post Content */}
             <View style={styles.postContent}>
@@ -481,40 +531,42 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
             {/* Post Image/Video */}
             {/* Post Images Grid OR Shared Post Content */}
-            {item.originalPost ? (
-                // SHARED POST VIEW
-                <View style={styles.sharedContainer}>
-                    <View style={styles.sharedHeader}>
-                        <Image
-                            source={{ uri: item.originalPost.author.avatar || `https://ui-avatars.com/api/?name=${item.originalPost.author.name}` }}
-                            style={styles.sharedAvatar}
-                        />
-                        <View>
-                            <Text style={styles.sharedAuthor}>{item.originalPost.author.name}</Text>
-                            <Text style={styles.sharedTime}>{formatTime(item.originalPost.createdAt)}</Text>
+            {
+                item.originalPost ? (
+                    // SHARED POST VIEW
+                    <View style={styles.sharedContainer}>
+                        <View style={styles.sharedHeader}>
+                            <Image
+                                source={{ uri: item.originalPost.author.avatar || `https://ui-avatars.com/api/?name=${item.originalPost.author.name}` }}
+                                style={styles.sharedAvatar}
+                            />
+                            <View>
+                                <Text style={styles.sharedAuthor}>{item.originalPost.author.name}</Text>
+                                <Text style={styles.sharedTime}>{formatTime(item.originalPost.createdAt)}</Text>
+                            </View>
                         </View>
-                    </View>
-                    {item.originalPost.content ? <Text style={styles.sharedContent}>{item.originalPost.content}</Text> : null}
-                    {/* Reuse Grid for shared images */}
-                    <PhotoGrid
-                        images={item.originalPost.images && item.originalPost.images.length > 0 ? item.originalPost.images : (item.originalPost.image ? [item.originalPost.image] : [])}
-                        onPressImage={(index) => openImageViewer(item.originalPost!, index)}
-                    />
-                </View>
-            ) : (
-                // NORMAL POST VIEW
-                <View style={styles.postImagesContainer}>
-                    {/* Check if single video */}
-                    {(item.images?.length === 1 || (!item.images?.length && item.image)) && isVideo(item.images?.[0] || item.image || '') ? (
-                        <VideoPlayer source={getUri(item.images?.[0] || item.image)} style={{ width: '100%' }} />
-                    ) : (
+                        {item.originalPost.content ? <Text style={styles.sharedContent}>{item.originalPost.content}</Text> : null}
+                        {/* Reuse Grid for shared images */}
                         <PhotoGrid
-                            images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
-                            onPressImage={(index) => openImageViewer(item, index)}
+                            images={item.originalPost.images && item.originalPost.images.length > 0 ? item.originalPost.images : (item.originalPost.image ? [item.originalPost.image] : [])}
+                            onPressImage={(index) => openImageViewer(item.originalPost!, index)}
                         />
-                    )}
-                </View>
-            )}
+                    </View>
+                ) : (
+                    // NORMAL POST VIEW
+                    <View style={styles.postImagesContainer}>
+                        {/* Check if single video */}
+                        {(item.images?.length === 1 || (!item.images?.length && item.image)) && isVideo(item.images?.[0] || item.image || '') ? (
+                            <VideoPlayer source={getUri(item.images?.[0] || item.image)} style={{ width: '100%' }} />
+                        ) : (
+                            <PhotoGrid
+                                images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
+                                onPressImage={(index) => openImageViewer(item, index)}
+                            />
+                        )}
+                    </View>
+                )
+            }
 
             {/* Post Stats */}
             <View style={styles.postStats}>

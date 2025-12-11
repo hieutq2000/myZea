@@ -351,7 +351,7 @@ export interface Post {
     views: number;
     shares: number;
     taggedUsers?: { id: string; name: string; avatar?: string }[];
-    group?: { id: string; name: string };
+    group?: { id: string; name: string; avatar?: string };
 }
 
 export async function getPosts(page: number = 1, limit: number = 20): Promise<Post[]> {
