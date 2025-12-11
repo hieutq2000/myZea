@@ -94,6 +94,7 @@ async function initDatabase() {
             database: process.env.DB_NAME || 'vinalive_db',
             waitForConnections: true,
             connectionLimit: 10,
+            timezone: '+07:00', // Vietnam timezone
         });
 
         // Create tables if not exist
@@ -1203,7 +1204,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 image: images.length > 0 ? images[0] : null,
                 images: images,
                 originalPost: originalPost, // Attached Shared Post
-                createdAt: p.createdAt,
+                createdAt: new Date(p.createdAt).toISOString(),
                 likes: p.likes,
                 isLiked: p.isLiked > 0,
                 comments: p.comments,
@@ -1412,30 +1413,30 @@ app.post('/api/place/posts/:id/view', authenticateToken, async (req, res) => {
         const postId = req.params.id;
         const userId = req.user.id;
 
-        // Check if already viewed by this user
-        const [existing] = await pool.execute(
-            'SELECT id FROM post_views WHERE post_id = ? AND user_id = ?',
-            [postId, userId]
-        );
-
-        if (existing.length === 0) {
-            // Insert new view record
-            await pool.execute(
-                'INSERT INTO post_views (id, post_id, user_id) VALUES (?, ?, ?)',
-                [uuidv4(), postId, userId]
+        // Try to track view - silently fail if table doesn't exist
+        try {
+            // Check if already viewed by this user
+            const [existing] = await pool.execute(
+                'SELECT id FROM post_views WHERE post_id = ? AND user_id = ?',
+                [postId, userId]
             );
 
-            // Increment views counter on post
-            await pool.execute(
-                'UPDATE posts SET views = IFNULL(views, 0) + 1 WHERE id = ?',
-                [postId]
-            );
+            if (existing.length === 0) {
+                // Insert new view record
+                await pool.execute(
+                    'INSERT INTO post_views (id, post_id, user_id) VALUES (?, ?, ?)',
+                    [uuidv4(), postId, userId]
+                );
+            }
+        } catch (tableError) {
+            // Table might not exist yet - ignore
+            console.log('Track view skipped - table may not exist yet');
         }
 
         res.json({ success: true });
     } catch (error) {
         console.error('Track view error:', error);
-        res.json({ success: false }); // Don't fail silently
+        res.json({ success: true }); // Always return success to not break UX
     }
 });
 
@@ -1518,6 +1519,10 @@ app.post('/api/place/posts/:id/comments', authenticateToken, async (req, res) =>
 
 // Function to optimize database indexes
 const optimizeDatabase = async () => {
+    if (!pool) {
+        console.log('⚠️ Pool not initialized, skipping optimization');
+        return;
+    }
     try {
         // Index for sorting posts by date (Critical for Feed speed)
         try { await pool.execute('CREATE INDEX idx_posts_created_at ON posts(created_at DESC)'); } catch (e) { }
@@ -1544,7 +1549,10 @@ const optimizeDatabase = async () => {
                     INDEX idx_post_views_post_id (post_id)
                 )
             `);
-        } catch (e) { }
+            console.log('✅ post_views table created/exists');
+        } catch (e) {
+            console.error('❌ Failed to create post_views table:', e.message);
+        }
 
         // Create post_tags table for tagging users in posts
         try {
@@ -1559,7 +1567,10 @@ const optimizeDatabase = async () => {
                     INDEX idx_post_tags_user_id (user_id)
                 )
             `);
-        } catch (e) { }
+            console.log('✅ post_tags table created/exists');
+        } catch (e) {
+            console.error('❌ Failed to create post_tags table:', e.message);
+        }
 
         console.log('✅ Database indexes optimized for performance');
     } catch (error) {
@@ -1639,9 +1650,30 @@ app.get('/api/place/groups', authenticateToken, async (req, res) => {
         const pinnedGroups = groups.filter(g => g.isPinned);
         const myGroups = groups.filter(g => !g.isPinned);
 
+        // Get suggested groups (public groups user hasn't joined)
+        const [suggestedGroups] = await pool.execute(`
+            SELECT 
+                g.id,
+                g.name,
+                g.description,
+                g.avatar,
+                g.cover_image as coverImage,
+                g.privacy,
+                g.member_count as memberCount,
+                g.created_at as createdAt
+            FROM place_groups g
+            WHERE g.privacy = 'public'
+            AND g.id NOT IN (
+                SELECT group_id FROM place_group_members WHERE user_id = ?
+            )
+            ORDER BY g.member_count DESC
+            LIMIT 10
+        `, [userId]);
+
         res.json({
             pinned: pinnedGroups,
-            myGroups: myGroups
+            myGroups: myGroups,
+            suggested: suggestedGroups
         });
     } catch (error) {
         console.error('Get groups error:', error);

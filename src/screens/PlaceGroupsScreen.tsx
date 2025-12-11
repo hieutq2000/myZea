@@ -52,6 +52,7 @@ const getPrivacyLabel = (privacy: string): string => {
 export default function PlaceGroupsScreen({ onBack, onOpenGroup, onCreateGroup }: PlaceGroupsScreenProps) {
     const [pinnedGroups, setPinnedGroups] = useState<Group[]>([]);
     const [myGroups, setMyGroups] = useState<Group[]>([]);
+    const [suggestedGroups, setSuggestedGroups] = useState<Group[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isEditingPins, setIsEditingPins] = useState(false);
@@ -62,9 +63,10 @@ export default function PlaceGroupsScreen({ onBack, onOpenGroup, onCreateGroup }
 
     const loadGroups = async () => {
         try {
-            const data = await apiRequest<{ pinned: Group[]; myGroups: Group[] }>('/api/place/groups');
+            const data = await apiRequest<{ pinned: Group[]; myGroups: Group[]; suggested: Group[] }>('/api/place/groups');
             setPinnedGroups(data.pinned || []);
             setMyGroups(data.myGroups || []);
+            setSuggestedGroups(data.suggested || []);
         } catch (error) {
             console.error('Load groups error:', error);
         } finally {
@@ -209,6 +211,41 @@ export default function PlaceGroupsScreen({ onBack, onOpenGroup, onCreateGroup }
                                 </TouchableOpacity>
                             </View>
                         </View>
+                    )}
+                    ListFooterComponent={() => (
+                        suggestedGroups.length > 0 ? (
+                            <View>
+                                {/* Suggested Groups Section */}
+                                <View style={styles.sectionHeader}>
+                                    <Text style={styles.sectionTitle}>Nhóm gợi ý cho bạn</Text>
+                                    <TouchableOpacity>
+                                        <Text style={styles.seeAllButton}>Xem tất cả</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={styles.suggestedList}>
+                                    {suggestedGroups.map(group => (
+                                        <TouchableOpacity
+                                            key={group.id}
+                                            style={styles.suggestedItem}
+                                            onPress={() => onOpenGroup(group.id)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Image
+                                                source={{ uri: group.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(group.name)}&background=1877F2&color=fff&size=100` }}
+                                                style={styles.suggestedAvatar}
+                                            />
+                                            <View style={styles.suggestedInfo}>
+                                                <Text style={styles.suggestedName} numberOfLines={2}>{group.name}</Text>
+                                                <Text style={styles.suggestedMeta}>{formatMemberCount(group.memberCount)}</Text>
+                                            </View>
+                                            <TouchableOpacity style={styles.joinButton}>
+                                                <Text style={styles.joinButtonText}>Tham gia</Text>
+                                            </TouchableOpacity>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                        ) : null
                     )}
                     ListEmptyComponent={() => (
                         myGroups.length === 0 && pinnedGroups.length === 0 ? (
@@ -366,6 +403,53 @@ const styles = StyleSheet.create({
     createButtonText: {
         color: '#FFF',
         fontSize: 15,
+        fontWeight: '600',
+    },
+    seeAllButton: {
+        fontSize: 14,
+        color: '#1877F2',
+        fontWeight: '600',
+    },
+    suggestedList: {
+        backgroundColor: '#FFF',
+    },
+    suggestedItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+    },
+    suggestedAvatar: {
+        width: 70,
+        height: 70,
+        borderRadius: 12,
+        marginRight: 12,
+    },
+    suggestedInfo: {
+        flex: 1,
+    },
+    suggestedName: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 4,
+    },
+    suggestedMeta: {
+        fontSize: 13,
+        color: '#666',
+    },
+    joinButton: {
+        backgroundColor: '#E7F3FF',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 6,
+    },
+    joinButtonText: {
+        color: '#1877F2',
+        fontSize: 14,
         fontWeight: '600',
     },
 });

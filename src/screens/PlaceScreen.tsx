@@ -40,14 +40,23 @@ const { width } = Dimensions.get('window');
 
 // --- Helper Date ---
 const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
+    if (!dateString) return '';
+
+    // Parse the date from server (could be UTC or local depending on server config)
+    let date = new Date(dateString);
+
+    // If the date string doesn't have timezone info, MySQL returns local time
+    // So we don't need to adjust, just compare with local now
     const now = new Date();
     const diff = (now.getTime() - date.getTime()) / 1000; // seconds
+
+    // Handle negative diff (future dates, likely timezone issue)
+    if (diff < 0) return 'Vừa xong';
+
     if (diff < 60) return 'Vừa xong';
     if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
     if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-    return date.toLocaleDateString('vi-VN');
-    return date.toLocaleDateString('vi-VN');
+    if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`; // 7 days
     return date.toLocaleDateString('vi-VN');
 };
 
@@ -641,7 +650,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.modalBody}>
+                        <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
                             <View style={styles.modalUserRow}>
                                 <Image
                                     source={{ uri: user?.avatar || `https://ui-avatars.com/api/?name=${user?.name || 'User'}` }}
@@ -705,7 +714,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
                             {/* Tagged Users Display */}
                             {taggedUsers.length > 0 && (
-                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 8 }}>
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 8, marginBottom: 20 }}>
                                     {taggedUsers.map(user => (
                                         <View key={user.id} style={{
                                             flexDirection: 'row',
@@ -727,7 +736,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                     ))}
                                 </View>
                             )}
-                        </View>
+                        </ScrollView>
 
                         {/* Modal Footer - Actions */}
                         <View style={styles.modalFooter}>
@@ -735,7 +744,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                 <Ionicons name="image-outline" size={24} color="#45BD62" />
                                 <Text style={styles.footerButtonText}>Ảnh/Video</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.footerButton} onPress={() => setTagModalVisible(true)}>
+                            <TouchableOpacity style={styles.footerButton} onPress={() => {
+                                setPostModalVisible(false);
+                                setTimeout(() => setTagModalVisible(true), 100);
+                            }}>
                                 <Ionicons name="person-add-outline" size={24} color="#1877F2" />
                                 <Text style={styles.footerButtonText}>Gắn thẻ</Text>
                             </TouchableOpacity>
@@ -753,16 +765,25 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 visible={isTagModalVisible}
                 animationType="slide"
                 transparent={true}
-                onRequestClose={() => setTagModalVisible(false)}
+                onRequestClose={() => {
+                    setTagModalVisible(false);
+                    setTimeout(() => setPostModalVisible(true), 100);
+                }}
             >
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '80%' }]}>
                         <View style={styles.modalHeader}>
-                            <TouchableOpacity onPress={() => setTagModalVisible(false)}>
+                            <TouchableOpacity onPress={() => {
+                                setTagModalVisible(false);
+                                setTimeout(() => setPostModalVisible(true), 100);
+                            }}>
                                 <Ionicons name="arrow-back" size={24} color="#333" />
                             </TouchableOpacity>
                             <Text style={styles.modalTitle}>Gắn thẻ người khác</Text>
-                            <TouchableOpacity onPress={() => setTagModalVisible(false)}>
+                            <TouchableOpacity onPress={() => {
+                                setTagModalVisible(false);
+                                setTimeout(() => setPostModalVisible(true), 100);
+                            }}>
                                 <Text style={{ color: '#1877F2', fontWeight: '600' }}>Xong</Text>
                             </TouchableOpacity>
                         </View>

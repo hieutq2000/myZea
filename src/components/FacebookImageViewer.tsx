@@ -11,10 +11,16 @@ import {
     FlatList,
     StatusBar,
     SafeAreaView,
+    Alert,
+    Share,
+    ActionSheetIOS,
 } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Post } from '../utils/api';
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
+import * as Clipboard from 'expo-clipboard';
 
 const { width, height } = Dimensions.get('window');
 
@@ -38,6 +44,7 @@ export default function FacebookImageViewer({
     onComment,
 }: FacebookImageViewerProps) {
     const [currentIndex, setCurrentIndex] = useState(imageIndex);
+    const [isMenuVisible, setMenuVisible] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
     // Reset index when opening
@@ -57,6 +64,70 @@ export default function FacebookImageViewer({
     }).current;
 
     const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+
+    // Save image to gallery
+    const handleSaveImage = async () => {
+        try {
+            const { status } = await MediaLibrary.requestPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Quyền bị từ chối', 'Cần quyền truy cập thư viện để lưu ảnh.');
+                return;
+            }
+
+            const imageUrl = images[currentIndex];
+            const filename = `image_${Date.now()}.jpg`;
+            const fileUri = FileSystem.documentDirectory + filename;
+
+            const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
+            await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+
+            Alert.alert('Thành công', 'Đã lưu ảnh vào thư viện!');
+        } catch (error) {
+            console.error('Save image error:', error);
+            Alert.alert('Lỗi', 'Không thể lưu ảnh.');
+        }
+        setMenuVisible(false);
+    };
+
+    // Share image
+    const handleShareImage = async () => {
+        try {
+            const imageUrl = images[currentIndex];
+            await Share.share({
+                message: post.content || 'Xem ảnh này!',
+                url: imageUrl,
+            });
+        } catch (error) {
+            console.error('Share error:', error);
+        }
+        setMenuVisible(false);
+    };
+
+    // Copy link
+    const handleCopyLink = async () => {
+        try {
+            const imageUrl = images[currentIndex];
+            await Clipboard.setStringAsync(imageUrl);
+            Alert.alert('Đã sao chép', 'Liên kết ảnh đã được sao chép!');
+        } catch (error) {
+            console.error('Copy error:', error);
+        }
+        setMenuVisible(false);
+    };
+
+    // Show menu
+    const handleShowMenu = () => {
+        setMenuVisible(true);
+    };
+
+    const renderMenuItem = (icon: any, label: string, onPress: () => void, isDestructive = false) => (
+        <TouchableOpacity style={styles.menuItem} onPress={onPress}>
+            <View style={styles.menuIconContainer}>
+                <Ionicons name={icon} size={24} color={isDestructive ? "#000" : "#000"} />
+            </View>
+            <Text style={styles.menuItemText}>{label}</Text>
+        </TouchableOpacity>
+    );
 
     const renderImage = ({ item }: { item: string }) => (
         <View style={styles.imageContainer}>
@@ -89,10 +160,39 @@ export default function FacebookImageViewer({
                             {currentIndex + 1} / {images.length}
                         </Text>
                     )}
-                    <TouchableOpacity style={styles.menuButton}>
+                    <TouchableOpacity style={styles.menuButton} onPress={handleShowMenu}>
                         <Ionicons name="ellipsis-horizontal" size={24} color="white" />
                     </TouchableOpacity>
                 </SafeAreaView>
+
+                {/* Custom Bottom Sheet Menu */}
+                <Modal
+                    visible={isMenuVisible}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setMenuVisible(false)}
+                >
+                    <TouchableOpacity
+                        style={styles.menuOverlay}
+                        activeOpacity={1}
+                        onPress={() => setMenuVisible(false)}
+                    >
+                        <View style={styles.menuBottomSheet}>
+                            <View style={styles.menuHandle} />
+
+                            <View style={styles.menuContent}>
+                                {renderMenuItem("link-outline", "Sao chép liên kết", handleCopyLink)}
+                                {renderMenuItem("download-outline", "Tải ảnh", handleSaveImage)}
+                                {renderMenuItem("time-outline", "Xem lịch sử chỉnh sửa", () => setMenuVisible(false))}
+                                {renderMenuItem("notifications-outline", "Bật thông báo về bài viết này", () => setMenuVisible(false))}
+                                {renderMenuItem("alert-circle-outline", "Báo cáo bài viết", () => setMenuVisible(false))}
+                                {renderMenuItem("close-circle-outline", "Ẩn bài viết", () => setMenuVisible(false))}
+                                {renderMenuItem("time-outline", `Tạm thời ẩn ${post.author.name} trong 30 ngày`, () => setMenuVisible(false))}
+                                {renderMenuItem("remove-circle-outline", `Ẩn tất cả từ ${post.author.name}`, () => setMenuVisible(false))}
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                </Modal>
 
                 {/* Image Gallery */}
                 <FlatList
@@ -197,6 +297,49 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 16,
         fontWeight: '600',
+    },
+    menuOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    menuBottomSheet: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
+        paddingBottom: 30,
+        maxHeight: '80%',
+    },
+    menuHandle: {
+        width: 40,
+        height: 5,
+        backgroundColor: '#E0E0E0',
+        borderRadius: 3,
+        alignSelf: 'center',
+        marginTop: 10,
+        marginBottom: 10,
+    },
+    menuContent: {
+        paddingHorizontal: 16,
+    },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+    },
+    menuIconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#F0F2F5', // Light gray background for icon
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    menuItemText: {
+        fontSize: 16,
+        color: '#050505',
+        fontWeight: '500',
     },
     imageContainer: {
         width: width,
