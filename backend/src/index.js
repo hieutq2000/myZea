@@ -1070,7 +1070,13 @@ app.post('/api/upload/image', upload.single('image'), (req, res) => {
         try {
             // Only calculate for images, not videos
             if (req.file.mimetype.startsWith('image/')) {
-                dimensions = sizeOf(req.file.path);
+                // Try catch for image size calculation
+                try {
+                    const dimensionsResult = sizeOf(req.file.path);
+                    dimensions = dimensionsResult;
+                } catch (e) {
+                    console.log('Size calculation failed', e);
+                }
             }
         } catch (err) {
             console.error('Error calculating image size:', err);
@@ -1095,7 +1101,11 @@ app.post('/api/upload/image', upload.single('image'), (req, res) => {
 // Get posts
 app.get('/api/place/posts', authenticateToken, async (req, res) => {
     try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const offset = (page - 1) * limit;
         const userId = req.user.id;
+
         const [posts] = await pool.execute(`
             SELECT 
                 p.id, 
@@ -1118,14 +1128,18 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 op.created_at as op_createdAt,
                 opu.id as op_author_id,
                 opu.name as op_author_name,
-                opu.avatar as op_author_avatar
+                opu.avatar as op_author_avatar,
+                -- Group Info
+                pg.id as group_id,
+                pg.name as group_name
             FROM posts p
             JOIN users u ON p.user_id = u.id
             LEFT JOIN posts op ON p.original_post_id = op.id
             LEFT JOIN users opu ON op.user_id = opu.id
+            LEFT JOIN place_groups pg ON p.group_id = pg.id
             ORDER BY p.created_at DESC
-            LIMIT 50
-        `, [userId]);
+            LIMIT ? OFFSET ?
+        `, [userId, limit.toString(), offset.toString()]);
 
         // Helper to fix localhost URLs to actual IP
         const fixImageUrl = (url) => {
@@ -1210,7 +1224,11 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 comments: p.comments,
                 views: p.views || 0,
                 shares: 0,
-                taggedUsers: [] // Will be populated below
+                taggedUsers: [], // Will be populated below
+                group: p.group_id ? {
+                    id: p.group_id,
+                    name: p.group_name
+                } : null
             };
         });
 
@@ -1617,6 +1635,26 @@ const initGroupsTables = async () => {
             await pool.execute('ALTER TABLE posts ADD COLUMN group_id VARCHAR(36) NULL');
         } catch (e) { /* Column exists */ }
 
+        // Add original_post_id to posts if not exists (for sharing)
+        try {
+            await pool.execute('ALTER TABLE posts ADD COLUMN original_post_id VARCHAR(36) NULL');
+        } catch (e) { /* Column exists */ }
+
+        // Create post_comments table if not exists
+        try {
+            await pool.execute(`
+                CREATE TABLE IF NOT EXISTS post_comments (
+                    id VARCHAR(36) PRIMARY KEY,
+                    post_id VARCHAR(36) NOT NULL,
+                    user_id VARCHAR(36) NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+            `);
+        } catch (e) { console.error('Create post_comments error', e); }
+
         console.log('✅ Groups tables initialized');
     } catch (error) {
         console.error('Groups tables init error:', error);
@@ -1934,8 +1972,8 @@ app.post('/api/place/groups/:id/posts', authenticateToken, async (req, res) => {
         const userId = req.user.id;
         const { content, images } = req.body;
 
-        if (!content || content.trim().length === 0) {
-            return res.status(400).json({ error: 'Nội dung không được để trống' });
+        if ((!content || content.trim().length === 0) && (!images || !Array.isArray(images) || images.length === 0)) {
+            return res.status(400).json({ error: 'Nội dung hoặc hình ảnh không được để trống' });
         }
 
         const postId = uuidv4();

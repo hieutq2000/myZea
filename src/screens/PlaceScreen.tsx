@@ -156,26 +156,62 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     const [tagSearchQuery, setTagSearchQuery] = useState('');
     const [tagSearchResults, setTagSearchResults] = useState<{ id: string; name: string; avatar?: string }[]>([]);
 
+    // Pagination State
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+
     useEffect(() => {
-        loadPosts();
+        loadPosts(1);
     }, []);
 
-    const loadPosts = async () => {
-        setIsLoading(true);
+    const loadPosts = async (pageNum: number = 1) => {
+        if (pageNum === 1) setIsLoading(true);
+        else setIsLoadingMore(true);
+
         try {
-            const data = await getPosts();
-            setPosts(data);
+            const data = await getPosts(pageNum, 10); // Limit 10 posts per page
+
+            if (data.length < 10) {
+                setHasMore(false);
+            } else {
+                setHasMore(true);
+            }
+
+            if (pageNum === 1) {
+                setPosts(data);
+            } else {
+                setPosts(prev => [...prev, ...data]);
+            }
+            setPage(pageNum);
         } catch (error) {
             console.error(error);
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
+            setIsLoadingMore(false);
         }
     };
 
     const handleRefresh = () => {
         setIsRefreshing(true);
-        loadPosts();
+        // Reset scrolling state potentially?
+        setHasMore(true);
+        loadPosts(1);
+    };
+
+    const handleLoadMore = () => {
+        if (!hasMore || isLoadingMore || isLoading) return;
+        loadPosts(page + 1);
+    };
+
+    const renderFooter = () => {
+        if (!isLoadingMore) return <View style={{ height: 20 }} />;
+        return (
+            <View style={{ paddingVertical: 20 }}>
+                <ActivityIndicator size="small" color="#666" />
+            </View>
+        );
     };
 
     const handlePickImage = async () => {
@@ -404,8 +440,16 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     style={styles.postAvatar}
                 />
                 <View style={styles.postInfo}>
-                    <Text style={styles.postAuthor}>
-                        {item.author.name}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Text style={styles.postAuthor}>{item.author.name}</Text>
+                        {item.group && (
+                            <>
+                                <Ionicons name="caret-forward" size={14} color="#666" style={{ marginHorizontal: 4 }} />
+                                <TouchableOpacity onPress={() => {/* TODO: Navigate to group */ }}>
+                                    <Text style={[styles.postAuthor, { color: '#1877F2' }]}>{item.group.name}</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
                         {item.taggedUsers && item.taggedUsers.length > 0 && (
                             <Text style={{ fontWeight: '400', color: '#333' }}>
                                 {' cùng với '}
@@ -418,7 +462,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                 )}
                             </Text>
                         )}
-                    </Text>
+                    </View>
                     <View style={styles.postMeta}>
                         <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
                         <Text style={styles.dot}>•</Text>
@@ -585,6 +629,9 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 maxToRenderPerBatch={5}
                 windowSize={5}
                 showsVerticalScrollIndicator={false}
+                onEndReached={handleLoadMore}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={renderFooter}
                 ListEmptyComponent={() => (
                     <View style={{ padding: 20, alignItems: 'center' }}>
                         {isLoading ? <ActivityIndicator color="#0068FF" /> : <Text style={{ color: '#666' }}>Chưa có bài viết nào</Text>}

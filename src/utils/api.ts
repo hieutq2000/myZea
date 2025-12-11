@@ -351,10 +351,11 @@ export interface Post {
     views: number;
     shares: number;
     taggedUsers?: { id: string; name: string; avatar?: string }[];
+    group?: { id: string; name: string };
 }
 
-export async function getPosts(): Promise<Post[]> {
-    return apiRequest<Post[]>('/api/place/posts');
+export async function getPosts(page: number = 1, limit: number = 20): Promise<Post[]> {
+    return apiRequest<Post[]>(`/api/place/posts?page=${page}&limit=${limit}`);
 }
 
 // Track post view (call when user sees a post in feed)
