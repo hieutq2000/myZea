@@ -450,6 +450,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             </View>
         );
     }
+
+    return renderWelcome();
 }
 
 const styles = StyleSheet.create({
@@ -615,11 +617,6 @@ const styles = StyleSheet.create({
     },
     sliderContainer: {
         height: Dimensions.get('window').height * 0.65, // Match topSection height logic
-        position: 'relative',
-        zIndex: 1,
-    },
-    sliderContainer: {
-        height: Dimensions.get('window').height * 0.65,
         position: 'relative',
         zIndex: 1,
     },
