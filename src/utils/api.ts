@@ -411,4 +411,15 @@ export async function createGroup(params: CreateGroupParams): Promise<any> {
     });
 }
 
+export async function createGroupPost(
+    groupId: string,
+    content: string,
+    images?: (string | ImageObj)[]
+): Promise<Post> {
+    return apiRequest<Post>(`/api/place/groups/${groupId}/posts`, {
+        method: 'POST',
+        body: JSON.stringify({ content, images }),
+    });
+}
+
 

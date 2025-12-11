@@ -17,6 +17,7 @@ import {
     ScrollView,
     Platform,
     Share,
+    KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -621,7 +622,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 }}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                    <KeyboardAvoidingView
+                        style={styles.modalContent}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    >
                         <View style={styles.modalHeader}>
                             <TouchableOpacity onPress={() => {
                                 // Show confirmation if there's content
@@ -657,7 +661,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                        <ScrollView style={[styles.modalBody, { flex: 1 }]} showsVerticalScrollIndicator={false}>
                             <View style={styles.modalUserRow}>
                                 <Image
                                     source={{ uri: user?.avatar || `https://ui-avatars.com/api/?name=${user?.name || 'User'}` }}
@@ -763,19 +767,20 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                 <Text style={styles.footerButtonText}>Cảm xúc</Text>
                             </TouchableOpacity>
                         </View>
-                    </View>
+                    </KeyboardAvoidingView>
                 </View>
-            </Modal>
+            </Modal >
 
             {/* Tag People Modal */}
-            <Modal
+            < Modal
                 visible={isTagModalVisible}
                 animationType="slide"
                 transparent={true}
                 onRequestClose={() => {
                     setTagModalVisible(false);
                     setTimeout(() => setPostModalVisible(true), 100);
-                }}
+                }
+                }
             >
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: '80%' }]}>
@@ -865,7 +870,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         </ScrollView>
                     </View>
                 </View>
-            </Modal>
+            </Modal >
 
 
             {selectedPost && (
@@ -912,7 +917,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     }
                 }}
             />
-        </View>
+        </View >
     );
 
     // Render Notifications Screen if tab is NOTIFICATIONS

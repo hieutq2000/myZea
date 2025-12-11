@@ -14,16 +14,24 @@ import {
     TextInput,
     Alert,
     ScrollView,
+    Modal,
+    KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { apiRequest } from '../utils/api';
+import { apiRequest, createGroupPost, uploadImage, getCurrentUser, Post } from '../utils/api';
+import { launchImageLibrary } from '../utils/imagePicker';
 import InAppBrowser from '../components/InAppBrowser';
 import TextWithSeeMore from '../components/TextWithSeeMore';
 import VideoPlayer from '../components/VideoPlayer';
 
-const isVideo = (url: string) => {
-    return url?.match(/\.(mp4|mov|avi|wmv|flv|webm|m4v|3gp)$/i);
+const isVideo = (url: string | any) => {
+    const uri = typeof url === 'string' ? url : url?.uri;
+    return uri?.match(/\.(mp4|mov|avi|wmv|flv|webm|m4v|3gp)$/i);
+};
+
+const getUri = (img: string | any): string => {
+    if (!img) return '';
+    return typeof img === 'string' ? img : img.uri;
 };
 
 interface GroupDetail {
@@ -38,17 +46,6 @@ interface GroupDetail {
     myRole?: string;
     isPinned: boolean;
     previewMembers: Array<{ id: string; name: string; avatar?: string }>;
-}
-
-interface Post {
-    id: string;
-    author: { id: string; name: string; avatar?: string };
-    content: string;
-    images?: string[];
-    createdAt: string;
-    likes: number;
-    comments: number;
-    isLiked: boolean;
 }
 
 interface PlaceGroupDetailScreenProps {
@@ -90,14 +87,66 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
     const [browserUrl, setBrowserUrl] = useState<string | null>(null);
     const [isBrowserVisible, setBrowserVisible] = useState(false);
 
+    // Post Creation State
+    const [isPostModalVisible, setPostModalVisible] = useState(false);
+    const [newPostContent, setNewPostContent] = useState('');
+    const [newPostImages, setNewPostImages] = useState<string[]>([]);
+    const [isPosting, setIsPosting] = useState(false);
+    const [currentUser, setCurrentUser] = useState<any>(null);
+
     const openLink = (url: string) => {
         setBrowserUrl(url);
         setBrowserVisible(true);
     };
 
     useEffect(() => {
+        fetchCurrentUser();
         loadGroupData();
     }, [groupId]);
+
+    const fetchCurrentUser = async () => {
+        const user = await getCurrentUser();
+        setCurrentUser(user);
+    };
+
+    const handlePickImage = async () => {
+        const result = await launchImageLibrary({ mediaType: 'mixed', quality: 0.8, selectionLimit: 10 });
+        if (!result.didCancel && !result.error && result.assets) {
+            const uris = result.assets.map((a: any) => a.uri);
+            setNewPostImages(prev => [...prev, ...uris]);
+        }
+    };
+
+    const handleCreatePost = async () => {
+        if (!newPostContent.trim() && newPostImages.length === 0) return;
+        setIsPosting(true);
+        try {
+            const uploadedImages: any[] = [];
+            for (const imgUri of newPostImages) {
+                const result = await uploadImage(imgUri);
+                uploadedImages.push({
+                    uri: result.url,
+                    width: result.width,
+                    height: result.height
+                });
+            }
+
+            const newPost = await createGroupPost(groupId, newPostContent, uploadedImages);
+
+            // Add to top of list
+            setPosts([newPost, ...posts]);
+
+            // Reset and close
+            setNewPostContent('');
+            setNewPostImages([]);
+            setPostModalVisible(false);
+        } catch (error) {
+            console.error('Create group post error:', error);
+            Alert.alert('Lỗi', 'Không thể đăng bài viết');
+        } finally {
+            setIsPosting(false);
+        }
+    };
 
     const loadGroupData = async () => {
         try {
@@ -162,9 +211,9 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                 {
                     item.images && item.images.length > 0 && (
                         (isVideo(item.images[0])) ? (
-                            <VideoPlayer source={item.images[0]} style={{ width: '100%', height: 350, marginTop: 8 }} />
+                            <VideoPlayer source={getUri(item.images[0])} style={{ width: '100%', height: 350, marginTop: 8 }} />
                         ) : (
-                            <Image source={{ uri: item.images[0] }} style={styles.postImage} resizeMode="cover" />
+                            <Image source={{ uri: getUri(item.images[0]) }} style={styles.postImage} resizeMode="cover" />
                         )
                     )
                 }
@@ -313,21 +362,23 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                         </View>
 
                         {/* Composer */}
-                        <View style={styles.composer}>
-                            <TextInput
-                                style={styles.composerInput}
-                                placeholder="Bạn đang nghĩ gì?"
-                                placeholderTextColor="#999"
-                            />
+                        <TouchableOpacity
+                            style={styles.composer}
+                            activeOpacity={0.9}
+                            onPress={() => setPostModalVisible(true)}
+                        >
+                            <View style={[styles.composerInput, { justifyContent: 'center' }]}>
+                                <Text style={{ color: '#999' }}>Bạn đang nghĩ gì?</Text>
+                            </View>
                             <View style={styles.composerActions}>
                                 <TouchableOpacity style={styles.composerAction}>
                                     <MaterialCommunityIcons name="poll" size={22} color="#666" />
                                 </TouchableOpacity>
-                                <TouchableOpacity style={styles.composerAction}>
+                                <TouchableOpacity style={styles.composerAction} onPress={handlePickImage}>
                                     <Ionicons name="image-outline" size={22} color="#666" />
                                 </TouchableOpacity>
                             </View>
-                        </View>
+                        </TouchableOpacity>
 
                         {/* Section Header */}
                         <View style={styles.sectionHeader}>
@@ -347,6 +398,116 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                 url={browserUrl}
                 onClose={() => setBrowserVisible(false)}
             />
+
+            {/* Create Post Modal */}
+            <Modal
+                visible={isPostModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setPostModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <KeyboardAvoidingView
+                        style={styles.modalContent}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    >
+                        <View style={styles.modalHeader}>
+                            <TouchableOpacity onPress={() => setPostModalVisible(false)}>
+                                <Ionicons name="arrow-back" size={24} color="#333" />
+                            </TouchableOpacity>
+                            <Text style={styles.modalTitle}>Tạo bài viết</Text>
+                            <TouchableOpacity
+                                onPress={handleCreatePost}
+                                disabled={isPosting || (!newPostContent.trim() && newPostImages.length === 0)}
+                                style={[styles.postButton, (!newPostContent.trim() && newPostImages.length === 0 || isPosting) && styles.postButtonDisabled]}
+                            >
+                                {isPosting ? <ActivityIndicator color="white" size="small" /> : <Text style={styles.postButtonText}>Đăng</Text>}
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={[styles.modalBody, { flex: 1 }]} showsVerticalScrollIndicator={false}>
+                            <View style={styles.modalUserRow}>
+                                <Image
+                                    source={{ uri: currentUser?.avatar || `https://ui-avatars.com/api/?name=${currentUser?.name || 'User'}` }}
+                                    style={styles.postAvatar}
+                                />
+                                <View>
+                                    <Text style={styles.postAuthor}>{currentUser?.name}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                        <Text style={{ fontSize: 12, color: '#666' }}>Thành viên của </Text>
+                                        <Text style={{ fontSize: 12, fontWeight: 'bold' }}>{group?.name}</Text>
+                                    </View>
+                                </View>
+                            </View>
+                            <TextInput
+                                style={styles.modalInput}
+                                placeholder="Bạn đang nghĩ gì?"
+                                multiline
+                                autoFocus
+                                value={newPostContent}
+                                onChangeText={setNewPostContent}
+                            />
+
+                            {/* Image Preview Grid */}
+                            {newPostImages.length > 0 && (
+                                <View style={{
+                                    flexDirection: 'row',
+                                    flexWrap: 'wrap',
+                                    marginTop: 12,
+                                    gap: 8,
+                                }}>
+                                    {newPostImages.map((uri, index) => (
+                                        <View key={index} style={{
+                                            width: newPostImages.length === 1 ? '100%' : '48%',
+                                            aspectRatio: newPostImages.length === 1 ? 16 / 9 : 1,
+                                            borderRadius: 8,
+                                            overflow: 'hidden',
+                                            position: 'relative',
+                                        }}>
+                                            {isVideo(uri) ? (
+                                                <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Ionicons name="videocam" size={32} color="white" />
+                                                    <Text style={{ color: 'white', marginTop: 4, fontSize: 12 }}>Video</Text>
+                                                </View>
+                                            ) : (
+                                                <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                            )}
+                                            <TouchableOpacity
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 6,
+                                                    right: 6,
+                                                    backgroundColor: 'rgba(0,0,0,0.6)',
+                                                    borderRadius: 12,
+                                                    width: 24,
+                                                    height: 24,
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
+                                                }}
+                                                onPress={() => setNewPostImages(prev => prev.filter((_, i) => i !== index))}
+                                            >
+                                                <Ionicons name="close" size={16} color="white" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </ScrollView>
+
+                        {/* Modal Footer - Actions */}
+                        <View style={styles.modalFooter}>
+                            <TouchableOpacity style={styles.footerButton} onPress={handlePickImage}>
+                                <Ionicons name="image-outline" size={24} color="#45BD62" />
+                                <Text style={styles.footerButtonText}>Ảnh/Video</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.footerButton}>
+                                <Ionicons name="happy-outline" size={24} color="#F7B928" />
+                                <Text style={styles.footerButtonText}>Cảm xúc</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -625,5 +786,74 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#999',
         marginTop: 12,
+    },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        height: '90%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    modalBody: {
+        padding: 16,
+    },
+    modalUserRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    modalInput: {
+        fontSize: 18,
+        color: '#333',
+        minHeight: 100,
+        textAlignVertical: 'top',
+    },
+    modalFooter: {
+        flexDirection: 'row',
+        padding: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#eee',
+    },
+    footerButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 20,
+        padding: 8,
+    },
+    footerButtonText: {
+        marginLeft: 8,
+        color: '#333',
+        fontWeight: '500',
+    },
+    postButton: {
+        backgroundColor: '#F97316',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    postButtonDisabled: {
+        backgroundColor: '#B0B0B0',
+    },
+    postButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
     },
 });
