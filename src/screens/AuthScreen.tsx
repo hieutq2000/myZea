@@ -217,11 +217,15 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             {/* Top Blue Section */}
             <View style={styles.topSection}>
                 <LinearGradient
-                    colors={['#5B6BE6', '#4F46E5']}
+                    colors={['#1a45a0', '#0d2860']} // Darker blue gradient like FPT style
                     style={StyleSheet.absoluteFill}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                 />
+
+                {/* Background Pattern (Optional opacity circles) */}
+                <View style={[styles.bgCircle, { top: -50, right: -50, width: 200, height: 200 }]} />
+                <View style={[styles.bgCircle, { top: 100, left: -20, width: 100, height: 100 }]} />
 
                 <SafeAreaView style={{ flex: 1 }}>
                     <View style={styles.headerTextContainer}>
@@ -231,31 +235,36 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         </Text>
                     </View>
                 </SafeAreaView>
+            </View>
 
-                {/* Team Image */}
-                <View style={styles.teamImageContainer}>
-                    <Image
-                        source={{ uri: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&q=80' }}
-                        style={styles.teamImage}
-                        resizeMode="cover"
-                    />
-                </View>
+            {/* Curved Separator */}
+            <View style={styles.curveSeparator} />
+
+            {/* Team Image - Overlapping Top and Bottom */}
+            <View style={styles.teamImageContainer}>
+                <Image
+                    // Placeholder for business couple
+                    source={{ uri: 'https://png.pngtree.com/png-vector/20230906/ourmid/pngtree-business-man-and-woman-png-image_9962291.png' }}
+                    style={styles.teamImage}
+                    resizeMode="contain"
+                />
             </View>
 
             {/* Bottom Black Section */}
             <View style={styles.bottomSection}>
-
                 <View style={styles.bottomContent}>
-                    {/* myZyea Logo */}
-                    <View style={styles.wLogoRow}>
-                        <View style={styles.zyeaLogoContainer}>
-                            <Text style={styles.zyeaMy}>my</Text>
-                            <Text style={styles.zyeaName}>Zyea</Text>
+                    {/* myZyea Logo (Old FPT place) */}
+                    <View style={styles.logoContainer}>
+                        {/* Mimic FPT 3-color logo shape with simple blocks or just text */}
+                        <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+                            <Text style={{ fontSize: 36, fontWeight: '900', color: '#F27125' }}>my</Text>
+                            <Text style={{ fontSize: 36, fontWeight: '900', color: '#27A844' }}>Z</Text>
+                            <Text style={{ fontSize: 36, fontWeight: '900', color: '#1a45a0' }}>yea</Text>
                         </View>
                     </View>
 
                     <Text style={styles.wWelcomeText}>Chào mừng bạn !</Text>
-                    <Text style={styles.wInstructionText}>Vui lòng nhập email để đăng nhập myZyea</Text>
+                    <Text style={styles.wInstructionText}>Vui lòng nhập email để đăng nhập MyZyea Chat</Text>
 
                     <TouchableOpacity
                         style={styles.wLoginButton}
@@ -605,118 +614,105 @@ const styles = StyleSheet.create({
         color: COLORS.primary,
         fontWeight: 'bold',
     },
-    // Welcome Screen Styles
+
+    // ================= NEW STYLE =================
     welcomeContainer: {
         flex: 1,
-        backgroundColor: '#5B6BE6', // Match topSection gradient color
+        backgroundColor: '#121212', // Black background base
     },
     topSection: {
-        height: Dimensions.get('window').height * 0.60,
+        height: Dimensions.get('window').height * 0.65, // Increased height for blue part
         position: 'relative',
         zIndex: 1,
+        overflow: 'hidden', // Contain the circles
+    },
+    bgCircle: {
+        position: 'absolute',
+        borderRadius: 999,
+        backgroundColor: 'rgba(255,255,255,0.05)',
     },
     headerTextContainer: {
-        paddingHorizontal: 24,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 20 : 60,
+        paddingHorizontal: 30,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 40 : 80,
         alignItems: 'center',
     },
     wBrandTitle: {
-        fontSize: 24,
+        fontSize: 26,
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 8,
-        letterSpacing: 1,
+        marginBottom: 12,
+        letterSpacing: 0.5,
     },
     wSlogan: {
         fontSize: 13,
-        color: 'rgba(255,255,255,0.9)',
+        color: 'rgba(255,255,255,0.8)',
         textAlign: 'center',
-        paddingHorizontal: 40,
-        lineHeight: 18,
+        paddingHorizontal: 20,
+        lineHeight: 20,
+        fontWeight: '300',
     },
+
+    // The trick for S-Curve: A rotated black view overlapping the blue
+    curveSeparator: {
+        position: 'absolute',
+        top: Dimensions.get('window').height * 0.55, // Adjust this to move curve up/down
+        left: '-10%',
+        width: '120%',
+        height: 200,
+        backgroundColor: '#121212', // Match bottom background
+        transform: [{ rotate: '-8deg' }], // Slight tilt
+        zIndex: 2,
+        borderRadius: 80, // Soften edges
+    },
+
     teamImageContainer: {
         position: 'absolute',
-        bottom: 30,
-        left: 0,
-        right: 0,
+        top: Dimensions.get('window').height * 0.28, // Position image
+        width: '100%',
         alignItems: 'center',
-        zIndex: 10,
+        zIndex: 3, // Above curve
     },
     teamImage: {
-        width: Dimensions.get('window').width * 0.85,
-        height: 200,
-        borderRadius: 16,
+        width: Dimensions.get('window').width * 0.9,
+        height: Dimensions.get('window').height * 0.45,
     },
+
     bottomSection: {
         flex: 1,
-        backgroundColor: '#0D0D0D',
+        backgroundColor: '#121212',
         justifyContent: 'flex-end',
-        paddingBottom: 40,
+        paddingBottom: 50,
         paddingHorizontal: 24,
-        marginTop: -120, // Kéo lên cao hơn để không có khoảng trống
-        paddingTop: 140,
-        position: 'relative',
-        overflow: 'visible',
-    },
-    curveOverlay: {
-        position: 'absolute',
-        top: -40,
-        left: 0,
-        right: 0,
-        height: 80,
-        backgroundColor: '#0D0D0D',
-        borderTopLeftRadius: 50,
-        borderTopRightRadius: 50,
-        zIndex: 1, // Đưa xuống dưới hình ảnh
+        zIndex: 4, // Topmost text content
     },
     bottomContent: {
-        zIndex: 2,
+        width: '100%',
     },
-    wLogoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    zyeaLogoContainer: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-    },
-    zyeaMy: {
-        fontSize: 24,
-        fontWeight: '600',
-        color: '#F97316', // Orange
-        fontStyle: 'italic',
-    },
-    zyeaName: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#5B6BE6', // Blue/Purple matching header
-    },
-    wLogoText: {
-        fontSize: 32,
-        fontWeight: '900',
-        fontStyle: 'italic',
+    logoContainer: {
+        marginBottom: 20,
     },
     wWelcomeText: {
-        fontSize: 24,
+        fontSize: 30,
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 8,
+        marginBottom: 10,
     },
     wInstructionText: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#888',
-        marginBottom: 32,
+        marginBottom: 40,
     },
     wLoginButton: {
         backgroundColor: '#fff',
-        paddingVertical: 16,
-        borderRadius: 16,
+        paddingVertical: 18,
+        borderRadius: 12,
         alignItems: 'center',
+        width: '100%',
     },
     wLoginButtonText: {
         color: '#000',
         fontSize: 16,
         fontWeight: 'bold',
+        textTransform: 'uppercase',
     },
 });

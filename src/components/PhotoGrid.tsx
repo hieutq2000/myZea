@@ -109,7 +109,7 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     if (count === 4) {
         return (
             <View style={styles.gridContainer}>
-                <View style={styles.row}>
+                <View style={styles.gridRow}>
                     <TouchableOpacity onPress={() => onPressImage(0)} activeOpacity={0.9} style={[styles.col2, { marginBottom: 2, marginRight: 2 }]}>
                         <Image source={{ uri: uri0 }} style={styles.imageHalfGrid} resizeMode="cover" />
                     </TouchableOpacity>
@@ -117,7 +117,7 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
                         <Image source={{ uri: uri1 }} style={styles.imageHalfGrid} resizeMode="cover" />
                     </TouchableOpacity>
                 </View>
-                <View style={styles.row}>
+                <View style={styles.gridRow}>
                     <TouchableOpacity onPress={() => onPressImage(2)} activeOpacity={0.9} style={[styles.col2, { marginTop: 2, marginRight: 2 }]}>
                         <Image source={{ uri: uri2 }} style={styles.imageHalfGrid} resizeMode="cover" />
                     </TouchableOpacity>
@@ -132,7 +132,7 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     // 5+ Images (2x2 Grid with Overlay on last one)
     return (
         <View style={styles.gridContainer}>
-            <View style={styles.row}>
+            <View style={styles.gridRow}>
                 <TouchableOpacity onPress={() => onPressImage(0)} activeOpacity={0.9} style={[styles.col2, { marginBottom: 2, marginRight: 2 }]}>
                     <Image source={{ uri: uri0 }} style={styles.imageHalfGrid} resizeMode="cover" />
                 </TouchableOpacity>
@@ -140,7 +140,7 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
                     <Image source={{ uri: uri1 }} style={styles.imageHalfGrid} resizeMode="cover" />
                 </TouchableOpacity>
             </View>
-            <View style={styles.row}>
+            <View style={styles.gridRow}>
                 <TouchableOpacity onPress={() => onPressImage(2)} activeOpacity={0.9} style={[styles.col2, { marginTop: 2, marginRight: 2 }]}>
                     <Image source={{ uri: uri2 }} style={styles.imageHalfGrid} resizeMode="cover" />
                 </TouchableOpacity>
@@ -164,6 +164,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         height: 300,
     },
+    gridRow: {
+        flex: 1,
+        flexDirection: 'row',
+    },
     col2: {
         flex: 1,
     },
@@ -177,11 +181,11 @@ const styles = StyleSheet.create({
         height: '100%',
     },
     gridContainer: {
-        height: 300,
+        height: 380, // Tăng chiều cao lên chút cho đẹp hơn với 4 ảnh
     },
     imageHalfGrid: {
         width: '100%',
-        height: 148, // approximate half
+        height: '100%', // Flexible height
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,
