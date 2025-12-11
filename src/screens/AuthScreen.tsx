@@ -385,60 +385,123 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                             )}
 
                             {view === AuthView.REGISTER && (
-                                <View style={{ marginBottom: 16 }}>
-                                    <TextInput
-                                        style={styles.sheetInput}
-                                        placeholder="Họ và tên"
-                                        value={name}
-                                        onChangeText={setName}
-                                        placeholderTextColor="#999"
-                                    />
-                                </View>
+                                <FloatingLabelInput
+                                    label="Họ và tên"
+                                    value={name}
+                                    onChangeText={setName}
+                                    icon="user"
+                                />
                             )}
 
-                            <View style={{ marginBottom: 16 }}>
-                                <TextInput
-                                    style={styles.sheetInput}
-                                    placeholder="Nhập email của bạn"
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                    placeholderTextColor="#999"
-                                />
-                            </View>
+                            <FloatingLabelInput
+                                label="Email"
+                                value={email}
+                                onChangeText={setEmail}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                icon="mail"
+                            />
 
-                            <View style={{ marginBottom: 20 }}>
-                                <TextInput
-                                    style={styles.sheetInput}
-                                    placeholder="Mật khẩu"
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    secureTextEntry
-                                    placeholderTextColor="#999"
-                                />
-                            </View>
+                            <FloatingLabelInput
+                                label="Mật khẩu"
+                                value={password}
+                                onChangeText={setPassword}
+                                isPassword={true}
+                                icon="lock"
+                            />
 
-                            <TouchableOpacity
-                                style={styles.sheetButton}
-                                onPress={handleSubmit}
-                                disabled={loading}
-                            >
-                                {loading ? (
-                                    <ActivityIndicator color="#fff" />
-                                ) : (
-                                    <Text style={styles.sheetButtonText}>
-                                        {view === AuthView.LOGIN ? 'Tiếp tục' : 'Đăng ký'}
+                            {view === AuthView.REGISTER && (
+                                <FloatingLabelInput
+                                    label="Nhập lại mật khẩu"
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
+                                    isPassword={true}
+                                />
+                            )}
+
+                            {/* Terms & Conditions Checkbox - Only for Register */}
+                            {view === AuthView.REGISTER && (
+                                <TouchableOpacity
+                                    style={styles.termsContainer}
+                                    onPress={() => setAgreeToTerms(!agreeToTerms)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={[styles.checkbox, agreeToTerms && styles.checkboxChecked]}>
+                                        {agreeToTerms && <Feather name="check" size={14} color="#fff" />}
+                                    </View>
+                                    <Text style={styles.termsText}>
+                                        Tôi đồng ý với <Text style={styles.linkText}>Điều khoản sử dụng</Text> và <Text style={styles.linkText}>Chính sách bảo mật</Text>
                                     </Text>
-                                )}
-                            </TouchableOpacity>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Action Buttons Row */}
+                            {(() => {
+                                // Check if form is valid
+                                const isLoginValid = email.trim() !== '' && password !== '';
+                                const isRegisterValid = email.trim() !== '' && password !== '' && name.trim() !== '' && confirmPassword !== '' && agreeToTerms;
+                                const isFormValid = view === AuthView.LOGIN ? isLoginValid : isRegisterValid;
+
+                                return (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        <TouchableOpacity
+                                            style={{ flex: 1, borderRadius: 12, overflow: 'hidden' }}
+                                            onPress={handleSubmit}
+                                            disabled={loading || !isFormValid}
+                                            activeOpacity={0.8}
+                                        >
+                                            {isFormValid ? (
+                                                <LinearGradient
+                                                    colors={['#FFB347', '#FF7E21']}
+                                                    start={{ x: 0, y: 0 }}
+                                                    end={{ x: 1, y: 0 }}
+                                                    style={{ paddingVertical: 16, alignItems: 'center' }}
+                                                >
+                                                    {loading ? (
+                                                        <ActivityIndicator color="#fff" />
+                                                    ) : (
+                                                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
+                                                            {view === AuthView.LOGIN ? 'Tiếp tục' : 'Đăng ký'}
+                                                        </Text>
+                                                    )}
+                                                </LinearGradient>
+                                            ) : (
+                                                <View style={styles.sheetButton}>
+                                                    <Text style={styles.sheetButtonText}>
+                                                        {view === AuthView.LOGIN ? 'Tiếp tục' : 'Đăng ký'}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+
+                                        {/* Face ID Button - Only show in Login view */}
+                                        {view === AuthView.LOGIN && hasBiometrics && (
+                                            <TouchableOpacity
+                                                style={styles.faceIdIconButton}
+                                                onPress={handleFaceIdLogin}
+                                            >
+                                                <Ionicons name="scan-outline" size={28} color="#F27125" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                );
+                            })()}
 
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
                                 <TouchableOpacity onPress={() => { }}>
                                     <Text style={{ color: '#666' }}>Quên mật khẩu?</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity onPress={() => setView(view === AuthView.LOGIN ? AuthView.REGISTER : AuthView.LOGIN)}>
+                                <TouchableOpacity onPress={() => {
+                                    // Clear all form data when switching views
+                                    setError(null);
+                                    setEmail('');
+                                    setPassword('');
+                                    setName('');
+                                    setConfirmPassword('');
+                                    setAgreeToTerms(false);
+                                    setView(view === AuthView.LOGIN ? AuthView.REGISTER : AuthView.LOGIN);
+                                }}>
                                     <Text style={{ color: '#F27125', fontWeight: 'bold' }}>
                                         {view === AuthView.LOGIN ? 'Đăng ký ngay' : 'Đăng nhập'}
                                     </Text>
