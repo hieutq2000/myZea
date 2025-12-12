@@ -14,6 +14,7 @@ import PostDetailScreen from './src/screens/PostDetailScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import IncomingCallModal from './src/components/IncomingCallModal';
 import BottomTabBar, { TabType } from './src/components/BottomTabBar';
+import OnboardingScreen from './src/screens/OnboardingScreen';
 import {
   User, ExamResult, LiveMode, Topic, TargetAudience,
   BADGES, LEVEL_THRESHOLDS
@@ -23,7 +24,7 @@ import { getLatestChangelog } from './src/utils/changelog';
 import { COLORS } from './src/utils/theme';
 import { useAppUpdates } from './src/hooks/useAppUpdates';
 
-type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'PROFILE' | 'SESSION' | 'PLACE';
+type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'PROFILE' | 'SESSION' | 'PLACE' | 'ONBOARDING';
 
 interface SessionConfig {
   mode: LiveMode;
@@ -189,7 +190,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       const apiUser = await getCurrentUser();
       if (apiUser) {
         setUser(apiUser);
-        setView(apiUser.avatar ? 'HOME' : 'PROFILE');
+        setView(apiUser.avatar ? 'HOME' : 'ONBOARDING');
       }
     } catch (error) {
       console.error('Session check error:', error);
@@ -246,7 +247,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     };
 
     setUser(fullUser);
-    setView(fullUser.avatar ? 'HOME' : 'PROFILE');
+    setView(fullUser.avatar ? 'HOME' : 'ONBOARDING');
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
@@ -362,6 +363,15 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     }
 
     switch (view) {
+      case 'ONBOARDING':
+        return (
+          <OnboardingScreen
+            user={user}
+            onComplete={handleUpdateUser}
+            onSkip={() => setView('HOME')}
+          />
+        );
+
       case 'PROFILE':
         return (
           <ProfileScreen
@@ -438,8 +448,8 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     setView(tab as ViewType);
   };
 
-  // Check if should show tab bar (hide for PLACE - it has its own bottom bar)
-  const shouldShowTabBar = user && view !== 'AUTH' && view !== 'SESSION' && view !== 'PLACE';
+  // Check if should show tab bar (hide for PLACE, ONBOARDING - they have their own UI)
+  const shouldShowTabBar = user && view !== 'AUTH' && view !== 'SESSION' && view !== 'PLACE' && view !== 'ONBOARDING';
 
   const { colors, isDark } = useTheme();
 

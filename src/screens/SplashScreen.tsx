@@ -4,6 +4,7 @@ import {
     Text,
     StyleSheet,
     Dimensions,
+    Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getLatestChangelog } from '../utils/changelog';
@@ -36,9 +37,14 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
             <View style={styles.circle2} />
 
             {/* Logo */}
+            {/* Logo */}
             <View style={styles.logoContainer}>
-                <Text style={styles.logo}>🎓</Text>
-                <Text style={styles.title}>Zyea</Text>
+                <Image
+                    source={require('../../assets/adaptive-icon.png')}
+                    style={styles.logoImage}
+                    resizeMode="contain"
+                />
+                <Text style={styles.title}>myZyea</Text>
             </View>
 
             {/* Bottom section */}
@@ -78,8 +84,9 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
     },
-    logo: {
-        fontSize: 100,
+    logoImage: {
+        width: 150,
+        height: 150,
         marginBottom: 16,
     },
     title: {
