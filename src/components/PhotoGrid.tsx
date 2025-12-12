@@ -1,14 +1,10 @@
 import React from 'react';
 import { View, Image, StyleSheet, TouchableOpacity, Text, Dimensions } from 'react-native';
 import AutoHeightImage from './AutoHeightImage';
+import { ImageObj } from '../utils/api';
+import { getUri } from '../utils/media';
 
 const { width } = Dimensions.get('window');
-
-interface ImageObj {
-    uri: string;
-    width?: number;
-    height?: number;
-}
 
 interface PhotoGridProps {
     images: (string | ImageObj)[];
@@ -19,9 +15,6 @@ interface PhotoGridProps {
 const MULTI_IMAGE_HEIGHT = 350;
 
 export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
-    // Helper to get URI
-    const getUri = (img: string | ImageObj) => typeof img === 'string' ? img : img.uri;
-
     if (!images || images.length === 0) return null;
 
     const count = images.length;

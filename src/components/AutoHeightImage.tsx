@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Image, Dimensions, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { ImageObj } from '../utils/api';
 
 const screenWidth = Dimensions.get('window').width;
-
-interface ImageObj {
-    uri: string;
-    width?: number;
-    height?: number;
-}
 
 interface AutoHeightImageProps {
     source: string | ImageObj;

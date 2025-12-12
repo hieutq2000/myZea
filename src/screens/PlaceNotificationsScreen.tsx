@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { formatTime } from '../utils/formatTime';
 
 // Mock notification data (later replace with API)
 interface Notification {
@@ -35,31 +36,6 @@ interface PlaceNotificationsScreenProps {
     onBack: () => void;
     onOpenPost?: (postId: string) => void;
 }
-
-// Helper to format time
-const formatTime = (dateString: string) => {
-    if (!dateString) return '';
-
-    let date: Date;
-    if (dateString.includes('T') && dateString.endsWith('Z')) {
-        date = new Date(dateString);
-    } else if (dateString.includes('T')) {
-        date = new Date(dateString);
-    } else {
-        const localDate = dateString.replace(' ', 'T');
-        date = new Date(localDate);
-    }
-
-    const now = new Date();
-    const diff = (now.getTime() - date.getTime()) / 1000;
-
-    if (diff < 0) return 'Vừa xong';
-    if (diff < 60) return 'Vừa xong';
-    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`;
-    return date.toLocaleDateString('vi-VN');
-};
 
 // Get notification icon and color based on type
 const getNotificationStyle = (type: string) => {

@@ -26,16 +26,8 @@ import InAppBrowser from '../components/InAppBrowser';
 import TextWithSeeMore from '../components/TextWithSeeMore';
 import VideoPlayer from '../components/VideoPlayer';
 import PhotoGrid from '../components/PhotoGrid';
-
-const isVideo = (url: string | any) => {
-    const uri = typeof url === 'string' ? url : url?.uri;
-    return uri?.match(/\.(mp4|mov|avi|wmv|flv|webm|m4v|3gp)$/i);
-};
-
-const getUri = (img: string | any): string => {
-    if (!img) return '';
-    return typeof img === 'string' ? img : img.uri;
-};
+import { formatTime } from '../utils/formatTime';
+import { isVideo, getUri } from '../utils/media';
 
 interface GroupDetail {
     id: string;
@@ -62,30 +54,6 @@ const formatMemberCount = (count: number): string => {
     return `${count}`;
 };
 
-const formatTime = (dateString: string) => {
-    if (!dateString) return '';
-
-    let date: Date;
-    if (dateString.includes('T') && dateString.endsWith('Z')) {
-        date = new Date(dateString);
-    } else if (dateString.includes('T')) {
-        date = new Date(dateString);
-    } else {
-        const localDate = dateString.replace(' ', 'T');
-        date = new Date(localDate);
-    }
-
-    const now = new Date();
-    const diff = (now.getTime() - date.getTime()) / 1000;
-
-    if (diff < 0) return 'Vừa xong';
-    if (diff < 60) return 'Vừa xong';
-    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`;
-    return date.toLocaleDateString('vi-VN');
-};
-
 const getPrivacyLabel = (privacy: string): string => {
     switch (privacy) {
         case 'public': return 'Nhóm công khai';
@@ -94,6 +62,7 @@ const getPrivacyLabel = (privacy: string): string => {
         default: return 'Nhóm';
     }
 };
+
 
 export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDetailScreenProps) {
     const [group, setGroup] = useState<GroupDetail | null>(null);

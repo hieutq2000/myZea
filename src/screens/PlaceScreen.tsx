@@ -36,81 +36,10 @@ import InAppBrowser from '../components/InAppBrowser';
 import TextWithSeeMore from '../components/TextWithSeeMore';
 import VideoPlayer from '../components/VideoPlayer';
 import CreateGroupModal from '../components/CreateGroupModal';
+import { formatTime } from '../utils/formatTime';
+import { isVideo, getUri, getAvatarUri } from '../utils/media';
 
 const { width } = Dimensions.get('window');
-
-// --- Helper Date ---
-const formatTime = (dateString: string) => {
-    if (!dateString) return '';
-
-    // MySQL returns datetime in format: "2024-12-13T00:30:00.000Z" or "2024-12-13 00:30:00"
-    // If it ends with Z, it's UTC. Otherwise, treat as local time.
-    let date: Date;
-
-    if (dateString.includes('T') && dateString.endsWith('Z')) {
-        // ISO format with Z - this is UTC, convert to local
-        date = new Date(dateString);
-    } else if (dateString.includes('T')) {
-        // ISO format without Z - treat as local time
-        date = new Date(dateString);
-    } else {
-        // MySQL format without T (e.g., "2024-12-13 00:30:00")
-        // JavaScript may parse this as UTC, so we need to treat it as local
-        // Replace space with T and add local timezone offset
-        const localDate = dateString.replace(' ', 'T');
-        date = new Date(localDate);
-
-        // If the date seems way off, it might be parsed as UTC
-        // In that case, we don't adjust (MySQL with timezone config handles it)
-    }
-
-    const now = new Date();
-    const diff = (now.getTime() - date.getTime()) / 1000; // seconds
-
-    // Debug logging (remove in production)
-    // console.log('formatTime:', { dateString, date: date.toISOString(), now: now.toISOString(), diff });
-
-    // Handle negative diff (future dates, likely timezone issue)
-    if (diff < 0) return 'Vừa xong';
-
-    if (diff < 60) return 'Vừa xong';
-    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`; // 7 days
-    return date.toLocaleDateString('vi-VN');
-};
-
-// Helper function to get avatar URI (handles base64 and URL)
-const getAvatarUri = (avatar: string | undefined, name: string = 'User'): string => {
-    if (!avatar) {
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
-    }
-    // If already a URL, return as-is
-    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
-        return avatar;
-    }
-    // If already has data prefix, return as-is
-    if (avatar.startsWith('data:image/')) {
-        return avatar;
-    }
-    // Otherwise, assume it's base64 and add prefix
-    return `data:image/jpeg;base64,${avatar}`;
-};
-
-// ... imports
-
-// Helper to get URI from string or ImageObj
-const getUri = (img: string | any | undefined): string => {
-    if (!img) return '';
-    return typeof img === 'string' ? img : img.uri;
-};
-
-const isVideo = (url: string | any) => {
-    const uri = getUri(url);
-    return uri?.match(/\.(mp4|mov|avi|wmv|flv|webm|m4v|3gp)$/i);
-};
-
-// ... existing code ...
 
 
 const REACTIONS = [

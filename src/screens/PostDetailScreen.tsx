@@ -20,31 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../navigation/types';
 import { Post, Comment, getComments, createComment, toggleLikePost, getCurrentUser } from '../utils/api';
 import { useTheme } from '../context/ThemeContext';
-
-// --- Helper Functions ---
-const formatTime = (dateString: string) => {
-    if (!dateString) return '';
-
-    let date: Date;
-    if (dateString.includes('T') && dateString.endsWith('Z')) {
-        date = new Date(dateString);
-    } else if (dateString.includes('T')) {
-        date = new Date(dateString);
-    } else {
-        const localDate = dateString.replace(' ', 'T');
-        date = new Date(localDate);
-    }
-
-    const now = new Date();
-    const diff = (now.getTime() - date.getTime()) / 1000;
-
-    if (diff < 0) return 'Vừa xong';
-    if (diff < 60) return 'Vừa xong';
-    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`;
-    return date.toLocaleDateString('vi-VN');
-};
+import { formatTime } from '../utils/formatTime';
 
 const REACTIONS = [
     { id: 'like', icon: 'https://media.giphy.com/media/l4pTfx2qLszoacZRS/giphy.gif', label: 'Thích', color: '#1877F2' },
@@ -185,7 +161,7 @@ export default function PostDetailScreen() {
 
                 {/* Post Image */}
                 {passedPost.image && (
-                    <Image source={{ uri: passedPost.image }} style={styles.postImage} resizeMode="cover" />
+                    <Image source={{ uri: typeof passedPost.image === 'string' ? passedPost.image : passedPost.image.uri }} style={styles.postImage} resizeMode="cover" />
                 )}
 
                 {/* Minimal Stats */}
