@@ -38,19 +38,9 @@ import VideoPlayer from '../components/VideoPlayer';
 import CreateGroupModal from '../components/CreateGroupModal';
 import { formatTime } from '../utils/formatTime';
 import { isVideo, getUri, getAvatarUri } from '../utils/media';
+import { ReactionDock, REACTIONS, Reaction, getReactionDisplay } from '../components/AnimatedReactions';
 
 const { width } = Dimensions.get('window');
-
-
-const REACTIONS = [
-    { id: 'like', emoji: '👍', bgColor: '#1877F2', label: 'Thích', color: '#1877F2' },
-    { id: 'love', emoji: '❤️', bgColor: '#F33E58', label: 'Yêu thích', color: '#F33E58' },
-    { id: 'care', emoji: '🥰', bgColor: '#F7B928', label: 'Thương thương', color: '#F7B928' },
-    { id: 'haha', emoji: '😆', bgColor: '#F7B928', label: 'Haha', color: '#F7B928' },
-    { id: 'wow', emoji: '😮', bgColor: '#F7B928', label: 'Wow', color: '#F7B928' },
-    { id: 'sad', emoji: '😢', bgColor: '#F7B928', label: 'Buồn', color: '#F7B928' },
-    { id: 'angry', emoji: '😠', bgColor: '#E9710F', label: 'Phẫn nộ', color: '#E9710F' },
-];
 
 interface PlaceScreenProps {
     user: any;
@@ -550,20 +540,11 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
             {/* Post Actions */}
             <View style={styles.actionContainer}>
-                {/* Reaction Popup Dock - only show when long pressed */}
-                {activeReactionPostId === item.id && (
-                    <View style={styles.reactionDock}>
-                        {REACTIONS.map((reaction) => (
-                            <TouchableOpacity
-                                key={reaction.id}
-                                onPress={() => handleReaction(item.id, reaction.id)}
-                                style={styles.reactionButton}
-                            >
-                                <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                )}
+                {/* Animated Reaction Dock - Facebook style */}
+                <ReactionDock
+                    visible={activeReactionPostId === item.id}
+                    onSelect={(reaction) => handleReaction(item.id, reaction.id)}
+                />
 
                 <TouchableOpacity
                     style={styles.actionButton}
@@ -575,10 +556,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         // Show selected reaction with emoji
                         <>
                             <Text style={{ fontSize: 20, marginRight: 6 }}>
-                                {REACTIONS.find(r => r.id === localReactions[item.id])?.emoji}
+                                {getReactionDisplay(localReactions[item.id])?.emoji}
                             </Text>
-                            <Text style={[styles.actionText, { color: REACTIONS.find(r => r.id === localReactions[item.id])?.color || '#1877F2', fontWeight: 'bold' }]}>
-                                {REACTIONS.find(r => r.id === localReactions[item.id])?.label}
+                            <Text style={[styles.actionText, { color: getReactionDisplay(localReactions[item.id])?.color || '#1877F2', fontWeight: 'bold' }]}>
+                                {getReactionDisplay(localReactions[item.id])?.label}
                             </Text>
                         </>
                     ) : (
