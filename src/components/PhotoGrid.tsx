@@ -39,25 +39,29 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     // 1 Image (Full Width, Dynamic Height with max limit like Facebook)
     if (count === 1) {
         const aspectRatio = getAspectRatio(images[0]);
-        // Clamp aspect ratio to reasonable bounds (Facebook style)
-        // 0.75 = 3:4 portrait, 1.5 = 3:2 landscape
-        const clampedRatio = Math.min(Math.max(aspectRatio, 0.75), 1.5);
+
+        // For single image: allow wider range of aspect ratios
+        // Only clamp extreme cases (very tall or very wide)
+        const clampedRatio = Math.min(Math.max(aspectRatio, 0.5), 2.0); // 1:2 to 2:1
         const calculatedHeight = width / clampedRatio;
+
         // Clamp height between min and max
         const finalHeight = Math.min(Math.max(calculatedHeight, MIN_SINGLE_IMAGE_HEIGHT), MAX_SINGLE_IMAGE_HEIGHT);
+
+        // Determine if image will be cropped significantly
+        const actualRatioFromHeight = width / finalHeight;
+        const isCropped = Math.abs(actualRatioFromHeight - aspectRatio) > 0.3;
 
         return (
             <TouchableOpacity
                 onPress={() => onPressImage(0)}
                 activeOpacity={0.9}
-                style={{ width: '100%', height: finalHeight }}
+                style={{ width: '100%', height: finalHeight, backgroundColor: '#000' }}
             >
-                {/* Placeholder background */}
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#f0f0f0' }]} />
                 <Image
                     source={{ uri: uri0 }}
                     style={{ width: '100%', height: '100%' }}
-                    resizeMode="cover"
+                    resizeMode={isCropped ? "contain" : "cover"}
                 />
             </TouchableOpacity>
         );
