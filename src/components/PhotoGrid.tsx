@@ -36,21 +36,10 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     const count = images.length;
     const uri0 = getUri(images[0]);
 
-    // 1 Image (Full Width, Dynamic Height with max limit like Facebook)
+    // 1 Image (Full Width, Fixed Height - hiển thị full ảnh không bị cắt)
     if (count === 1) {
-        const aspectRatio = getAspectRatio(images[0]);
-
-        // For single image: allow wider range of aspect ratios
-        // Only clamp extreme cases (very tall or very wide)
-        const clampedRatio = Math.min(Math.max(aspectRatio, 0.5), 2.0); // 1:2 to 2:1
-        const calculatedHeight = width / clampedRatio;
-
-        // Clamp height between min and max
-        const finalHeight = Math.min(Math.max(calculatedHeight, MIN_SINGLE_IMAGE_HEIGHT), MAX_SINGLE_IMAGE_HEIGHT);
-
-        // Determine if image will be cropped significantly
-        const actualRatioFromHeight = width / finalHeight;
-        const isCropped = Math.abs(actualRatioFromHeight - aspectRatio) > 0.3;
+        // Fixed height - ảnh sẽ được scale để fit, không bị cắt
+        const finalHeight = MAX_SINGLE_IMAGE_HEIGHT; // 400px cố định
 
         return (
             <TouchableOpacity
@@ -61,7 +50,7 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
                 <Image
                     source={{ uri: uri0 }}
                     style={{ width: '100%', height: '100%' }}
-                    resizeMode={isCropped ? "contain" : "cover"}
+                    resizeMode="contain"
                 />
             </TouchableOpacity>
         );
