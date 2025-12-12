@@ -12,17 +12,10 @@ import {
     Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchUsers } from '../utils/api';
 
-// Mock Data Lịch sử tìm kiếm
-const MOCK_RECENT_HISTORY = [
-    { id: '1', type: 'USER', name: 'Trinh Nguyen Tuan', avatar: 'https://ui-avatars.com/api/?name=Trinh+Nguyen+Tuan&background=F97316&color=fff' },
-    { id: '2', type: 'KEYWORD', text: 'giờ thiệu app myfpt' },
-    { id: '3', type: 'KEYWORD', text: 'Myfpt' },
-    { id: '4', type: 'KEYWORD', text: 'hỗ trợ fpt' },
-    { id: '5', type: 'KEYWORD', text: 'fptchat' },
-    { id: '6', type: 'USER', name: 'Tai Dao Quy', avatar: 'https://ui-avatars.com/api/?name=Tai+Dao+Quy&background=F97316&color=fff' },
-];
+const HISTORY_KEY = 'place_search_history';
 
 interface PlaceSearchScreenProps {
     onBack: () => void;
@@ -32,30 +25,69 @@ interface PlaceSearchScreenProps {
 export default function PlaceSearchScreen({ onBack, onSelectResult }: PlaceSearchScreenProps) {
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [recentHistory, setRecentHistory] = useState(MOCK_RECENT_HISTORY);
+    const [recentHistory, setRecentHistory] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+
+    useEffect(() => {
+        loadHistory();
+    }, []);
+
+    const loadHistory = async () => {
+        try {
+            const json = await AsyncStorage.getItem(HISTORY_KEY);
+            if (json) {
+                setRecentHistory(JSON.parse(json));
+            }
+        } catch (error) {
+            console.error('Failed to load search history', error);
+        }
+    };
+
+    const saveHistoryToStorage = async (newHistory: any[]) => {
+        try {
+            await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
+        } catch (error) {
+            console.error('Failed to save search history', error);
+        }
+    };
 
     // Xử lý tìm kiếm
     const handleSearch = async (text: string) => {
         setQuery(text);
-        if (text.length > 1) {
+        if (text.length > 0) {
             setIsSearching(true);
             try {
-                // Gọi API search user tạm thời
+                // Call API Search Users
                 const users = await searchUsers(text);
-                setSearchResults(users.map(u => ({ ...u, type: 'USER' })));
+                // Add type 'USER' to results
+                const results = users.map(u => ({ ...u, type: 'USER' }));
+                setSearchResults(results);
             } catch (error) {
-                console.log('Search error', error);
-                setSearchResults([]);
+                console.error(error);
             }
         } else {
-            setIsSearching(false);
             setSearchResults([]);
+            setIsSearching(false);
         }
     };
 
     const removeItem = (id: string) => {
-        setRecentHistory(prev => prev.filter(item => item.id !== id));
+        const newHistory = recentHistory.filter(item => item.id !== id);
+        setRecentHistory(newHistory);
+        saveHistoryToStorage(newHistory);
+    };
+
+    const handleSelect = (item: any) => {
+        // Add to history (remove duplicates based on ID or Name)
+        const newHistory = [
+            item,
+            ...recentHistory.filter(h => h.id !== item.id && h.name !== item.name)
+        ].slice(0, 20); // Limit to 20 items
+
+        setRecentHistory(newHistory);
+        saveHistoryToStorage(newHistory);
+
+        onSelectResult(item);
     };
 
     const renderItem = ({ item }: { item: any }) => {
@@ -66,7 +98,7 @@ export default function PlaceSearchScreen({ onBack, onSelectResult }: PlaceSearc
         return (
             <TouchableOpacity
                 style={styles.itemContainer}
-                onPress={() => onSelectResult(item)}
+                onPress={() => handleSelect(item)}
             >
                 {/* Icon/Avatar */}
                 <View style={styles.iconContainer}>

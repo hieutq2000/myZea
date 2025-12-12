@@ -428,7 +428,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
                             {/* User Name & Time */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 1 }}>
-                                <TouchableOpacity onPress={() => handleViewProfile(item.author)}>
+                                <TouchableOpacity onPress={() => item.author.id !== user.id && handleViewProfile(item.author)}>
                                     <Text style={{ fontSize: 12, color: '#65676B', fontWeight: '500' }}>
                                         {item.author.name}
                                     </Text>
@@ -447,7 +447,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 ) : (
                     // NORMAL POST HEADER STYLE
                     <>
-                        <TouchableOpacity onPress={() => handleViewProfile(item.author)}>
+                        <TouchableOpacity onPress={() => item.author.id !== user.id && handleViewProfile(item.author)}>
                             <Image
                                 source={{ uri: item.author.avatar || `https://ui-avatars.com/api/?name=${item.author.name}` }}
                                 style={styles.postAvatar}
@@ -455,17 +455,25 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         </TouchableOpacity>
                         <View style={styles.postInfo}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <TouchableOpacity onPress={() => handleViewProfile(item.author)}>
+                                <TouchableOpacity onPress={() => item.author.id !== user.id && handleViewProfile(item.author)}>
                                     <Text style={styles.postAuthor}>{item.author.name}</Text>
                                 </TouchableOpacity>
                                 {item.taggedUsers && item.taggedUsers.length > 0 && (
                                     <Text style={{ fontWeight: '400', color: '#333' }}>
                                         {' cùng với '}
-                                        <Text style={{ fontWeight: '600' }}>{item.taggedUsers[0].name}</Text>
+                                        <Text
+                                            style={{ fontWeight: 'bold' }}
+                                            onPress={() => {
+                                                const taggedUser = item.taggedUsers![0];
+                                                if (taggedUser.id !== user.id) handleViewProfile(taggedUser);
+                                            }}
+                                        >
+                                            {item.taggedUsers[0].name}
+                                        </Text>
                                         {item.taggedUsers.length > 1 && (
                                             <Text style={{ fontWeight: '400' }}>
                                                 {' và '}
-                                                <Text style={{ fontWeight: '600' }}>{item.taggedUsers.length - 1} người khác</Text>
+                                                <Text style={{ fontWeight: 'bold' }}>{item.taggedUsers.length - 1} người khác</Text>
                                             </Text>
                                         )}
                                     </Text>
@@ -1045,7 +1053,13 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     setViewingProfileUser(null);
                 }}
                 onEditProfile={() => Alert.alert('Thông báo', 'Tính năng chỉnh sửa profile đang phát triển')}
-                onMessage={() => Alert.alert('Tin nhắn', `Bắt đầu cuộc trò chuyện với ${viewingProfileUser?.name || 'người dùng'}`)}
+                onMessage={() => {
+                    navigation.navigate('ChatDetail', {
+                        partnerId: viewingProfileUser?.id,
+                        userName: viewingProfileUser?.name,
+                        avatar: viewingProfileUser?.avatar,
+                    });
+                }}
             />
         );
     }

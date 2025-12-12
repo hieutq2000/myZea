@@ -424,3 +424,16 @@ export async function createGroupPost(
 }
 
 
+
+export async function getUserPosts(userId: string, page: number = 1): Promise<Post[]> {
+    // Note: This endpoint allows getting posts from a specific user
+    return apiRequest<Post[]>(`/api/place/users/${userId}/posts?page=${page}`);
+}
+
+export async function followUser(userId: string): Promise<void> {
+    return apiRequest(`/api/place/users/${userId}/follow`, { method: 'POST' });
+}
+
+export async function unfollowUser(userId: string): Promise<void> {
+    return apiRequest(`/api/place/users/${userId}/unfollow`, { method: 'POST' });
+}

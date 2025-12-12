@@ -12,7 +12,9 @@ import {
     Platform,
     ActivityIndicator,
     Alert,
-    Keyboard
+    Keyboard,
+    ImageBackground,
+    ScrollView
 } from 'react-native';
 import { Ionicons, FontAwesome, Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -21,6 +23,9 @@ import { RootStackParamList } from '../navigation/types';
 import { Post, Comment, getComments, createComment, toggleLikePost, getCurrentUser } from '../utils/api';
 import { useTheme } from '../context/ThemeContext';
 import { formatTime } from '../utils/formatTime';
+import FacebookImageViewer from '../components/FacebookImageViewer';
+import TextWithSeeMore from '../components/TextWithSeeMore';
+import * as ImagePicker from 'expo-image-picker';
 
 const REACTIONS = [
     { id: 'like', icon: 'https://media.giphy.com/media/l4pTfx2qLszoacZRS/giphy.gif', label: 'Thích', color: '#1877F2' },
@@ -71,6 +76,51 @@ export default function PostDetailScreen() {
 
     const flatListRef = useRef<FlatList>(null);
 
+    // Image Viewer State
+    const [isImageViewerVisible, setIsImageViewerVisible] = useState(false);
+    const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+    // Comment Input Images
+    const [commentImages, setCommentImages] = useState<string[]>([]); // Preview uris
+
+    // Wrapper for viewing comment images vs post images
+    const [viewerImages, setViewerImages] = useState<string[]>([]);
+
+    // Pick Images for Comment
+    const handlePickCommentImages = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.8,
+            allowsMultipleSelection: true, // Expo 46+
+        });
+
+        if (!result.canceled && result.assets) {
+            setCommentImages([...commentImages, ...result.assets.map(a => a.uri)]);
+        }
+    };
+
+    const removeCommentImage = (index: number) => {
+        setCommentImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Prepare images for viewer
+    const getPostImages = () => {
+        if (!passedPost) return [];
+        if (passedPost.images && passedPost.images.length > 0) {
+            return passedPost.images.map(img => typeof img === 'string' ? img : img.uri);
+        }
+        if (passedPost.image) {
+            return [typeof passedPost.image === 'string' ? passedPost.image : passedPost.image.uri];
+        }
+        return [];
+    };
+
+    const postImages = getPostImages();
+
+    const openImageViewer = (index: number) => {
+        setSelectedImageIndex(index);
+        setIsImageViewerVisible(true);
+    };
+
     useEffect(() => {
         loadData();
     }, []);
@@ -90,13 +140,28 @@ export default function PostDetailScreen() {
     };
 
     const handleSendComment = async () => {
-        if (!commentText.trim()) return;
+        if (!commentText.trim() && commentImages.length === 0) return;
 
         setIsSending(true);
         try {
+            // Note: API createComment currently mostly supports text. 
+            // We simulate image attach by sending text or mocking response update
+
+            // TODO: Upload images to server here using formData
+            // const uploadedImages = await uploadImages(commentImages);
+
             const newComment = await createComment(postId, commentText);
-            setComments([...comments, newComment]);
+
+            // Mock adding images to the local comment object purely for UI demo
+            // In real app, backend returns the comment with images
+            const commentWithImages = {
+                ...newComment,
+                images: commentImages.length > 0 ? commentImages : undefined
+            };
+
+            setComments([...comments, commentWithImages]);
             setCommentText('');
+            setCommentImages([]); // Clear images
             Keyboard.dismiss();
 
             // Scroll to bottom
@@ -156,12 +221,69 @@ export default function PostDetailScreen() {
 
                 {/* Post Content */}
                 <View style={styles.postContent}>
-                    <Text style={[styles.postText, { color: colors.text }]}>{passedPost.content}</Text>
+                    <TextWithSeeMore text={passedPost.content} style={StyleSheet.flatten([styles.postText, { color: colors.text }])} />
                 </View>
 
-                {/* Post Image */}
-                {passedPost.image && (
-                    <Image source={{ uri: typeof passedPost.image === 'string' ? passedPost.image : passedPost.image.uri }} style={styles.postImage} resizeMode="cover" />
+                {/* Post Images Grid */}
+                {postImages.length > 0 && (
+                    <View style={styles.mediaContainer}>
+                        {postImages.length === 1 && (
+                            <TouchableOpacity onPress={() => openImageViewer(0)}>
+                                <Image source={{ uri: postImages[0] }} style={[styles.postImage, { height: 300 }]} resizeMode="cover" />
+                            </TouchableOpacity>
+                        )}
+                        {postImages.length === 2 && (
+                            <View style={{ flexDirection: 'row', height: 300 }}>
+                                <TouchableOpacity style={{ flex: 1, marginRight: 2 }} onPress={() => openImageViewer(0)}>
+                                    <Image source={{ uri: postImages[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                </TouchableOpacity>
+                                <TouchableOpacity style={{ flex: 1, marginLeft: 2 }} onPress={() => openImageViewer(1)}>
+                                    <Image source={{ uri: postImages[1] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        {postImages.length === 3 && (
+                            <View style={{ flexDirection: 'row', height: 300 }}>
+                                <TouchableOpacity style={{ flex: 2, marginRight: 2 }} onPress={() => openImageViewer(0)}>
+                                    <Image source={{ uri: postImages[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                </TouchableOpacity>
+                                <View style={{ flex: 1, marginLeft: 2 }}>
+                                    <TouchableOpacity style={{ flex: 1, marginBottom: 2 }} onPress={() => openImageViewer(1)}>
+                                        <Image source={{ uri: postImages[1] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={{ flex: 1, marginTop: 2 }} onPress={() => openImageViewer(2)}>
+                                        <Image source={{ uri: postImages[2] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+                        {postImages.length >= 4 && (
+                            <View style={{ flexDirection: 'row', height: 300 }}>
+                                <View style={{ flex: 2, marginRight: 2 }}>
+                                    <TouchableOpacity style={{ flex: 1 }} onPress={() => openImageViewer(0)}>
+                                        <Image source={{ uri: postImages[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={{ flex: 1, marginLeft: 2 }}>
+                                    <TouchableOpacity style={{ flex: 1, marginBottom: 2 }} onPress={() => openImageViewer(1)}>
+                                        <Image source={{ uri: postImages[1] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={{ flex: 1, marginVertical: 2 }} onPress={() => openImageViewer(2)}>
+                                        <Image source={{ uri: postImages[2] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={{ flex: 1, marginTop: 2 }} onPress={() => openImageViewer(3)}>
+                                        <ImageBackground source={{ uri: postImages[3] }} style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }} resizeMode="cover">
+                                            {postImages.length > 4 && (
+                                                <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>+{postImages.length - 4}</Text>
+                                                </View>
+                                            )}
+                                        </ImageBackground>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+                    </View>
                 )}
 
                 {/* Minimal Stats */}
@@ -178,7 +300,7 @@ export default function PostDetailScreen() {
         );
     };
 
-    const renderCommentItem = ({ item }: { item: Comment }) => (
+    const renderCommentItem = ({ item }: { item: any }) => ( // Use any to support temporary 'images' prop
         <View style={styles.commentItem}>
             <Image
                 source={{ uri: item.user.avatar || `https://ui-avatars.com/api/?name=${item.user.name}` }}
@@ -187,12 +309,37 @@ export default function PostDetailScreen() {
             <View style={styles.commentRight}>
                 <View style={[styles.commentBubble, { backgroundColor: isDark ? '#3A3B3C' : '#F0F2F5' }]}>
                     <Text style={[styles.commentAuthor, { color: colors.text }]}>{item.user.name}</Text>
-                    <Text style={[styles.commentContent, { color: colors.text }]}>{item.content}</Text>
+                    {item.content ? <TextWithSeeMore text={item.content} style={StyleSheet.flatten([styles.commentContent, { color: colors.text }])} /> : null}
+
+                    {/* Comment Images */}
+                    {item.images && item.images.length > 0 && (
+                        <View style={{ marginTop: 8 }}>
+                            <TouchableOpacity onPress={() => {
+                                setViewerImages(item.images);
+                                setSelectedImageIndex(0);
+                                setIsImageViewerVisible(true);
+                            }}>
+                                <Image
+                                    source={{ uri: item.images[0] }}
+                                    style={{ width: 200, height: 200, borderRadius: 8 }}
+                                    resizeMode="cover"
+                                />
+                                {item.images.length > 1 && (
+                                    <View style={{
+                                        position: 'absolute', right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)',
+                                        padding: 4, borderTopLeftRadius: 8, borderBottomRightRadius: 8
+                                    }}>
+                                        <Text style={{ color: '#fff', fontSize: 12 }}>+{item.images.length - 1}</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
                 <View style={styles.commentActions}>
                     <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
-                    <Text style={styles.commentActionBtn}>Thích</Text>
-                    <Text style={styles.commentActionBtn}>Phản hồi</Text>
+                    <TouchableOpacity><Text style={styles.commentActionBtn}>Thích</Text></TouchableOpacity>
+                    <TouchableOpacity><Text style={styles.commentActionBtn}>Phản hồi</Text></TouchableOpacity>
                 </View>
             </View>
         </View>
@@ -227,35 +374,65 @@ export default function PostDetailScreen() {
 
                 {/* Input Bar */}
                 <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-                    <Image
-                        source={{ uri: currentUser?.avatar || `https://ui-avatars.com/api/?name=${currentUser?.name || 'Me'}` }}
-                        style={styles.inputAvatar}
-                    />
-                    <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#3A3B3C' : '#F0F2F5' }]}>
-                        <TextInput
-                            style={[styles.input, { color: colors.text }]}
-                            placeholder="Viết bình luận..."
-                            placeholderTextColor={colors.textSecondary}
-                            multiline
-                            value={commentText}
-                            onChangeText={setCommentText}
-                        />
-                        <TouchableOpacity style={styles.emojiBtn}>
-                            <Ionicons name="happy-outline" size={24} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
-                    <TouchableOpacity
-                        onPress={handleSendComment}
-                        disabled={!commentText.trim() || isSending}
-                        style={[styles.sendBtn]}
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                        style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}
                     >
-                        <Ionicons
-                            name="send"
-                            size={24}
-                            color={commentText.trim() ? '#0084FF' : colors.textSecondary}
-                        />
-                    </TouchableOpacity>
+                        {/* Image Preview in Input */}
+                        {commentImages.length > 0 && (
+                            <View style={{ flexDirection: 'row', paddingHorizontal: 10, paddingBottom: 10 }}>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                    {commentImages.map((uri, index) => (
+                                        <View key={index} style={{ marginRight: 8 }}>
+                                            <Image source={{ uri }} style={{ width: 60, height: 60, borderRadius: 8 }} />
+                                            <TouchableOpacity
+                                                onPress={() => removeCommentImage(index)}
+                                                style={{ position: 'absolute', top: -5, right: -5, backgroundColor: '#ddd', borderRadius: 10 }}
+                                            >
+                                                <Ionicons name="close-circle" size={20} color="#333" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
+
+                        <View style={styles.footerInputContainer}>
+                            <TouchableOpacity style={styles.footerIconBtn} onPress={handlePickCommentImages}>
+                                <Ionicons name="camera-outline" size={24} color={isDark ? '#FFF' : '#000'} />
+                            </TouchableOpacity>
+                            <TextInput
+                                style={[styles.input, { color: colors.text, backgroundColor: isDark ? '#3A3B3C' : '#F0F2F5' }]}
+                                placeholder="Viết bình luận..."
+                                placeholderTextColor={colors.textSecondary}
+                                value={commentText}
+                                onChangeText={setCommentText}
+                                multiline
+                            />
+                            <TouchableOpacity
+                                style={[styles.sendButton, (!commentText.trim() && commentImages.length === 0) && styles.sendButtonDisabled]}
+                                onPress={handleSendComment}
+                                disabled={!commentText.trim() && commentImages.length === 0}
+                            >
+                                <Ionicons name="send" size={20} color="#1877F2" />
+                            </TouchableOpacity>
+                        </View>
+                    </KeyboardAvoidingView>
                 </View>
+                {/* Image Viewer */}
+                {isImageViewerVisible && (
+                    <FacebookImageViewer
+                        images={viewerImages.length > 0 ? viewerImages : postImages}
+                        visible={isImageViewerVisible}
+                        onClose={() => {
+                            setIsImageViewerVisible(false);
+                            setViewerImages([]);
+                        }}
+                        imageIndex={selectedImageIndex}
+                        post={passedPost}
+                    />
+                )}
             </KeyboardAvoidingView>
         </View>
     );
@@ -335,11 +512,34 @@ const styles = StyleSheet.create({
         width: '100%',
         height: 250,
     },
+    mediaContainer: {
+        marginTop: 8,
+    },
     postStats: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        marginTop: 12,
         paddingHorizontal: 12,
-        paddingTop: 12,
+    },
+    // Footer Styles
+    footer: {
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        borderTopWidth: 1,
+    },
+    footerInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    footerIconBtn: {
+        padding: 8,
+    },
+    sendButton: {
+        padding: 8,
+        marginLeft: 4,
+    },
+    sendButtonDisabled: {
+        opacity: 0.5,
     },
     // Comments
     commentItem: {
