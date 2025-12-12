@@ -43,13 +43,32 @@ const { width } = Dimensions.get('window');
 const formatTime = (dateString: string) => {
     if (!dateString) return '';
 
-    // Parse the date from server (could be UTC or local depending on server config)
-    let date = new Date(dateString);
+    // MySQL returns datetime in format: "2024-12-13T00:30:00.000Z" or "2024-12-13 00:30:00"
+    // If it ends with Z, it's UTC. Otherwise, treat as local time.
+    let date: Date;
 
-    // If the date string doesn't have timezone info, MySQL returns local time
-    // So we don't need to adjust, just compare with local now
+    if (dateString.includes('T') && dateString.endsWith('Z')) {
+        // ISO format with Z - this is UTC, convert to local
+        date = new Date(dateString);
+    } else if (dateString.includes('T')) {
+        // ISO format without Z - treat as local time
+        date = new Date(dateString);
+    } else {
+        // MySQL format without T (e.g., "2024-12-13 00:30:00")
+        // JavaScript may parse this as UTC, so we need to treat it as local
+        // Replace space with T and add local timezone offset
+        const localDate = dateString.replace(' ', 'T');
+        date = new Date(localDate);
+
+        // If the date seems way off, it might be parsed as UTC
+        // In that case, we don't adjust (MySQL with timezone config handles it)
+    }
+
     const now = new Date();
     const diff = (now.getTime() - date.getTime()) / 1000; // seconds
+
+    // Debug logging (remove in production)
+    // console.log('formatTime:', { dateString, date: date.toISOString(), now: now.toISOString(), diff });
 
     // Handle negative diff (future dates, likely timezone issue)
     if (diff < 0) return 'Vừa xong';

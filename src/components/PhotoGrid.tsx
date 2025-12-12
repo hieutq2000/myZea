@@ -36,12 +36,11 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     const count = images.length;
     const uri0 = getUri(images[0]);
 
-    // 1 Image - Chiều cao tính theo tỷ lệ ảnh thực tế, giới hạn min/max
+    // 1 Image - Hiển thị đầy đủ ảnh không bị cắt
     if (count === 1) {
         const aspectRatio = getAspectRatio(images[0]);
 
         // Tính chiều cao dựa trên tỷ lệ ảnh
-        // width / aspectRatio = height
         const calculatedHeight = width / aspectRatio;
 
         // Giới hạn chiều cao: min 200px, max 500px
@@ -51,12 +50,12 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
             <TouchableOpacity
                 onPress={() => onPressImage(0)}
                 activeOpacity={0.9}
-                style={{ width: '100%', height: finalHeight }}
+                style={{ width: '100%', height: finalHeight, backgroundColor: '#f5f5f5' }}
             >
                 <Image
                     source={{ uri: uri0 }}
                     style={{ width: '100%', height: '100%' }}
-                    resizeMode="cover"
+                    resizeMode="contain"
                 />
             </TouchableOpacity>
         );

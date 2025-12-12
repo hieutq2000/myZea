@@ -23,12 +23,26 @@ import { useTheme } from '../context/ThemeContext';
 
 // --- Helper Functions ---
 const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
+    if (!dateString) return '';
+
+    let date: Date;
+    if (dateString.includes('T') && dateString.endsWith('Z')) {
+        date = new Date(dateString);
+    } else if (dateString.includes('T')) {
+        date = new Date(dateString);
+    } else {
+        const localDate = dateString.replace(' ', 'T');
+        date = new Date(localDate);
+    }
+
     const now = new Date();
     const diff = (now.getTime() - date.getTime()) / 1000;
+
+    if (diff < 0) return 'Vừa xong';
     if (diff < 60) return 'Vừa xong';
     if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
     if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`;
     return date.toLocaleDateString('vi-VN');
 };
 
