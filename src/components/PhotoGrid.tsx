@@ -16,8 +16,8 @@ interface PhotoGridProps {
 
 // Default aspect ratio when no dimensions available
 const DEFAULT_ASPECT_RATIO = 1.5; // 3:2 - common photo ratio
-const MAX_SINGLE_IMAGE_HEIGHT = 500;
-const DEFAULT_HEIGHT = Math.min(width / DEFAULT_ASPECT_RATIO, MAX_SINGLE_IMAGE_HEIGHT);
+const MAX_SINGLE_IMAGE_HEIGHT = 400; // Facebook limits to ~400px for single image
+const MIN_SINGLE_IMAGE_HEIGHT = 200; // Minimum height for very wide images
 
 export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     // Helper to get URI
@@ -39,10 +39,12 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     // 1 Image (Full Width, Dynamic Height with max limit like Facebook)
     if (count === 1) {
         const aspectRatio = getAspectRatio(images[0]);
-        // Clamp aspect ratio to reasonable bounds (prevent too tall or too wide)
-        const clampedRatio = Math.min(Math.max(aspectRatio, 0.5), 2); // Between 1:2 and 2:1
+        // Clamp aspect ratio to reasonable bounds (Facebook style)
+        // 0.75 = 3:4 portrait, 1.5 = 3:2 landscape
+        const clampedRatio = Math.min(Math.max(aspectRatio, 0.75), 1.5);
         const calculatedHeight = width / clampedRatio;
-        const finalHeight = Math.min(calculatedHeight, MAX_SINGLE_IMAGE_HEIGHT);
+        // Clamp height between min and max
+        const finalHeight = Math.min(Math.max(calculatedHeight, MIN_SINGLE_IMAGE_HEIGHT), MAX_SINGLE_IMAGE_HEIGHT);
 
         return (
             <TouchableOpacity
