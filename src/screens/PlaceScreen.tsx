@@ -32,6 +32,7 @@ import PlaceMenuScreen from './PlaceMenuScreen';
 import PlaceGroupsScreen from './PlaceGroupsScreen';
 import PlaceGroupDetailScreen from './PlaceGroupDetailScreen';
 import PlaceProfileScreen from './PlaceProfileScreen';
+import PlaceSearchScreen from './PlaceSearchScreen';
 import InAppBrowser from '../components/InAppBrowser';
 import TextWithSeeMore from '../components/TextWithSeeMore';
 import VideoPlayer from '../components/VideoPlayer';
@@ -84,6 +85,13 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     const [isCreateGroupModalVisible, setCreateGroupModalVisible] = useState(false);
     const [groupsKey, setGroupsKey] = useState(0); // Refresh trigger
     const [showProfileScreen, setShowProfileScreen] = useState(false);
+    const [viewingProfileUser, setViewingProfileUser] = useState<any>(null); // State to track which user profile to view
+    const [isSearching, setIsSearching] = useState(false); // State for search screen
+
+    const handleViewProfile = (targetUser: any) => {
+        setViewingProfileUser(targetUser);
+        setShowProfileScreen(true);
+    };
     // Tag People State
     const [taggedUsers, setTaggedUsers] = useState<{ id: string; name: string; avatar?: string }[]>([]);
     const [isTagModalVisible, setTagModalVisible] = useState(false);
@@ -332,7 +340,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                 <Ionicons name="home-outline" size={22} color="#333" />
                             </TouchableOpacity>
                         )}
-                        <TouchableOpacity style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}>
+                        <TouchableOpacity
+                            style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}
+                            onPress={() => setIsSearching(true)}
+                        >
                             <Ionicons name="search" size={22} color="#333" />
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}>
@@ -417,9 +428,11 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
                             {/* User Name & Time */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 1 }}>
-                                <Text style={{ fontSize: 12, color: '#65676B', fontWeight: '500' }}>
-                                    {item.author.name}
-                                </Text>
+                                <TouchableOpacity onPress={() => handleViewProfile(item.author)}>
+                                    <Text style={{ fontSize: 12, color: '#65676B', fontWeight: '500' }}>
+                                        {item.author.name}
+                                    </Text>
+                                </TouchableOpacity>
                                 <Text style={styles.dot}>•</Text>
                                 <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
                                 <Text style={styles.dot}>•</Text>
@@ -434,13 +447,17 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 ) : (
                     // NORMAL POST HEADER STYLE
                     <>
-                        <Image
-                            source={{ uri: item.author.avatar || `https://ui-avatars.com/api/?name=${item.author.name}` }}
-                            style={styles.postAvatar}
-                        />
+                        <TouchableOpacity onPress={() => handleViewProfile(item.author)}>
+                            <Image
+                                source={{ uri: item.author.avatar || `https://ui-avatars.com/api/?name=${item.author.name}` }}
+                                style={styles.postAvatar}
+                            />
+                        </TouchableOpacity>
                         <View style={styles.postInfo}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <Text style={styles.postAuthor}>{item.author.name}</Text>
+                                <TouchableOpacity onPress={() => handleViewProfile(item.author)}>
+                                    <Text style={styles.postAuthor}>{item.author.name}</Text>
+                                </TouchableOpacity>
                                 {item.taggedUsers && item.taggedUsers.length > 0 && (
                                     <Text style={{ fontWeight: '400', color: '#333' }}>
                                         {' cùng với '}
@@ -1015,6 +1032,40 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     onTabChange={setPlaceActiveTab}
                 />
             </View>
+        );
+    }
+
+    if (showProfileScreen) {
+        return (
+            <PlaceProfileScreen
+                user={viewingProfileUser || user || {}}
+                isOwnProfile={!viewingProfileUser || viewingProfileUser.id === user.id}
+                onBack={() => {
+                    setShowProfileScreen(false);
+                    setViewingProfileUser(null);
+                }}
+                onEditProfile={() => Alert.alert('Thông báo', 'Tính năng chỉnh sửa profile đang phát triển')}
+                onMessage={() => Alert.alert('Tin nhắn', `Bắt đầu cuộc trò chuyện với ${viewingProfileUser?.name || 'người dùng'}`)}
+            />
+        );
+    }
+
+    // Render Search Screen
+    if (isSearching) {
+        return (
+            <PlaceSearchScreen
+                onBack={() => setIsSearching(false)}
+                onSelectResult={(item) => {
+                    if (item.type === 'USER') {
+                        setIsSearching(false);
+                        handleViewProfile(item); // Navigate to profile
+                    } else {
+                        // Handle keyword search (future)
+                        setIsSearching(false);
+                        Alert.alert('Tìm kiếm', `Kết quả cho: ${item.text || item.name}`);
+                    }
+                }}
+            />
         );
     }
 

@@ -32,15 +32,22 @@ const FB_ORANGE = '#F97316';
 
 interface PlaceProfileScreenProps {
     user: any;
+    isOwnProfile?: boolean;
     onBack: () => void;
     onEditProfile?: () => void;
+    onMessage?: () => void;
 }
 
 export default function PlaceProfileScreen({
     user,
+    isOwnProfile = true, // Default to true for backward compatibility
     onBack,
     onEditProfile,
+    onMessage,
 }: PlaceProfileScreenProps) {
+    // Mock follow state (should be from user prop or API)
+    const [isFollowing, setIsFollowing] = useState(user?.isFollowing ?? true);
+    // Defaulting to true to match the 'Đang theo dõi' screenshot example
     const [newPostText, setNewPostText] = useState('');
     const [modalVisible, setModalVisible] = useState(false);
     const [modalType, setModalType] = useState<'AVATAR' | 'COVER'>('AVATAR');
@@ -52,8 +59,7 @@ export default function PlaceProfileScreen({
     const userName = user?.name || 'Người dùng';
     const userEmail = user?.email || 'email@example.com';
 
-    // Mock user posts - Replace with actual data fetching if needed
-    // Currently empty to show empty state as requested, or use user.posts if available
+    // Use actual user posts, default to empty array if none
     const userPosts = user?.posts || [];
     // Slide animation for modal
     const slideAnim = React.useRef(new Animated.Value(300)).current;
@@ -122,31 +128,25 @@ export default function PlaceProfileScreen({
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-            {/* Fixed Header */}
-            <SafeAreaView style={styles.fixedHeader} pointerEvents="box-none">
-                <LinearGradient
-                    colors={['rgba(0,0,0,0.5)', 'transparent']}
-                    style={styles.headerGradient}
-                >
-                    <View style={[styles.topNav, { marginTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0 }]}>
-                        <TouchableOpacity onPress={onBack} style={styles.navButton}>
-                            <Ionicons name="chevron-back" size={24} color="#fff" />
-                        </TouchableOpacity>
-                        <Text style={styles.navTitle} numberOfLines={1}>{userName}</Text>
-                        <TouchableOpacity style={styles.navButton}>
-                            <Ionicons name="search" size={22} color="#fff" />
-                        </TouchableOpacity>
-                    </View>
-                </LinearGradient>
+            {/* White Fixed Header */}
+            <SafeAreaView style={styles.headerContainer}>
+                <View style={styles.topNav}>
+                    <TouchableOpacity onPress={onBack} style={styles.navButton}>
+                        <Ionicons name="chevron-back" size={28} color="#000" />
+                    </TouchableOpacity>
+                    <Text style={styles.navTitle} numberOfLines={1}>{userName}</Text>
+                    <TouchableOpacity style={styles.navButton}>
+                        <Ionicons name="search" size={24} color="#000" />
+                    </TouchableOpacity>
+                </View>
             </SafeAreaView>
 
             <ScrollView
                 style={styles.scrollView}
                 showsVerticalScrollIndicator={false}
                 bounces={false}
-                contentContainerStyle={{ paddingTop: 0 }}
             >
                 {/* Cover Photo Section */}
                 <View style={styles.coverContainer}>
@@ -155,13 +155,7 @@ export default function PlaceProfileScreen({
                         style={styles.coverImage}
                         resizeMode="cover"
                     >
-                        {/* Gradient overlay at top for status bar */}
-                        <LinearGradient
-                            colors={['rgba(0,0,0,0.4)', 'transparent']}
-                            style={styles.coverGradient}
-                        />
-
-
+                        {/* No content needed inside cover anymore since header is moved out */}
 
                         {/* Camera button for cover photo */}
                         <TouchableOpacity
@@ -194,13 +188,44 @@ export default function PlaceProfileScreen({
 
                     {/* Action Buttons Row */}
                     <View style={styles.actionRow}>
-                        <TouchableOpacity style={styles.editButton} onPress={onEditProfile}>
-                            <Feather name="edit-2" size={16} color="#333" />
-                            <Text style={styles.editButtonText}>Chỉnh sửa thông tin</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.moreButton}>
-                            <Ionicons name="ellipsis-horizontal" size={20} color="#333" />
-                        </TouchableOpacity>
+                        {isOwnProfile ? (
+                            <>
+                                <TouchableOpacity style={styles.editButton} onPress={onEditProfile}>
+                                    <Feather name="edit-2" size={16} color="#333" />
+                                    <Text style={styles.editButtonText}>Chỉnh sửa trang cá nhân</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.moreButton}>
+                                    <Ionicons name="ellipsis-horizontal" size={20} color="#333" />
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <>
+                                <TouchableOpacity
+                                    style={[styles.followButton, isFollowing && styles.followingButton]}
+                                    onPress={() => setIsFollowing(!isFollowing)}
+                                >
+                                    {isFollowing ? (
+                                        <>
+                                            <MaterialCommunityIcons name="briefcase-check" size={18} color="#F97316" />
+                                            <Text style={styles.followingText}>Đang theo dõi</Text>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Ionicons name="person-add" size={18} color="#fff" />
+                                            <Text style={styles.followText}>Theo dõi</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.messageButton} onPress={onMessage}>
+                                    <Ionicons name="chatbubble-ellipses-outline" size={22} color="#000" />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.moreButton}>
+                                    <Ionicons name="ellipsis-horizontal" size={20} color="#333" />
+                                </TouchableOpacity>
+                            </>
+                        )}
                     </View>
 
                     {/* Divider */}
@@ -389,52 +414,32 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
-    coverGradient: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: 80,
-    },
-    fixedHeader: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
+    // coverGradient removed
+    headerContainer: {
+        backgroundColor: '#fff',
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f2f5',
         zIndex: 100,
-    },
-    headerGradient: {
-        width: '100%',
-        paddingBottom: 10,
-    },
-    topNavSafe: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
     },
     topNav: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingHorizontal: 12,
+        height: 50,
     },
     navButton: {
         width: 36,
         height: 36,
-        borderRadius: 18,
-        backgroundColor: 'rgba(0,0,0,0.3)',
         justifyContent: 'center',
         alignItems: 'center',
     },
     navTitle: {
         fontSize: 18,
-        fontWeight: '600',
-        color: '#fff',
-        textShadowColor: 'rgba(0,0,0,0.3)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 2,
+        fontWeight: 'bold',
+        color: '#000',
+        marginLeft: 8,
+        flex: 1, // Let title take available space
     },
     coverCameraBtn: {
         position: 'absolute',
@@ -506,29 +511,60 @@ const styles = StyleSheet.create({
     },
     editButton: {
         flex: 1,
+        height: 36,
+        backgroundColor: '#E4E6EB',
+        borderRadius: 6,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: FB_ORANGE,
-        paddingVertical: 10,
-        borderRadius: 8,
         marginRight: 8,
     },
     editButtonText: {
-        marginLeft: 8,
-        fontSize: 15,
+        marginLeft: 6,
         fontWeight: '600',
+        color: '#050505',
+    },
+    // Follow/Message Buttons
+    followButton: {
+        flex: 1,
+        height: 36,
+        backgroundColor: '#1877F2',
+        borderRadius: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 8,
+    },
+    followingButton: {
+        backgroundColor: '#FEF0E6', // Light orange bg
+    },
+    followText: {
         color: '#fff',
+        fontWeight: '600',
+        marginLeft: 6,
+    },
+    followingText: {
+        color: '#F97316',
+        fontWeight: '600',
+        marginLeft: 6,
+    },
+    messageButton: {
+        width: 48,
+        height: 36,
+        backgroundColor: '#E4E6EB',
+        borderRadius: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 8,
     },
     moreButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 8,
+        width: 48,
+        height: 36,
         backgroundColor: '#E4E6EB',
-        justifyContent: 'center',
+        borderRadius: 6,
         alignItems: 'center',
+        justifyContent: 'center',
     },
-
     // Divider
     divider: {
         height: 1,
