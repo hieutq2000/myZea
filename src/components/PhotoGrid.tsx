@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Image, StyleSheet, TouchableOpacity, Text, Dimensions } from 'react-native';
+import AutoHeightImage from './AutoHeightImage';
 
 const { width } = Dimensions.get('window');
 
@@ -14,53 +15,30 @@ interface PhotoGridProps {
     onPressImage: (index: number) => void;
 }
 
-// Default aspect ratio when no dimensions available
-const DEFAULT_ASPECT_RATIO = 1.5; // 3:2 - common photo ratio
-const MAX_SINGLE_IMAGE_HEIGHT = 500; // Max height cho ảnh dọc
-const MIN_SINGLE_IMAGE_HEIGHT = 200; // Minimum height for very wide images
+// Constants cho grid nhiều ảnh
+const MULTI_IMAGE_HEIGHT = 350;
 
 export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     // Helper to get URI
     const getUri = (img: string | ImageObj) => typeof img === 'string' ? img : img.uri;
 
-    // Helper to get aspectRatio from image object (if available)
-    const getAspectRatio = (img: string | ImageObj): number => {
-        if (typeof img === 'object' && img.width && img.height && img.height > 0) {
-            return img.width / img.height;
-        }
-        return DEFAULT_ASPECT_RATIO;
-    };
-
     if (!images || images.length === 0) return null;
 
     const count = images.length;
-    const uri0 = getUri(images[0]);
 
-    // 1 Image - Hiển thị đầy đủ ảnh không bị cắt
+    // 1 Image - Sử dụng AutoHeightImage để hiển thị đúng tỷ lệ như Facebook
     if (count === 1) {
-        const aspectRatio = getAspectRatio(images[0]);
-
-        // Tính chiều cao dựa trên tỷ lệ ảnh
-        const calculatedHeight = width / aspectRatio;
-
-        // Giới hạn chiều cao: min 200px, max 500px
-        const finalHeight = Math.min(Math.max(calculatedHeight, MIN_SINGLE_IMAGE_HEIGHT), MAX_SINGLE_IMAGE_HEIGHT);
-
         return (
-            <TouchableOpacity
+            <AutoHeightImage
+                source={images[0]}
                 onPress={() => onPressImage(0)}
-                activeOpacity={0.9}
-                style={{ width: '100%', height: finalHeight, backgroundColor: '#f5f5f5' }}
-            >
-                <Image
-                    source={{ uri: uri0 }}
-                    style={{ width: '100%', height: '100%' }}
-                    resizeMode="contain"
-                />
-            </TouchableOpacity>
+                maxHeight={600}
+                minHeight={150}
+            />
         );
     }
 
+    const uri0 = getUri(images[0]);
     const uri1 = images[1] ? getUri(images[1]) : '';
     const uri2 = images[2] ? getUri(images[2]) : '';
     const uri3 = images[3] ? getUri(images[3]) : '';
@@ -147,8 +125,6 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
         </View>
     );
 }
-
-const MULTI_IMAGE_HEIGHT = 350; // Fixed height for 2+ images like Facebook
 
 const styles = StyleSheet.create({
     imageFull: {
