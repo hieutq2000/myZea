@@ -16,7 +16,7 @@ interface PhotoGridProps {
 
 // Default aspect ratio when no dimensions available
 const DEFAULT_ASPECT_RATIO = 1.5; // 3:2 - common photo ratio
-const MAX_SINGLE_IMAGE_HEIGHT = 400; // Facebook limits to ~400px for single image
+const MAX_SINGLE_IMAGE_HEIGHT = 500; // Max height cho ảnh dọc
 const MIN_SINGLE_IMAGE_HEIGHT = 200; // Minimum height for very wide images
 
 export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
@@ -36,21 +36,27 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     const count = images.length;
     const uri0 = getUri(images[0]);
 
-    // 1 Image (Full Width, Fixed Height - hiển thị full ảnh không bị cắt)
+    // 1 Image - Chiều cao tính theo tỷ lệ ảnh thực tế, giới hạn min/max
     if (count === 1) {
-        // Fixed height - ảnh sẽ được scale để fit, không bị cắt
-        const finalHeight = MAX_SINGLE_IMAGE_HEIGHT; // 400px cố định
+        const aspectRatio = getAspectRatio(images[0]);
+
+        // Tính chiều cao dựa trên tỷ lệ ảnh
+        // width / aspectRatio = height
+        const calculatedHeight = width / aspectRatio;
+
+        // Giới hạn chiều cao: min 200px, max 500px
+        const finalHeight = Math.min(Math.max(calculatedHeight, MIN_SINGLE_IMAGE_HEIGHT), MAX_SINGLE_IMAGE_HEIGHT);
 
         return (
             <TouchableOpacity
                 onPress={() => onPressImage(0)}
                 activeOpacity={0.9}
-                style={{ width: '100%', height: finalHeight, backgroundColor: '#000' }}
+                style={{ width: '100%', height: finalHeight }}
             >
                 <Image
                     source={{ uri: uri0 }}
                     style={{ width: '100%', height: '100%' }}
-                    resizeMode="contain"
+                    resizeMode="cover"
                 />
             </TouchableOpacity>
         );
