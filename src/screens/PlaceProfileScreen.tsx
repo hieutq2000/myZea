@@ -20,7 +20,7 @@ import {
 import { Ionicons, Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { getUserPosts, followUser, unfollowUser, Post } from '../utils/api';
+import { getUserPosts, followUser, unfollowUser, Post, uploadImage, updateProfile } from '../utils/api';
 import FacebookImageViewer from '../components/FacebookImageViewer';
 
 const { width } = Dimensions.get('window');
@@ -64,6 +64,7 @@ export default function PlaceProfileScreen({
     // Real Data State
     const [userPosts, setUserPosts] = useState<Post[]>([]);
     const [loadingPosts, setLoadingPosts] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
     // Image Viewer State
     const [isImageViewerVisible, setIsImageViewerVisible] = useState(false);
@@ -80,6 +81,7 @@ export default function PlaceProfileScreen({
         setViewingImageIndex(0);
         setIsImageViewerVisible(true);
     };
+
 
     // Fetch posts on mount or user change
     React.useEffect(() => {
@@ -146,24 +148,48 @@ export default function PlaceProfileScreen({
 
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true, // Facebook avatar thường cho phép crop vuông
-                aspect: modalType === 'AVATAR' ? [1, 1] : [16, 9],
+                allowsEditing: true,
+                aspect: modalType === 'AVATAR' ? [1, 1] : undefined, // Cover photo no need aspect ratio constraint
                 quality: 0.8,
             });
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 const newUri = result.assets[0].uri;
-                if (modalType === 'AVATAR') {
-                    setAvatarSource(newUri);
-                    // TODO: Call API to update avatar
-                } else {
-                    setCoverSource(newUri);
-                    // TODO: Call API to update cover
+                setIsUploading(true);
+
+                // 1. Upload to Server
+                let uploadedUrl = newUri;
+                try {
+                    const response = await uploadImage(newUri);
+                    uploadedUrl = response.url; // Extract URL from UploadResponse object
+                } catch (error) {
+                    console.error('Upload failed:', error);
+                    Alert.alert('Lỗi tải ảnh', 'Không thể tải ảnh lên server, sẽ sử dụng ảnh local tạm thời.');
                 }
+
+                // 2. Update State & Database
+                if (modalType === 'AVATAR') {
+                    setAvatarSource(uploadedUrl);
+                    // Update Profile in DB
+                    try {
+                        await updateProfile(userName, uploadedUrl); // Keep current name, update avatar
+                        Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện!');
+                    } catch (error) {
+                        console.error('Update profile failed:', error);
+                        Alert.alert('Lưu thất bại', 'Ảnh đã tải lên nhưng chưa lưu được vào hồ sơ.');
+                    }
+                } else {
+                    setCoverSource(uploadedUrl);
+                    // Cover photo API not available yet, just local update
+                    Alert.alert('Thành công', 'Đã cập nhật ảnh bìa (Lưu tạm thời).');
+                }
+
+                setIsUploading(false);
                 closeModal();
             }
         } catch (error) {
             console.error(error);
+            setIsUploading(false);
             Alert.alert("Lỗi", "Không thể chọn ảnh");
         }
     };
