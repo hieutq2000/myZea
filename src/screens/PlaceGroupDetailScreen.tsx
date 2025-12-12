@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -16,6 +16,8 @@ import {
     ScrollView,
     Modal,
     KeyboardAvoidingView,
+    Animated,
+    Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { apiRequest, createGroupPost, uploadImage, getCurrentUser, Post } from '../utils/api';
@@ -23,6 +25,7 @@ import { launchImageLibrary } from '../utils/imagePicker';
 import InAppBrowser from '../components/InAppBrowser';
 import TextWithSeeMore from '../components/TextWithSeeMore';
 import VideoPlayer from '../components/VideoPlayer';
+import PhotoGrid from '../components/PhotoGrid';
 
 const isVideo = (url: string | any) => {
     const uri = typeof url === 'string' ? url : url?.uri;
@@ -93,6 +96,23 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
     const [newPostImages, setNewPostImages] = useState<string[]>([]);
     const [isPosting, setIsPosting] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
+
+    // Animated Header State
+    const scrollY = useRef(new Animated.Value(0)).current;
+    const HEADER_SCROLL_THRESHOLD = 200; // Khi cuộn qua 200px sẽ hiện header thu gọn
+
+    // Calculate header opacity based on scroll
+    const headerOpacity = scrollY.interpolate({
+        inputRange: [0, HEADER_SCROLL_THRESHOLD - 50, HEADER_SCROLL_THRESHOLD],
+        outputRange: [0, 0, 1],
+        extrapolate: 'clamp',
+    });
+
+    const headerBgOpacity = scrollY.interpolate({
+        inputRange: [0, HEADER_SCROLL_THRESHOLD - 50, HEADER_SCROLL_THRESHOLD],
+        outputRange: [0, 0.5, 1],
+        extrapolate: 'clamp',
+    });
 
     const openLink = (url: string) => {
         setBrowserUrl(url);
@@ -208,17 +228,23 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                     <TextWithSeeMore text={item.content} onLinkPress={openLink} />
                 </View>
 
+                {/* Post Images/Videos - Sử dụng PhotoGrid giống PlaceScreen */}
                 {item.images && item.images.length > 0 && (
                     <View style={{ marginTop: 8 }}>
-                        {item.images.map((img, index) => (
-                            <View key={index} style={{ marginBottom: 4 }}>
-                                {isVideo(img) ? (
-                                    <VideoPlayer source={getUri(img)} style={{ width: '100%', height: 350 }} />
-                                ) : (
-                                    <Image source={{ uri: getUri(img) }} style={{ width: '100%', height: 350, borderRadius: 8 }} resizeMode="cover" />
-                                )}
-                            </View>
-                        ))}
+                        {/* Check if single video */}
+                        {item.images.length === 1 && isVideo(item.images[0]) ? (
+                            <VideoPlayer
+                                source={getUri(item.images[0])}
+                                style={{ width: '100%', maxHeight: 450 }}
+                            />
+                        ) : (
+                            <PhotoGrid
+                                images={item.images}
+                                onPressImage={(_index: number) => {
+                                    // Có thể thêm image viewer ở đây sau
+                                }}
+                            />
+                        )}
                     </View>
                 )}
 
@@ -268,7 +294,76 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-            <FlatList
+            {/* Sticky Animated Header - Always visible */}
+            <Animated.View style={[
+                styles.stickyHeader,
+                {
+                    backgroundColor: headerBgOpacity.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['transparent', '#FFFFFF'],
+                    }),
+                }
+            ]}>
+                <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                    <Animated.View style={{
+                        backgroundColor: headerBgOpacity.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['rgba(0,0,0,0.3)', 'transparent'],
+                        }),
+                        borderRadius: 20,
+                        width: 40,
+                        height: 40,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                    }}>
+                        <Animated.Text style={{
+                            color: headerBgOpacity.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: ['#FFFFFF', '#333333'],
+                            }),
+                        }}>
+                            <Ionicons name="arrow-back" size={24} />
+                        </Animated.Text>
+                    </Animated.View>
+                </TouchableOpacity>
+
+                {/* Group Name - Chỉ hiển thị khi cuộn */}
+                <Animated.Text
+                    style={[
+                        styles.stickyHeaderTitle,
+                        { opacity: headerOpacity }
+                    ]}
+                    numberOfLines={1}
+                >
+                    {group.name}
+                </Animated.Text>
+
+                {/* Right side icons */}
+                <Animated.View style={{
+                    flexDirection: 'row',
+                    opacity: headerOpacity,
+                }}>
+                    <TouchableOpacity style={styles.headerIconButton}>
+                        <Ionicons name="search" size={22} color="#333" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.headerIconButton}>
+                        <Ionicons name="ellipsis-horizontal" size={22} color="#333" />
+                    </TouchableOpacity>
+                </Animated.View>
+
+                {/* Placeholder for right side when not scrolled */}
+                <Animated.View style={{
+                    width: 80,
+                    opacity: headerOpacity.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 0],
+                    }),
+                    position: 'absolute',
+                    right: 16,
+                }} />
+            </Animated.View>
+
+            <Animated.FlatList
                 data={posts}
                 keyExtractor={item => item.id}
                 renderItem={renderPost}
@@ -281,17 +376,13 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                 maxToRenderPerBatch={5}
                 windowSize={5}
                 showsVerticalScrollIndicator={false}
+                onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                    { useNativeDriver: false }
+                )}
+                scrollEventThrottle={16}
                 ListHeaderComponent={() => (
                     <View>
-                        {/* Header with back button */}
-                        <View style={styles.headerOverlay}>
-                            <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                                <Ionicons name="arrow-back" size={24} color="#FFF" />
-                            </TouchableOpacity>
-                            <Text style={styles.headerTitle} numberOfLines={1}>{group.name}</Text>
-                            <View style={{ width: 40 }} />
-                        </View>
-
                         {/* Cover Image */}
                         <Image source={{ uri: coverUri }} style={styles.coverImage} />
 
@@ -408,7 +499,28 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                 visible={isPostModalVisible}
                 animationType="slide"
                 transparent={true}
-                onRequestClose={() => setPostModalVisible(false)}
+                onRequestClose={() => {
+                    // Show confirmation if there's content
+                    if (newPostContent.trim() || newPostImages.length > 0) {
+                        Alert.alert(
+                            'Bạn có muốn lưu bài viết để hoàn thành sau không?',
+                            '',
+                            [
+                                {
+                                    text: 'Bỏ bài viết', style: 'destructive', onPress: () => {
+                                        setNewPostContent('');
+                                        setNewPostImages([]);
+                                        setPostModalVisible(false);
+                                    }
+                                },
+                                { text: 'Lưu bản nháp', onPress: () => setPostModalVisible(false) },
+                                { text: 'Tiếp tục chỉnh sửa', style: 'cancel' },
+                            ]
+                        );
+                    } else {
+                        setPostModalVisible(false);
+                    }
+                }}
             >
                 <View style={styles.modalOverlay}>
                     <KeyboardAvoidingView
@@ -416,7 +528,28 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     >
                         <View style={styles.modalHeader}>
-                            <TouchableOpacity onPress={() => setPostModalVisible(false)}>
+                            <TouchableOpacity onPress={() => {
+                                // Show confirmation if there's content
+                                if (newPostContent.trim() || newPostImages.length > 0) {
+                                    Alert.alert(
+                                        'Bạn có muốn lưu bài viết để hoàn thành sau không?',
+                                        '',
+                                        [
+                                            {
+                                                text: 'Bỏ bài viết', style: 'destructive', onPress: () => {
+                                                    setNewPostContent('');
+                                                    setNewPostImages([]);
+                                                    setPostModalVisible(false);
+                                                }
+                                            },
+                                            { text: 'Lưu bản nháp', onPress: () => setPostModalVisible(false) },
+                                            { text: 'Tiếp tục chỉnh sửa', style: 'cancel' },
+                                        ]
+                                    );
+                                } else {
+                                    setPostModalVisible(false);
+                                }
+                            }}>
                                 <Ionicons name="arrow-back" size={24} color="#333" />
                             </TouchableOpacity>
                             <Text style={styles.modalTitle}>Tạo bài viết</Text>
@@ -505,6 +638,10 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                                 <Text style={styles.footerButtonText}>Ảnh/Video</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.footerButton}>
+                                <Ionicons name="person-add-outline" size={24} color="#1877F2" />
+                                <Text style={styles.footerButtonText}>Gắn thẻ</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.footerButton}>
                                 <Ionicons name="happy-outline" size={24} color="#F7B928" />
                                 <Text style={styles.footerButtonText}>Cảm xúc</Text>
                             </TouchableOpacity>
@@ -543,11 +680,37 @@ const styles = StyleSheet.create({
         paddingBottom: 12,
         backgroundColor: 'rgba(0,0,0,0.3)',
     },
+    // Sticky Header Styles
+    stickyHeader: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 8 : 50,
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 0,
+        borderBottomColor: '#E0E0E0',
+    },
+    stickyHeaderTitle: {
+        flex: 1,
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+        marginLeft: 12,
+    },
+    headerIconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 8,
+    },
     backButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(0,0,0,0.3)',
         justifyContent: 'center',
         alignItems: 'center',
     },

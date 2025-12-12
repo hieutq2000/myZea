@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus, Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -9,6 +9,8 @@ interface VideoPlayerProps {
     paused?: boolean;
     useNativeControls?: boolean;
 }
+
+const MAX_VIDEO_HEIGHT = 450; // Max height like Facebook
 
 export default function VideoPlayer({ source, style, paused = true, useNativeControls = false }: VideoPlayerProps) {
     const video = useRef<Video>(null);
@@ -43,8 +45,13 @@ export default function VideoPlayer({ source, style, paused = true, useNativeCon
         }
     };
 
+    // Calculate height with max limit
+    const screenWidth = Dimensions.get('window').width;
+    const calculatedHeight = screenWidth / videoRatio;
+    const finalHeight = Math.min(calculatedHeight, MAX_VIDEO_HEIGHT);
+
     return (
-        <View style={[styles.container, style, { width: '100%', aspectRatio: videoRatio }]}>
+        <View style={[styles.container, style, { width: '100%', height: finalHeight }]}>
             <Video
                 ref={video}
                 style={styles.video}

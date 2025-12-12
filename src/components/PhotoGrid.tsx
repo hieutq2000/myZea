@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, Image, StyleSheet, TouchableOpacity, Text, Dimensions } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -14,54 +14,47 @@ interface PhotoGridProps {
     onPressImage: (index: number) => void;
 }
 
+// Default aspect ratio when no dimensions available
+const DEFAULT_ASPECT_RATIO = 1.5; // 3:2 - common photo ratio
+const MAX_SINGLE_IMAGE_HEIGHT = 500;
+const DEFAULT_HEIGHT = Math.min(width / DEFAULT_ASPECT_RATIO, MAX_SINGLE_IMAGE_HEIGHT);
+
 export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     // Helper to get URI
     const getUri = (img: string | ImageObj) => typeof img === 'string' ? img : img.uri;
 
-    // Helper: Initial Ratio
-    const getInitialRatio = () => {
-        if (images && images.length === 1) {
-            const img = images[0];
-            if (typeof img === 'object' && img.width && img.height && img.height > 0) {
-                return img.width / img.height;
-            }
+    // Helper to get aspectRatio from image object (if available)
+    const getAspectRatio = (img: string | ImageObj): number => {
+        if (typeof img === 'object' && img.width && img.height && img.height > 0) {
+            return img.width / img.height;
         }
-        return 1.5;
+        return DEFAULT_ASPECT_RATIO;
     };
-
-    const [aspectRatio, setAspectRatio] = useState(getInitialRatio());
-
-    useEffect(() => {
-        if (images && images.length === 1) {
-            const img = images[0];
-            // If we already have dimensions, we don't need getSize, but we can double check or just skip
-            if (typeof img === 'object' && img.width && img.height) {
-                setAspectRatio(img.width / img.height);
-                return;
-            }
-
-            // Fallback for string URLs or objects without dims
-            const uri = getUri(img);
-            Image.getSize(uri, (w, h) => {
-                if (h > 0) setAspectRatio(w / h);
-            }, (error) => console.log('Image getSize error:', error));
-        }
-    }, [images]);
 
     if (!images || images.length === 0) return null;
 
     const count = images.length;
     const uri0 = getUri(images[0]);
 
-    // 1 Image (Full Width, Dynamic Height)
+    // 1 Image (Full Width, Dynamic Height with max limit like Facebook)
     if (count === 1) {
+        const aspectRatio = getAspectRatio(images[0]);
+        // Clamp aspect ratio to reasonable bounds (prevent too tall or too wide)
+        const clampedRatio = Math.min(Math.max(aspectRatio, 0.5), 2); // Between 1:2 and 2:1
+        const calculatedHeight = width / clampedRatio;
+        const finalHeight = Math.min(calculatedHeight, MAX_SINGLE_IMAGE_HEIGHT);
+
         return (
-            <TouchableOpacity onPress={() => onPressImage(0)} activeOpacity={0.9} style={{ width: '100%', aspectRatio: aspectRatio }}>
-                {/* Placeholder color can be added here if needed */}
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#ddd' }]} />
+            <TouchableOpacity
+                onPress={() => onPressImage(0)}
+                activeOpacity={0.9}
+                style={{ width: '100%', height: finalHeight }}
+            >
+                {/* Placeholder background */}
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#f0f0f0' }]} />
                 <Image
                     source={{ uri: uri0 }}
-                    style={{ width: '100%', height: '100%', maxHeight: 600 }}
+                    style={{ width: '100%', height: '100%' }}
                     resizeMode="cover"
                 />
             </TouchableOpacity>
@@ -155,14 +148,16 @@ export default function PhotoGrid({ images, onPressImage }: PhotoGridProps) {
     );
 }
 
+const MULTI_IMAGE_HEIGHT = 350; // Fixed height for 2+ images like Facebook
+
 const styles = StyleSheet.create({
     imageFull: {
         width: '100%',
-        height: 300,
+        height: 500, // Single image max height
     },
     row: {
         flexDirection: 'row',
-        height: 300,
+        height: MULTI_IMAGE_HEIGHT, // 2-3 images row height
     },
     gridRow: {
         flex: 1,
@@ -181,11 +176,11 @@ const styles = StyleSheet.create({
         height: '100%',
     },
     gridContainer: {
-        height: 380, // Tăng chiều cao lên chút cho đẹp hơn với 4 ảnh
+        height: MULTI_IMAGE_HEIGHT, // 4+ images grid height - same as 2-3 for consistency
     },
     imageHalfGrid: {
         width: '100%',
-        height: '100%', // Flexible height
+        height: '100%',
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,

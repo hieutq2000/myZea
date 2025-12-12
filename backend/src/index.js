@@ -1049,7 +1049,7 @@ app.use('/uploads', express.static(uploadsDir));
 
 // Upload image endpoint
 // Import image-size
-const sizeOf = require('image-size');
+const sizeOf = require('image-size').default;
 
 // ... existing code ...
 
@@ -1929,18 +1929,38 @@ app.get('/api/place/groups/:id/posts', authenticateToken, async (req, res) => {
             LIMIT 50
         `, [userId, groupId]);
 
-        const formattedPosts = posts.map(p => {
-            let images = [];
-            if (p.image) {
+        // Helper to process images - handles both string URLs and {uri, width, height} objects
+        const processImages = (dbImageString) => {
+            let processedImages = [];
+            if (dbImageString) {
                 try {
-                    const parsed = JSON.parse(p.image);
-                    images = Array.isArray(parsed)
-                        ? parsed.map(url => fixImageUrl(url, host))
-                        : [fixImageUrl(p.image, host)];
+                    const parsed = JSON.parse(dbImageString);
+                    if (Array.isArray(parsed)) {
+                        processedImages = parsed.map(item => {
+                            if (typeof item === 'string') {
+                                return fixImageUrl(item, host);
+                            } else if (item && typeof item === 'object') {
+                                return {
+                                    ...item,
+                                    uri: fixImageUrl(item.url || item.uri, host) // standardize to uri
+                                };
+                            }
+                            return item;
+                        });
+                    } else {
+                        // Single string (legacy)
+                        processedImages = [fixImageUrl(dbImageString, host)];
+                    }
                 } catch {
-                    images = [fixImageUrl(p.image, host)];
+                    // Not JSON, just a string URL
+                    processedImages = [fixImageUrl(dbImageString, host)];
                 }
             }
+            return processedImages;
+        };
+
+        const formattedPosts = posts.map(p => {
+            let images = processImages(p.image);
 
             return {
                 id: p.id,
