@@ -375,7 +375,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
     const renderPost = ({ item }: { item: Post }) => (
         <View
-            style={styles.postCard}
+            style={[styles.postCard, activeReactionPostId === item.id && { zIndex: 1000, elevation: 10 }]}
             onLayout={() => {
                 // Track view when post becomes visible
                 trackPostView(item.id);
@@ -620,6 +620,8 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
                 scrollEventThrottle={16}
                 data={posts}
+                extraData={activeReactionPostId}
+
                 keyExtractor={item => item.id}
                 renderItem={renderPost}
                 refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}

@@ -35,6 +35,7 @@ export default function VideoPlayer({
 }: VideoPlayerProps) {
     const video = useRef<Video>(null);
     const fullscreenVideo = useRef<Video>(null);
+    const [isPlaying, setIsPlaying] = useState(!paused);
     const [status, setStatus] = useState<AVPlaybackStatus | {}>({});
     const [isLoading, setIsLoading] = useState(true);
     const [isMuted, setIsMuted] = useState(false);
@@ -44,6 +45,10 @@ export default function VideoPlayer({
     const [duration, setDuration] = useState(0);
     const [position, setPosition] = useState(0);
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        setIsPlaying(!paused);
+    }, [paused]);
 
     useEffect(() => {
         // Enable audio playback in silent mode
@@ -68,7 +73,7 @@ export default function VideoPlayer({
                 clearTimeout(controlsTimeoutRef.current);
             }
             controlsTimeoutRef.current = setTimeout(() => {
-                if ((status as any)?.isPlaying) {
+                if (isPlaying) {
                     setShowControls(false);
                 }
             }, 3000);
@@ -78,17 +83,10 @@ export default function VideoPlayer({
                 clearTimeout(controlsTimeoutRef.current);
             }
         };
-    }, [isFullscreen, showControls, status]);
+    }, [isFullscreen, showControls, isPlaying]);
 
     const handlePlayPause = async () => {
-        const videoRef = isFullscreen ? fullscreenVideo : video;
-        if (!videoRef.current) return;
-
-        if ((status as any).isPlaying) {
-            await videoRef.current.pauseAsync();
-        } else {
-            await videoRef.current.playAsync();
-        }
+        setIsPlaying(!isPlaying);
         setShowControls(true);
     };
 
@@ -113,8 +111,12 @@ export default function VideoPlayer({
             if (currentStatus.isLoaded) {
                 setPosition(currentStatus.positionMillis || 0);
             }
+            // Explicitly pause the small video before opening fullscreen
+            // This is a safety measure in case prop update is slow
+            await video.current.pauseAsync();
         }
         setIsFullscreen(true);
+        setIsPlaying(true); // Ensure it plays in fullscreen
         setShowControls(true);
     };
 
@@ -127,6 +129,7 @@ export default function VideoPlayer({
             }
         }
         setIsFullscreen(false);
+        // isPlaying state persists, so if user paused in fullscreen, it remains paused
     };
 
     const handleStatusUpdate = (s: AVPlaybackStatus) => {
@@ -134,6 +137,11 @@ export default function VideoPlayer({
         if (s.isLoaded) {
             setDuration(s.durationMillis || 0);
             setPosition(s.positionMillis || 0);
+
+            // Sync internal state if playback finished or external factors changed it
+            if (s.didJustFinish) {
+                setIsPlaying(false);
+            }
         }
     };
 
@@ -153,7 +161,7 @@ export default function VideoPlayer({
                     isLooping
                     isMuted={isMuted}
                     volume={1.0}
-                    shouldPlay={!paused && !isFullscreen}
+                    shouldPlay={isPlaying && !isFullscreen}
                     onPlaybackStatusUpdate={handleStatusUpdate}
                     onLoad={(status: any) => {
                         if (status.naturalSize && status.naturalSize.height > 0) {
@@ -176,27 +184,45 @@ export default function VideoPlayer({
                 {!useNativeControls && !isLoading && (
                     <View style={styles.controlsOverlay}>
                         <TouchableOpacity style={styles.centerButton} onPress={handlePlayPause}>
-                            {!(status as any).isPlaying && (
+                            {!isPlaying && (
                                 <View style={styles.playButtonCircle}>
                                     <Ionicons name="play" size={30} color="white" style={{ marginLeft: 4 }} />
                                 </View>
                             )}
-                            {(status as any).isPlaying && (
+                            {isPlaying && (
                                 <View style={{ width: '100%', height: '100%' }} />
                             )}
                         </TouchableOpacity>
 
-                        {/* Volume Button */}
-                        <TouchableOpacity style={styles.volumeButton} onPress={() => setIsMuted(!isMuted)}>
-                            <Ionicons name={isMuted ? "volume-mute" : "volume-high"} size={20} color="white" />
-                        </TouchableOpacity>
+                        {/* Bottom Bar Controls (Facebook style) */}
+                        <View style={styles.inlineControlsContainer}>
+                            <View style={styles.inlineProgressContainer}>
+                                <Text style={styles.inlineTimeText}>{formatTime(position)}</Text>
+                                <Slider
+                                    style={styles.inlineSlider}
+                                    minimumValue={0}
+                                    maximumValue={1}
+                                    value={duration > 0 ? position / duration : 0}
+                                    onSlidingComplete={handleSeek}
+                                    minimumTrackTintColor="#1877F2" // Facebook Blue
+                                    maximumTrackTintColor="rgba(255,255,255,0.3)"
+                                    thumbTintColor="#1877F2"
+                                />
+                                <Text style={styles.inlineTimeText}>{formatTime(duration)}</Text>
+                            </View>
 
-                        {/* Fullscreen Button */}
-                        {showFullscreenButton && (
-                            <TouchableOpacity style={styles.fullscreenButton} onPress={openFullscreen}>
-                                <Ionicons name="expand" size={20} color="white" />
-                            </TouchableOpacity>
-                        )}
+                            <View style={styles.inlineRightControls}>
+                                <TouchableOpacity style={styles.iconButton} onPress={() => setIsMuted(!isMuted)}>
+                                    <Ionicons name={isMuted ? "volume-mute" : "volume-high"} size={20} color="white" />
+                                </TouchableOpacity>
+
+                                {showFullscreenButton && (
+                                    <TouchableOpacity style={styles.iconButton} onPress={openFullscreen}>
+                                        <Ionicons name="expand" size={20} color="white" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </View>
                     </View>
                 )}
             </View>
@@ -223,7 +249,7 @@ export default function VideoPlayer({
                         isLooping
                         isMuted={isMuted}
                         volume={1.0}
-                        shouldPlay={true}
+                        shouldPlay={isPlaying}
                         positionMillis={position}
                         onPlaybackStatusUpdate={handleStatusUpdate}
                     />
@@ -305,6 +331,45 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    // Inline Controls (Facebook Style)
+    inlineControlsContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingBottom: 6,
+        paddingTop: 6,
+    },
+    inlineProgressContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    inlineSlider: {
+        flex: 1,
+        marginHorizontal: 8,
+        height: 30,
+    },
+    inlineTimeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: '600',
+        minWidth: 35,
+        textAlign: 'center',
+    },
+    inlineRightControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    iconButton: {
+        padding: 5,
+        marginLeft: 5,
     },
     centerButton: {
         width: '100%',
