@@ -328,7 +328,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         >
                             <Text style={styles.logoText}>P</Text>
                         </LinearGradient>
-                        <Text style={styles.headerTitle}>Zyea Place</Text>
+                        <Text style={styles.headerTitle}>Z-Feed</Text>
                     </View>
                     <View style={styles.headerIcons}>
                         {/* Home button - go back to main tabs */}
