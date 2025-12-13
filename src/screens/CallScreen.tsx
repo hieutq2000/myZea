@@ -220,6 +220,7 @@ export default function CallScreen() {
     };
 
     const handleCallRejected = () => {
+        sendCallMessage('call_missed');
         cleanup();
         navigation.goBack();
         Alert.alert('Cuộc gọi', 'Người nhận đang bận.');

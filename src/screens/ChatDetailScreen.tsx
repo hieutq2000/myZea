@@ -37,6 +37,10 @@ export default function ChatDetailScreen() {
         loadHistory();
         fetchCurrentUser();
 
+        const unsubscribeFocus = navigation.addListener('focus', () => {
+            loadHistory();
+        });
+
         const keyboardWillShow = Keyboard.addListener('keyboardWillShow', (e) => {
             setKeyboardHeight(e.endCoordinates.height);
             setShowEmojiPicker(false);

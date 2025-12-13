@@ -250,7 +250,11 @@ export default function VideoPlayer({
                         isMuted={isMuted}
                         volume={1.0}
                         shouldPlay={isPlaying}
-                        positionMillis={position}
+                        onLoad={() => {
+                            if (fullscreenVideo.current) {
+                                fullscreenVideo.current.setPositionAsync(position);
+                            }
+                        }}
                         onPlaybackStatusUpdate={handleStatusUpdate}
                     />
 
@@ -268,7 +272,7 @@ export default function VideoPlayer({
                             <TouchableOpacity style={styles.centerPlayButton} onPress={handlePlayPause}>
                                 <View style={styles.bigPlayButton}>
                                     <Ionicons
-                                        name={(status as any).isPlaying ? "pause" : "play"}
+                                        name={isPlaying ? "pause" : "play"}
                                         size={40}
                                         color="white"
                                     />
@@ -286,9 +290,9 @@ export default function VideoPlayer({
                                         maximumValue={1}
                                         value={duration > 0 ? position / duration : 0}
                                         onSlidingComplete={handleSeek}
-                                        minimumTrackTintColor="#FF6B00"
+                                        minimumTrackTintColor="#1877F2"
                                         maximumTrackTintColor="rgba(255,255,255,0.3)"
-                                        thumbTintColor="#FF6B00"
+                                        thumbTintColor="#1877F2"
                                     />
                                     <Text style={styles.timeText}>{formatTime(duration)}</Text>
                                 </View>
