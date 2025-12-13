@@ -116,7 +116,7 @@ export default function CallScreen() {
                 try {
                     console.log('🔊 Playing Dial Tone...');
                     const { sound } = await Audio.Sound.createAsync(
-                        { uri: 'https://vinalive.net/assets/sounds/dial_tone_us.mp3' },
+                        { uri: 'https://assets.mixkit.co/active_storage/sfx/2359/2359-preview.mp3' },
                         { shouldPlay: true, isLooping: true }
                     );
                     setDialTone(sound);

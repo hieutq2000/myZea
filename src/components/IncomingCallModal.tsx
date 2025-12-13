@@ -58,7 +58,7 @@ export default function IncomingCallModal({
                 // In a real app, use a local asset like require('../assets/ringtone.mp3')
                 // For this demo, we use a standard ringtone URL or fallback to vibration
                 const { sound } = await Audio.Sound.createAsync(
-                    { uri: 'https://vinalive.net/assets/sounds/ringtone_iphone_14.mp3' }, // Placeholder URL
+                    { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' }, // Standard Ringtone
                     { shouldPlay: true, isLooping: true }
                 );
                 soundObject = sound;
