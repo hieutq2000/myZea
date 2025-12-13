@@ -373,6 +373,121 @@ app.post('/api/auth/push-token', authenticateToken, async (req, res) => {
     }
 });
 
+// ============ ADMIN ROUTES ============
+app.get('/api/admin/users', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+        const [users] = await pool.execute('SELECT id, name, email, avatar, level, xp, created_at FROM users ORDER BY created_at DESC');
+        res.json(users);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Update user info
+app.put('/api/admin/users/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') return res.status(403).json({ error: 'Không có quyền truy cập' });
+
+        const { id } = req.params;
+        const { name, email, xp, level, resetPassword } = req.body;
+
+        let query = 'UPDATE users SET name = ?, email = ?, xp = ?, level = ?';
+        let params = [name, email, xp, level];
+
+        if (resetPassword) {
+            const hashedPassword = await bcrypt.hash(resetPassword, 10);
+            query += ', password = ?';
+            params.push(hashedPassword);
+        }
+
+        query += ' WHERE id = ?';
+        params.push(id);
+
+        await pool.execute(query, params);
+        res.json({ success: true });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Delete user
+app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') return res.status(403).json({ error: 'Không có quyền truy cập' });
+
+        const { id } = req.params;
+        // Prevent deleting self
+        const [currentUser] = await pool.execute('SELECT id FROM users WHERE email = ?', ['hieu@gmail.com']);
+        if (currentUser[0] && currentUser[0].id === id) {
+            return res.status(400).json({ error: 'Không thể tự xóa chính mình' });
+        }
+
+        await pool.execute('DELETE FROM users WHERE id = ?', [id]);
+        res.json({ success: true });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get all posts (for content moderation)
+app.get('/api/admin/posts', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') return res.status(403).json({ error: 'Không có quyền truy cập' });
+
+        const [posts] = await pool.execute(`
+            SELECT p.id, p.content, p.image_url, p.created_at, 
+                   u.name as author_name, u.avatar as author_avatar 
+            FROM posts p 
+            JOIN users u ON p.user_id = u.id 
+            ORDER BY p.created_at DESC
+        `);
+        res.json(posts);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Delete post (moderation)
+app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') return res.status(403).json({ error: 'Không có quyền truy cập' });
+
+        await pool.execute('DELETE FROM posts WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Send System Notification
+app.post('/api/admin/system/notification', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') return res.status(403).json({ error: 'Không có quyền truy cập' });
+
+        const { title, message } = req.body;
+
+        // Emit socket event to ALL connected clients
+        io.emit('systemNotification', {
+            title: title || 'Thông báo hệ thống',
+            message: message,
+            time: new Date().toISOString()
+        });
+
+        res.json({ success: true, count: io.engine.clientsCount });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
 // ============ EXAM ROUTES ============
 
 // Save exam result
