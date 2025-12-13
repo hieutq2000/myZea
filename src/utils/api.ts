@@ -139,6 +139,22 @@ export async function getExamHistory(): Promise<ExamResult[]> {
     return apiRequest<ExamResult[]>('/api/exam/history');
 }
 
+// ============ SYSTEM API ============
+
+export interface SystemSettings {
+    maintenance: boolean;
+    maintenanceMessage?: string;
+    version?: string;
+}
+
+export async function getSystemSettings(): Promise<SystemSettings> {
+    try {
+        return await apiRequest<SystemSettings>('/api/system/settings');
+    } catch {
+        return { maintenance: false }; // Fallback
+    }
+}
+
 // ============ HEALTH CHECK ============
 
 export async function checkServerHealth(): Promise<boolean> {

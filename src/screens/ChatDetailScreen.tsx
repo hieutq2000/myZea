@@ -181,7 +181,7 @@ export default function ChatDetailScreen() {
                 type: type,
                 imageUrl: imageUrl,
                 tempId: tempId,
-                replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, type: replyingTo.type } : null
+                replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, type: replyingTo.type } : undefined
             });
             socket.emit('userStoppedTyping', { conversationId, userId: currentUserId });
         }

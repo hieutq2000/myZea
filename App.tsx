@@ -23,6 +23,8 @@ import { getCurrentUser, logout as apiLogout, updateProfile, saveExamResult } fr
 import { getLatestChangelog } from './src/utils/changelog';
 import { COLORS } from './src/utils/theme';
 import { useAppUpdates } from './src/hooks/useAppUpdates';
+import MaintenanceScreen from './src/screens/MaintenanceScreen';
+import { getSystemSettings } from './src/utils/api';
 
 type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'PROFILE' | 'SESSION' | 'PLACE' | 'ONBOARDING';
 
@@ -73,6 +75,9 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     channelName?: string;
     isVideo: boolean;
   }>({ visible: false, callerId: '', isVideo: false });
+  const [maintenanceMode, setMaintenanceMode] = useState<{ enabled: boolean; message?: string }>({
+    enabled: false,
+  });
 
 
   const [pushToken, setPushToken] = useState<string | null>(null);
@@ -198,6 +203,16 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const checkMaintenance = async () => {
+      const settings = await getSystemSettings();
+      if (settings.maintenance) {
+        setMaintenanceMode({ enabled: true, message: settings.maintenanceMessage });
+      }
+    };
+    checkMaintenance();
+  }, []);
 
   // Handle accepting incoming call
   const handleAcceptCall = () => {
@@ -347,13 +362,16 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
 
-  // Loading screen while checking session (same color as splash for smooth transition)
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#667eea' }}>
         <ActivityIndicator size="large" color="#fff" />
       </View>
     );
+  }
+
+  if (maintenanceMode.enabled) {
+    return <MaintenanceScreen message={maintenanceMode.message} />;
   }
 
   // Render different screens based on current view
