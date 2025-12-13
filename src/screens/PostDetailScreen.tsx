@@ -350,7 +350,7 @@ export default function PostDetailScreen() {
             {renderHeader()}
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
@@ -360,7 +360,7 @@ export default function PostDetailScreen() {
                     keyExtractor={item => item.id}
                     renderItem={renderCommentItem}
                     ListHeaderComponent={renderPostContent}
-                    contentContainerStyle={{ paddingBottom: 80 }}
+                    contentContainerStyle={{ paddingBottom: 20 }}
                     ListEmptyComponent={() => (
                         <View style={{ padding: 20, alignItems: 'center' }}>
                             {isLoadingComments ? (
@@ -370,70 +370,72 @@ export default function PostDetailScreen() {
                             )}
                         </View>
                     )}
+                    style={{ flex: 1 }}
                 />
 
-                {/* Input Bar */}
+                {/* Input Bar - Fixed at bottom */}
                 <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-                    <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-                        style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}
-                    >
-                        {/* Image Preview in Input */}
-                        {commentImages.length > 0 && (
-                            <View style={{ flexDirection: 'row', paddingHorizontal: 10, paddingBottom: 10 }}>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                    {commentImages.map((uri, index) => (
-                                        <View key={index} style={{ marginRight: 8 }}>
-                                            <Image source={{ uri }} style={{ width: 60, height: 60, borderRadius: 8 }} />
-                                            <TouchableOpacity
-                                                onPress={() => removeCommentImage(index)}
-                                                style={{ position: 'absolute', top: -5, right: -5, backgroundColor: '#ddd', borderRadius: 10 }}
-                                            >
-                                                <Ionicons name="close-circle" size={20} color="#333" />
-                                            </TouchableOpacity>
-                                        </View>
-                                    ))}
-                                </ScrollView>
-                            </View>
-                        )}
+                    {/* Image Preview in Input */}
+                    {commentImages.length > 0 && (
+                        <View style={{ flexDirection: 'row', paddingHorizontal: 10, paddingBottom: 10 }}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                {commentImages.map((uri, index) => (
+                                    <View key={index} style={{ marginRight: 8 }}>
+                                        <Image source={{ uri }} style={{ width: 60, height: 60, borderRadius: 8 }} />
+                                        <TouchableOpacity
+                                            onPress={() => removeCommentImage(index)}
+                                            style={{ position: 'absolute', top: -5, right: -5, backgroundColor: '#ddd', borderRadius: 10 }}
+                                        >
+                                            <Ionicons name="close-circle" size={20} color="#333" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    )}
 
-                        <View style={styles.footerInputContainer}>
-                            <TouchableOpacity style={styles.footerIconBtn} onPress={handlePickCommentImages}>
-                                <Ionicons name="camera-outline" size={24} color={isDark ? '#FFF' : '#000'} />
-                            </TouchableOpacity>
+                    <View style={styles.footerInputContainer}>
+                        <TouchableOpacity style={styles.footerIconBtn} onPress={handlePickCommentImages}>
+                            <Ionicons name="camera-outline" size={24} color={isDark ? '#FFF' : '#666'} />
+                        </TouchableOpacity>
+                        <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#3A3B3C' : '#F0F2F5' }]}>
                             <TextInput
-                                style={[styles.input, { color: colors.text, backgroundColor: isDark ? '#3A3B3C' : '#F0F2F5' }]}
+                                style={[styles.input, { color: colors.text }]}
                                 placeholder="Viết bình luận..."
                                 placeholderTextColor={colors.textSecondary}
                                 value={commentText}
                                 onChangeText={setCommentText}
                                 multiline
                             />
-                            <TouchableOpacity
-                                style={[styles.sendButton, (!commentText.trim() && commentImages.length === 0) && styles.sendButtonDisabled]}
-                                onPress={handleSendComment}
-                                disabled={!commentText.trim() && commentImages.length === 0}
-                            >
-                                <Ionicons name="send" size={20} color="#1877F2" />
-                            </TouchableOpacity>
                         </View>
-                    </KeyboardAvoidingView>
+                        <TouchableOpacity
+                            style={[styles.sendButton, (!commentText.trim() && commentImages.length === 0) && styles.sendButtonDisabled]}
+                            onPress={handleSendComment}
+                            disabled={(!commentText.trim() && commentImages.length === 0) || isSending}
+                        >
+                            {isSending ? (
+                                <ActivityIndicator size="small" color="#1877F2" />
+                            ) : (
+                                <Ionicons name="send" size={22} color="#1877F2" />
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                {/* Image Viewer */}
-                {isImageViewerVisible && (
-                    <FacebookImageViewer
-                        images={viewerImages.length > 0 ? viewerImages : postImages}
-                        visible={isImageViewerVisible}
-                        onClose={() => {
-                            setIsImageViewerVisible(false);
-                            setViewerImages([]);
-                        }}
-                        imageIndex={selectedImageIndex}
-                        post={passedPost}
-                    />
-                )}
             </KeyboardAvoidingView>
+
+            {/* Image Viewer */}
+            {isImageViewerVisible && (
+                <FacebookImageViewer
+                    images={viewerImages.length > 0 ? viewerImages : postImages}
+                    visible={isImageViewerVisible}
+                    onClose={() => {
+                        setIsImageViewerVisible(false);
+                        setViewerImages([]);
+                    }}
+                    imageIndex={selectedImageIndex}
+                    post={passedPost}
+                />
+            )}
         </View>
     );
 }
@@ -589,9 +591,8 @@ const styles = StyleSheet.create({
     },
     // Input
     inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'flex-end',
-        padding: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 8,
         borderTopWidth: 1,
         borderTopColor: '#eee',
     },

@@ -320,14 +320,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             <SafeAreaView>
                 <View style={[styles.headerContent, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
                     <View style={styles.headerLogoContainer}>
-                        <LinearGradient
-                            colors={['#00C6FF', '#0072FF']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.logoBadge}
-                        >
-                            <Text style={styles.logoText}>P</Text>
-                        </LinearGradient>
+                        <Image
+                            source={require('../../assets/icon.png')}
+                            style={styles.logoIcon}
+                        />
                         <Text style={styles.headerTitle}>Z-Feed</Text>
                     </View>
                     <View style={styles.headerIcons}>
@@ -1156,6 +1152,12 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
+        marginRight: 10,
+    },
+    logoIcon: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
         marginRight: 10,
     },
     logoText: {

@@ -50,6 +50,29 @@ function safeJsonParse(str, defaultValue = []) {
 
 // ============ UTILS ============
 
+/**
+ * Format MySQL datetime to ISO string preserving Vietnam timezone (GMT+7)
+ * MySQL với timezone +07:00 trả về Date object, nhưng khi JSON.stringify 
+ * nó sẽ convert về UTC. Hàm này đảm bảo client nhận được thời gian chính xác.
+ */
+function formatDateForClient(mysqlDate) {
+    if (!mysqlDate) return null;
+
+    // Nếu đã là string, return luôn
+    if (typeof mysqlDate === 'string') {
+        return mysqlDate;
+    }
+
+    // Nếu là Date object, format theo ISO với timezone offset
+    if (mysqlDate instanceof Date) {
+        // Date object từ MySQL connection với timezone +07:00 đã là local time
+        // Sử dụng toISOString() để get UTC time (chuẩn cho client xử lý)
+        return mysqlDate.toISOString();
+    }
+
+    return mysqlDate;
+}
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function safeCallApi(apiFunction) {
@@ -94,7 +117,7 @@ async function initDatabase() {
             database: process.env.DB_NAME || 'vinalive_db',
             waitForConnections: true,
             connectionLimit: 10,
-            timezone: '+07:00', // Vietnam timezone
+            timezone: 'Z', // Use UTC to avoid timezone conversion issues
         });
 
         // Create tables if not exist
@@ -1204,7 +1227,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                     content: p.op_content,
                     image: opImages.length > 0 ? opImages[0] : null,
                     images: opImages,
-                    createdAt: p.op_createdAt
+                    createdAt: formatDateForClient(p.op_createdAt)
                 };
             }
 
@@ -1219,7 +1242,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 image: images.length > 0 ? images[0] : null,
                 images: images,
                 originalPost: originalPost, // Attached Shared Post
-                createdAt: new Date(p.createdAt).toISOString(),
+                createdAt: formatDateForClient(p.createdAt),
                 likes: p.likes,
                 isLiked: p.isLiked > 0,
                 comments: p.comments,
@@ -1617,7 +1640,7 @@ app.get('/api/place/notifications', authenticateToken, async (req, res) => {
             postId: n.postId,
             postPreview: n.postPreview,
             message: n.message,
-            createdAt: new Date(n.createdAt).toISOString(),
+            createdAt: formatDateForClient(n.createdAt),
             isRead: !!n.isRead
         }));
 
