@@ -18,6 +18,7 @@ import {
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Post } from '../utils/api';
+import { formatTime } from '../utils/formatTime';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import * as Clipboard from 'expo-clipboard';
@@ -225,7 +226,7 @@ export default function FacebookImageViewer({
                         <View style={styles.postInfoContainer}>
                             <View style={styles.authorRow}>
                                 <Text style={styles.authorName}>{post.author.name}</Text>
-                                <Text style={styles.postTime}> • 1 giờ</Text>
+                                <Text style={styles.postTime}> • {formatTime(post.createdAt)}</Text>
                             </View>
 
                             <Text style={styles.caption} numberOfLines={2}>

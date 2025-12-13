@@ -985,8 +985,16 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 <PlaceNotificationsScreen
                     onBack={() => setPlaceActiveTab('HOME')}
                     onOpenPost={(postId) => {
-                        // TODO: Navigate to post detail
-                        setPlaceActiveTab('HOME');
+                        // Find the post from posts array
+                        const post = posts.find(p => p.id === postId);
+                        if (post) {
+                            // Navigate to PostDetail with the post
+                            navigation.navigate('PostDetail', { postId, post });
+                        } else {
+                            // If post not found in local state, still navigate with just postId
+                            // PostDetail screen should handle fetching the post
+                            navigation.navigate('PostDetail', { postId });
+                        }
                     }}
                 />
                 <PlaceBottomBar

@@ -10,10 +10,12 @@ import {
     Image,
     Dimensions,
     Alert,
+    ImageBackground,
+    Animated,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
 import { getCurrentUser } from '../utils/api';
 import createAgoraRtcEngine, {
@@ -24,18 +26,19 @@ import createAgoraRtcEngine, {
 } from 'react-native-agora';
 import { Camera } from 'expo-camera';
 import { Audio } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type CallScreenRouteProp = RouteProp<RootStackParamList, 'Call'>;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Agora App ID from https://console.agora.io (Testing Mode - no token required)
+// Agora App ID from https://console.agora.io
 const AGORA_APP_ID = 'f1c136b8ee414b18b2881df02f8da179';
 
 export default function CallScreen() {
     const route = useRoute<CallScreenRouteProp>();
     const navigation = useNavigation();
-    const { partnerId, userName, avatar, isVideo, isIncoming, channelName } = route.params;
+    const { partnerId, userName, avatar, isVideo, isIncoming, channelName, conversationId } = route.params;
 
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [isJoined, setIsJoined] = useState(false);
@@ -45,15 +48,17 @@ export default function CallScreen() {
     const [remoteUid, setRemoteUid] = useState<number | null>(null);
     const [callStatus, setCallStatus] = useState<'calling' | 'ringing' | 'connected' | 'ended'>('calling');
     const [callDuration, setCallDuration] = useState(0);
+    const [dialTone, setDialTone] = useState<Audio.Sound | null>(null);
 
     const agoraEngineRef = useRef<IRtcEngine | null>(null);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const socket = getSocket();
+    const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
         initCall();
 
-        // Socket listeners for call signaling
+        // Socket listeners
         if (socket) {
             socket.on('callAccepted', handleCallAccepted);
             socket.on('callRejected', handleCallRejected);
@@ -70,8 +75,60 @@ export default function CallScreen() {
         };
     }, []);
 
+    // Pulse Animation for Avatar when ringing
+    useEffect(() => {
+        if (callStatus === 'ringing' || callStatus === 'calling') {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(pulseAnim, {
+                        toValue: 1.15,
+                        duration: 1000,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(pulseAnim, {
+                        toValue: 1,
+                        duration: 1000,
+                        useNativeDriver: true,
+                    }),
+                ])
+            ).start();
+        } else {
+            pulseAnim.setValue(1);
+        }
+    }, [callStatus]);
+
+    // Handle Dial Tone Sound
+    useEffect(() => {
+        const manageAudio = async () => {
+            if (isIncoming || callStatus === 'connected' || callStatus === 'ended') {
+                // Stop dial tone if connected, ended or incoming (incoming has ringtone where handled)
+                if (dialTone) {
+                    try {
+                        await dialTone.stopAsync();
+                        await dialTone.unloadAsync();
+                    } catch (e) { }
+                    setDialTone(null);
+                }
+                return;
+            }
+
+            if ((callStatus === 'calling' || callStatus === 'ringing') && !dialTone) {
+                try {
+                    console.log('🔊 Playing Dial Tone...');
+                    const { sound } = await Audio.Sound.createAsync(
+                        { uri: 'https://vinalive.net/assets/sounds/dial_tone_us.mp3' },
+                        { shouldPlay: true, isLooping: true }
+                    );
+                    setDialTone(sound);
+                } catch (error) {
+                    console.log('Error playing dial tone:', error);
+                }
+            }
+        };
+        manageAudio();
+    }, [callStatus, isIncoming]);
+
     const initCall = async () => {
-        // First get current user ID
         const user = await getCurrentUser();
         if (!user) {
             Alert.alert('Lỗi', 'Không thể lấy thông tin người dùng');
@@ -81,26 +138,18 @@ export default function CallScreen() {
         const userId = user.id;
         setCurrentUserId(userId);
 
-        // Generate or safe-keep channel name
-        // Agora channel name limit is 64 bytes. UUIDs are 36 chars.
-        // call_UUID_UUID = 5 + 36 + 1 + 36 = 78 chars -> Too long!
-        // We use slice to shorten IDs to ensure we are under the limit.
         let channel = channelName;
         if (!channel) {
-            // Take first 15 chars of each ID: 5 + 15 + 1 + 15 = 36 chars (Safe)
             const safeUserId = userId.slice(0, 15);
             const safePartnerId = partnerId.slice(0, 15);
             channel = `call_${safeUserId}_${safePartnerId}`;
         }
 
         if (isIncoming) {
-            // Incoming call - already accepted, show connected immediately
             setCallStatus('connected');
             startCallTimer();
         } else {
-            // Outgoing call - emit call request
             if (socket) {
-                console.log('📞 Emitting callRequest to', partnerId, 'Channel:', channel);
                 socket.emit('callRequest', {
                     callerId: userId,
                     receiverId: partnerId,
@@ -111,58 +160,40 @@ export default function CallScreen() {
             }
         }
 
-        // Try to setup Agora
         try {
             await setupAgora(userId, channel);
         } catch (e: any) {
             console.error('Agora setup failed:', e);
-            Alert.alert('Lỗi khởi tạo', 'Không thể khởi động Agora: ' + (e.message || JSON.stringify(e)));
+            Alert.alert('Lỗi', 'Không thể kết nối cuộc gọi');
         }
     };
 
     const setupAgora = async (userId: string, channel: string) => {
         try {
-            // Request permissions first
             if (Platform.OS === 'android' || Platform.OS === 'ios') {
-                const { status: cameraStatus } = await Camera.requestCameraPermissionsAsync();
-                const { status: audioStatus } = await Camera.requestMicrophonePermissionsAsync();
-
-                if (cameraStatus !== 'granted' || audioStatus !== 'granted') {
-                    Alert.alert('Lỗi quyền', 'Cần quyền Camera và Microphone để gọi điện.');
-                    return;
-                }
+                await Camera.requestCameraPermissionsAsync();
+                await Camera.requestMicrophonePermissionsAsync();
             }
-
-
 
             const engine = createAgoraRtcEngine();
             agoraEngineRef.current = engine;
 
             engine.registerEventHandler({
                 onJoinChannelSuccess: () => {
-                    console.log('✅ Joined Agora channel successfully');
-                    // Alert.alert('Debug', '✅ Máy bạn đã kết nối Agora Server!');
                     setIsJoined(true);
                 },
                 onUserJoined: (_connection, uid) => {
-                    console.log('👤 Remote user joined:', uid);
-                    // Alert.alert('Debug', `👤 Người kia (${uid}) đã kết nối Audio!`);
                     setRemoteUid(uid);
                     setCallStatus('connected');
                     startCallTimer();
                 },
                 onUserOffline: (_connection, uid) => {
-                    console.log('👤 Remote user left:', uid);
                     setRemoteUid(null);
                     endCall();
                 },
                 onError: (err, msg) => {
-                    console.error('❌ Agora Error:', err, msg);
-                    Alert.alert('Lỗi Agora', `Code: ${err} - Msg: ${msg}`);
+                    console.log('Agora Error:', err, msg);
                 },
-                onPermissionError: (type) => {
-                    Alert.alert('Lỗi quyền', `Không có quyền truy cập ${type === 0 ? 'Audio' : 'Camera'}`);
-                }
             });
 
             engine.initialize({
@@ -177,37 +208,21 @@ export default function CallScreen() {
 
             engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
             engine.setEnableSpeakerphone(true);
-
-            // Join channel
-            console.log('Joining channel:', channel);
-
-            // UID = 0 means Agora assigns a random ID. Use this for UUID users.
             const result = await engine.joinChannel('', channel, 0, {});
-            if (result !== 0) {
-                console.error('Join channel returned error code:', result);
-                Alert.alert('Lỗi', `Join channel failed with code: ${result}`);
-            } else {
-                console.log('Join channel API called successfully');
-            }
-
         } catch (error) {
-            console.error('Agora setup error:', error);
-            Alert.alert('Lỗi', 'Không thể khởi tạo cuộc gọi');
-            navigation.goBack();
+            console.error('Agora error:', error);
         }
     };
 
     const handleCallAccepted = (data: any) => {
-        console.log('✅ SIGNALING: Call Accepted received!', data);
-        // Alert.alert('Debug', 'Đã nhận tín hiệu chấp nhận cuộc gọi!');
         setCallStatus('connected');
         startCallTimer();
     };
 
     const handleCallRejected = () => {
-        Alert.alert('Cuộc gọi', 'Người dùng từ chối cuộc gọi');
         cleanup();
         navigation.goBack();
+        Alert.alert('Cuộc gọi', 'Người nhận đang bận.');
     };
 
     const handleCallEnded = () => {
@@ -216,19 +231,39 @@ export default function CallScreen() {
     };
 
     const startCallTimer = () => {
-        timerRef.current = setInterval(() => {
-            setCallDuration(prev => prev + 1);
-        }, 1000);
+        if (!timerRef.current) {
+            setCallDuration(0);
+            timerRef.current = setInterval(() => {
+                setCallDuration(prev => prev + 1);
+            }, 1000);
+        }
+    };
+
+    const sendCallMessage = (type: 'call_missed' | 'call_ended', duration?: string) => {
+        if (socket && currentUserId) {
+            const text = type === 'call_missed' ? 'Cuộc gọi thoại bị nhỡ' : `Cuộc gọi thoại ${duration}`;
+            socket.emit('sendMessage', {
+                conversationId: conversationId,
+                senderId: currentUserId,
+                receiverId: partnerId,
+                message: text,
+                type: type,
+                callDuration: duration,
+                tempId: Date.now().toString()
+            });
+        }
     };
 
     const cleanup = () => {
-        if (timerRef.current) {
-            clearInterval(timerRef.current);
-        }
+        if (timerRef.current) clearInterval(timerRef.current);
         if (agoraEngineRef.current) {
             agoraEngineRef.current.leaveChannel();
             agoraEngineRef.current.release();
             agoraEngineRef.current = null;
+        }
+        if (dialTone) {
+            dialTone.stopAsync();
+            dialTone.unloadAsync();
         }
     };
 
@@ -239,6 +274,16 @@ export default function CallScreen() {
                 receiverId: partnerId,
             });
         }
+
+        // Send Chat Message Log
+        if (!isIncoming) {
+            if (callStatus === 'connected') {
+                sendCallMessage('call_ended', formatDuration(callDuration));
+            } else if (callStatus === 'calling' || callStatus === 'ringing') {
+                sendCallMessage('call_missed');
+            }
+        }
+
         cleanup();
         navigation.goBack();
     };
@@ -283,113 +328,86 @@ export default function CallScreen() {
 
     const getStatusText = () => {
         switch (callStatus) {
-            case 'calling':
-                return 'Đang kết nối...';
-            case 'ringing':
-                return 'Đang đổ chuông...';
-            case 'connected':
-                return formatDuration(callDuration);
-            case 'ended':
-                return 'Cuộc gọi kết thúc';
-            default:
-                return '';
+            case 'calling': return 'Đang kết nối...';
+            case 'ringing': return 'Đang đổ chuông...';
+            case 'connected': return formatDuration(callDuration);
+            case 'ended': return 'Cuộc gọi kết thúc';
+            default: return '';
         }
     };
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#000" />
+            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-            {/* Video View */}
             {isVideoEnabled && remoteUid ? (
                 <View style={styles.videoContainer}>
-                    {/* Remote Video (Full screen) */}
-                    <RtcSurfaceView
-                        style={styles.remoteVideo}
-                        canvas={{ uid: remoteUid }}
-                    />
-
-                    {/* Local Video (Small) */}
+                    <RtcSurfaceView style={styles.remoteVideo} canvas={{ uid: remoteUid }} />
                     <View style={styles.localVideoContainer}>
-                        <RtcSurfaceView
-                            style={styles.localVideo}
-                            canvas={{ uid: 0 }}
-                        />
+                        <RtcSurfaceView style={styles.localVideo} canvas={{ uid: 0 }} />
                     </View>
                 </View>
             ) : (
-                /* Audio Call / Waiting Screen */
-                <View style={styles.audioCallContainer}>
-                    <View style={styles.avatarLarge}>
-                        {avatar ? (
-                            <Image source={{ uri: avatar }} style={styles.avatarImage} />
-                        ) : (
-                            <View style={styles.avatarPlaceholder}>
-                                <Text style={styles.avatarText}>{userName?.[0]?.toUpperCase()}</Text>
+                <ImageBackground
+                    source={{ uri: avatar || 'https://images.unsplash.com/photo-1557683316-973673baf926?w=800&q=80' }}
+                    style={styles.backgroundImage}
+                    blurRadius={20}
+                >
+                    <LinearGradient
+                        colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)', '#000000']}
+                        style={styles.gradientOverlay}
+                    >
+                        <View style={styles.audioCallContent}>
+                            <View style={styles.avatarWrapper}>
+                                <Animated.View style={[styles.avatarPulse, { transform: [{ scale: pulseAnim }] }]} />
+                                <View style={styles.avatarContainer}>
+                                    {avatar ? (
+                                        <Image source={{ uri: avatar }} style={styles.avatarImage} />
+                                    ) : (
+                                        <Text style={styles.avatarText}>{userName?.[0]?.toUpperCase()}</Text>
+                                    )}
+                                </View>
                             </View>
-                        )}
-                    </View>
-                    <Text style={styles.userName}>{userName}</Text>
-                    <Text style={styles.callStatus}>{getStatusText()}</Text>
-                </View>
+                            <Text style={styles.userName}>{userName}</Text>
+                            <Text style={styles.callStatus}>{getStatusText()}</Text>
+                        </View>
+                    </LinearGradient>
+                </ImageBackground>
             )}
 
-            {/* Controls */}
             <SafeAreaView style={styles.controlsContainer}>
-                <View style={styles.controlsRow}>
-                    {/* Mute */}
-                    <TouchableOpacity
-                        style={[styles.controlButton, isMuted && styles.controlButtonActive]}
-                        onPress={toggleMute}
-                    >
-                        <Ionicons
-                            name={isMuted ? "mic-off" : "mic"}
-                            size={28}
-                            color="white"
-                        />
-                        <Text style={styles.controlLabel}>{isMuted ? 'Bật mic' : 'Tắt mic'}</Text>
-                    </TouchableOpacity>
-
-                    {/* End Call */}
-                    <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-                        <MaterialIcons name="call-end" size={36} color="white" />
-                    </TouchableOpacity>
-
-                    {/* Speaker */}
-                    <TouchableOpacity
-                        style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]}
-                        onPress={toggleSpeaker}
-                    >
-                        <Ionicons
-                            name={isSpeakerOn ? "volume-high" : "volume-low"}
-                            size={28}
-                            color="white"
-                        />
-                        <Text style={styles.controlLabel}>Loa</Text>
+                <View style={styles.topControls}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.minimizeBtn}>
+                        <Ionicons name="chevron-down" size={28} color="white" />
                     </TouchableOpacity>
                 </View>
 
-                {/* Video Controls */}
-                {isVideo && (
-                    <View style={styles.videoControlsRow}>
-                        <TouchableOpacity
-                            style={[styles.controlButton, !isVideoEnabled && styles.controlButtonActive]}
-                            onPress={toggleVideo}
-                        >
-                            <Ionicons
-                                name={isVideoEnabled ? "videocam" : "videocam-off"}
-                                size={28}
-                                color="white"
-                            />
-                            <Text style={styles.controlLabel}>Camera</Text>
+                <View style={styles.bottomControls}>
+                    <View style={styles.controlsRow}>
+                        <TouchableOpacity style={[styles.controlButton, isMuted && styles.controlButtonActive]} onPress={toggleMute}>
+                            <Ionicons name={isMuted ? "mic-off-outline" : "mic-outline"} size={28} color="white" />
+                            <Text style={styles.controlLabel}>Mic</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.controlButton} onPress={switchCamera}>
-                            <Ionicons name="camera-reverse" size={28} color="white" />
-                            <Text style={styles.controlLabel}>Đổi cam</Text>
+                        <TouchableOpacity style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]} onPress={toggleSpeaker}>
+                            <Ionicons name={isSpeakerOn ? "volume-high-outline" : "volume-low-outline"} size={28} color="white" />
+                            <Text style={styles.controlLabel}>Loa ngoài</Text>
+                        </TouchableOpacity>
+
+                        {isVideo && (
+                            <TouchableOpacity style={[styles.controlButton, !isVideoEnabled && styles.controlButtonActive]} onPress={toggleVideo}>
+                                <Ionicons name={isVideoEnabled ? "videocam-outline" : "videocam-off-outline"} size={28} color="white" />
+                                <Text style={styles.controlLabel}>Camera</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    <View style={styles.endCallRow}>
+                        <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
+                            <MaterialIcons name="call-end" size={32} color="white" />
                         </TouchableOpacity>
                     </View>
-                )}
+                </View>
             </SafeAreaView>
         </View>
     );
@@ -398,7 +416,17 @@ export default function CallScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#1a1a2e',
+        backgroundColor: '#000',
+    },
+    backgroundImage: {
+        flex: 1,
+        width: '100%',
+        height: '100%',
+    },
+    gradientOverlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     videoContainer: {
         flex: 1,
@@ -410,43 +438,53 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: Platform.OS === 'ios' ? 60 : 40,
         right: 20,
-        width: 120,
-        height: 160,
+        width: 100,
+        height: 150,
         borderRadius: 12,
         overflow: 'hidden',
         borderWidth: 2,
         borderColor: 'white',
+        backgroundColor: 'black',
+        shadowColor: '#000',
+        elevation: 5,
     },
     localVideo: {
         flex: 1,
     },
-    audioCallContainer: {
-        flex: 1,
+    audioCallContent: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 80,
+    },
+    avatarWrapper: {
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    avatarLarge: {
         marginBottom: 24,
     },
-    avatarImage: {
+    avatarPulse: {
+        position: 'absolute',
         width: 150,
         height: 150,
         borderRadius: 75,
-        borderWidth: 4,
-        borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: 'rgba(255,255,255,0.15)',
     },
-    avatarPlaceholder: {
-        width: 150,
-        height: 150,
-        borderRadius: 75,
-        backgroundColor: '#0068FF',
+    avatarContainer: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: '#333',
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 4,
-        borderColor: 'rgba(255,255,255,0.3)',
+        borderWidth: 2,
+        borderColor: 'white',
+        overflow: 'hidden',
+    },
+    avatarImage: {
+        width: '100%',
+        height: '100%',
     },
     avatarText: {
-        fontSize: 60,
+        fontSize: 48,
         fontWeight: 'bold',
         color: 'white',
     },
@@ -455,46 +493,63 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: 'white',
         marginBottom: 8,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
     },
     callStatus: {
         fontSize: 16,
-        color: 'rgba(255,255,255,0.7)',
+        color: 'rgba(255,255,255,0.8)',
+        fontWeight: '500',
     },
     controlsContainer: {
         position: 'absolute',
+        top: 0,
         bottom: 0,
         left: 0,
         right: 0,
-        paddingBottom: Platform.OS === 'ios' ? 40 : 30,
+        justifyContent: 'space-between',
+        paddingVertical: 20,
+    },
+    topControls: {
+        paddingTop: Platform.OS === 'ios' ? 20 : 40,
         paddingHorizontal: 20,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        flexDirection: 'row',
+    },
+    minimizeBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    bottomControls: {
+        paddingBottom: 40,
+        gap: 30,
+        paddingHorizontal: 30,
     },
     controlsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        paddingVertical: 20,
-    },
-    videoControlsRow: {
-        flexDirection: 'row',
         justifyContent: 'center',
         gap: 40,
-        paddingBottom: 10,
+        alignItems: 'flex-start',
     },
     controlButton: {
         alignItems: 'center',
-        padding: 12,
-        borderRadius: 50,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        minWidth: 70,
+        gap: 8,
     },
     controlButtonActive: {
-        backgroundColor: 'rgba(255,255,255,0.4)',
+        opacity: 0.7,
     },
     controlLabel: {
         color: 'white',
         fontSize: 12,
-        marginTop: 4,
+        fontWeight: '500',
+    },
+    endCallRow: {
+        alignItems: 'center',
+        marginTop: 10,
     },
     endCallButton: {
         width: 70,
@@ -503,5 +558,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#FF3B30',
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        elevation: 5,
     },
 });

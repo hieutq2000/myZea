@@ -26,6 +26,8 @@ import { formatTime } from '../utils/formatTime';
 import FacebookImageViewer from '../components/FacebookImageViewer';
 import TextWithSeeMore from '../components/TextWithSeeMore';
 import * as ImagePicker from 'expo-image-picker';
+import VideoPlayer from '../components/VideoPlayer';
+import { isVideo } from '../utils/media';
 
 const REACTIONS = [
     { id: 'like', icon: 'https://media.giphy.com/media/l4pTfx2qLszoacZRS/giphy.gif', label: 'Thích', color: '#1877F2' },
@@ -224,64 +226,78 @@ export default function PostDetailScreen() {
                     <TextWithSeeMore text={passedPost.content} style={StyleSheet.flatten([styles.postText, { color: colors.text }])} />
                 </View>
 
-                {/* Post Images Grid */}
+                {/* Post Media (Video or Images) */}
                 {postImages.length > 0 && (
                     <View style={styles.mediaContainer}>
-                        {postImages.length === 1 && (
-                            <TouchableOpacity onPress={() => openImageViewer(0)}>
-                                <Image source={{ uri: postImages[0] }} style={[styles.postImage, { height: 300 }]} resizeMode="cover" />
-                            </TouchableOpacity>
-                        )}
-                        {postImages.length === 2 && (
-                            <View style={{ flexDirection: 'row', height: 300 }}>
-                                <TouchableOpacity style={{ flex: 1, marginRight: 2 }} onPress={() => openImageViewer(0)}>
-                                    <Image source={{ uri: postImages[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                                </TouchableOpacity>
-                                <TouchableOpacity style={{ flex: 1, marginLeft: 2 }} onPress={() => openImageViewer(1)}>
-                                    <Image source={{ uri: postImages[1] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                        {postImages.length === 3 && (
-                            <View style={{ flexDirection: 'row', height: 300 }}>
-                                <TouchableOpacity style={{ flex: 2, marginRight: 2 }} onPress={() => openImageViewer(0)}>
-                                    <Image source={{ uri: postImages[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                                </TouchableOpacity>
-                                <View style={{ flex: 1, marginLeft: 2 }}>
-                                    <TouchableOpacity style={{ flex: 1, marginBottom: 2 }} onPress={() => openImageViewer(1)}>
-                                        <Image source={{ uri: postImages[1] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                        {/* Check if first item is video */}
+                        {isVideo(postImages[0]) ? (
+                            <VideoPlayer
+                                source={postImages[0]}
+                                style={{ width: '100%', height: 300 }}
+                                paused={true}
+                                useNativeControls={false}
+                                showFullscreenButton={true}
+                            />
+                        ) : (
+                            // Existing Image Grid Logic
+                            <>
+                                {postImages.length === 1 && (
+                                    <TouchableOpacity onPress={() => openImageViewer(0)}>
+                                        <Image source={{ uri: postImages[0] }} style={[styles.postImage, { height: 300 }]} resizeMode="cover" />
                                     </TouchableOpacity>
-                                    <TouchableOpacity style={{ flex: 1, marginTop: 2 }} onPress={() => openImageViewer(2)}>
-                                        <Image source={{ uri: postImages[2] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        )}
-                        {postImages.length >= 4 && (
-                            <View style={{ flexDirection: 'row', height: 300 }}>
-                                <View style={{ flex: 2, marginRight: 2 }}>
-                                    <TouchableOpacity style={{ flex: 1 }} onPress={() => openImageViewer(0)}>
-                                        <Image source={{ uri: postImages[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                                    </TouchableOpacity>
-                                </View>
-                                <View style={{ flex: 1, marginLeft: 2 }}>
-                                    <TouchableOpacity style={{ flex: 1, marginBottom: 2 }} onPress={() => openImageViewer(1)}>
-                                        <Image source={{ uri: postImages[1] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={{ flex: 1, marginVertical: 2 }} onPress={() => openImageViewer(2)}>
-                                        <Image source={{ uri: postImages[2] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={{ flex: 1, marginTop: 2 }} onPress={() => openImageViewer(3)}>
-                                        <ImageBackground source={{ uri: postImages[3] }} style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }} resizeMode="cover">
-                                            {postImages.length > 4 && (
-                                                <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' }}>
-                                                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>+{postImages.length - 4}</Text>
-                                                </View>
-                                            )}
-                                        </ImageBackground>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
+                                )}
+                                {postImages.length === 2 && (
+                                    <View style={{ flexDirection: 'row', height: 300 }}>
+                                        <TouchableOpacity style={{ flex: 1, marginRight: 2 }} onPress={() => openImageViewer(0)}>
+                                            <Image source={{ uri: postImages[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={{ flex: 1, marginLeft: 2 }} onPress={() => openImageViewer(1)}>
+                                            <Image source={{ uri: postImages[1] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                                {postImages.length === 3 && (
+                                    <View style={{ flexDirection: 'row', height: 300 }}>
+                                        <TouchableOpacity style={{ flex: 2, marginRight: 2 }} onPress={() => openImageViewer(0)}>
+                                            <Image source={{ uri: postImages[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                        </TouchableOpacity>
+                                        <View style={{ flex: 1, marginLeft: 2 }}>
+                                            <TouchableOpacity style={{ flex: 1, marginBottom: 2 }} onPress={() => openImageViewer(1)}>
+                                                <Image source={{ uri: postImages[1] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity style={{ flex: 1, marginTop: 2 }} onPress={() => openImageViewer(2)}>
+                                                <Image source={{ uri: postImages[2] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                )}
+                                {postImages.length >= 4 && (
+                                    <View style={{ flexDirection: 'row', height: 300 }}>
+                                        <View style={{ flex: 2, marginRight: 2 }}>
+                                            <TouchableOpacity style={{ flex: 1 }} onPress={() => openImageViewer(0)}>
+                                                <Image source={{ uri: postImages[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                            </TouchableOpacity>
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 2 }}>
+                                            <TouchableOpacity style={{ flex: 1, marginBottom: 2 }} onPress={() => openImageViewer(1)}>
+                                                <Image source={{ uri: postImages[1] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity style={{ flex: 1, marginVertical: 2 }} onPress={() => openImageViewer(2)}>
+                                                <Image source={{ uri: postImages[2] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity style={{ flex: 1, marginTop: 2 }} onPress={() => openImageViewer(3)}>
+                                                <ImageBackground source={{ uri: postImages[3] }} style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }} resizeMode="cover">
+                                                    {postImages.length > 4 && (
+                                                        <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' }}>
+                                                            <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>+{postImages.length - 4}</Text>
+                                                        </View>
+                                                    )}
+                                                </ImageBackground>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                )}
+                            </>
                         )}
                     </View>
                 )}
@@ -350,7 +366,7 @@ export default function PostDetailScreen() {
             {renderHeader()}
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
@@ -371,6 +387,8 @@ export default function PostDetailScreen() {
                         </View>
                     )}
                     style={{ flex: 1 }}
+                    removeClippedSubviews={false}
+                    keyboardShouldPersistTaps="handled"
                 />
 
                 {/* Input Bar - Fixed at bottom */}

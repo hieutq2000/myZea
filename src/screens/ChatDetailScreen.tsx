@@ -267,6 +267,7 @@ export default function ChatDetailScreen() {
                         avatar,
                         isVideo: false,
                         isIncoming: false,
+                        conversationId, // Pass conversationId
                     })}
                 >
                     <Ionicons name="call-outline" size={22} color="white" />
@@ -279,6 +280,7 @@ export default function ChatDetailScreen() {
                         avatar,
                         isVideo: true,
                         isIncoming: false,
+                        conversationId, // Pass conversationId
                     })}
                 >
                     <Ionicons name="videocam-outline" size={24} color="white" />
@@ -321,6 +323,7 @@ export default function ChatDetailScreen() {
         const nextMessage = messages[index + 1];
         const isLast = index === messages.length - 1 || (nextMessage && nextMessage.senderId !== item.senderId);
         const isImage = item.type === 'image' && item.imageUrl;
+        const isCall = item.type === 'call_missed' || item.type === 'call_ended';
 
         return (
             <View style={[
@@ -354,6 +357,43 @@ export default function ChatDetailScreen() {
                         />
                         <Text style={styles.messageTime}>{item.time}</Text>
                     </TouchableOpacity>
+                ) : isCall ? (
+                    <View style={[styles.callBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+                        <View style={styles.callContent}>
+                            <View style={[styles.callIconBubble, item.type === 'call_missed' ? { backgroundColor: '#FF3B30' } : { backgroundColor: '#34C759' }]}>
+                                <Ionicons
+                                    name={item.type === 'call_missed' ? "call" : "call"}
+                                    size={16}
+                                    color="white"
+                                />
+                                {item.type === 'call_missed' && (
+                                    <View style={{ position: 'absolute', top: 0, right: 0 }}>
+                                        <MaterialIcons name="close" size={10} color="white" />
+                                    </View>
+                                )}
+                            </View>
+                            <View style={styles.callInfo}>
+                                <Text style={styles.callTitle}>
+                                    {item.type === 'call_missed' ? 'Cuộc gọi thoại bị nhỡ' : 'Cuộc gọi thoại'}
+                                </Text>
+                                <Text style={styles.callSubtitle}>
+                                    {item.type === 'call_missed' ? item.time : item.text || item.callDuration || 'Đã kết thúc'}
+                                </Text>
+                            </View>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.callBackButton}
+                            onPress={() => (navigation as any).navigate('Call', {
+                                partnerId,
+                                userName,
+                                avatar,
+                                isVideo: false,
+                                isIncoming: false,
+                            })}
+                        >
+                            <Text style={styles.callButtonText}>Gọi lại</Text>
+                        </TouchableOpacity>
+                    </View>
                 ) : (
                     <TouchableOpacity
                         style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
@@ -564,6 +604,52 @@ const styles = StyleSheet.create({
         padding: 4,
         borderRadius: 12,
         overflow: 'hidden',
+    },
+    callBubble: {
+        maxWidth: '75%',
+        padding: 12,
+        borderRadius: 16,
+        backgroundColor: 'rgba(0,0,0,0.4)', // Darker background for calls
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    callContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    callIconBubble: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    callInfo: {
+        flex: 1,
+    },
+    callTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#000', // Sẽ chỉnh lại color nếu background đổi
+    },
+    callSubtitle: {
+        fontSize: 12,
+        color: '#555',
+    },
+    callBackButton: {
+        backgroundColor: 'rgba(0,0,0,0.05)', // Button background
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
+    },
+    callButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#000',
     },
     bubbleMe: {
         backgroundColor: MY_BUBBLE,

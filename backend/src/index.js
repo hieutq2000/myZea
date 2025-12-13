@@ -2449,7 +2449,10 @@ io.on('connection', (socket) => {
     });
 });
 
-initDatabase().then(() => {
+initDatabase().then(async () => {
+    // Create additional tables and optimize indexes
+    await optimizeDatabase();
+
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Server running on port ${PORT}`);
         console.log(`Socket.IO initialized`);

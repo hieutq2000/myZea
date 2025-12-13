@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -9,10 +9,14 @@ import {
     Animated,
     Dimensions,
     Platform,
+    Vibration,
+    ImageBackground,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface IncomingCallModalProps {
     visible: boolean;
@@ -31,132 +35,219 @@ export default function IncomingCallModal({
     onAccept,
     onReject,
 }: IncomingCallModalProps) {
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+
+    // Animations
     const pulseAnim = useRef(new Animated.Value(1)).current;
-    const slideAnim = useRef(new Animated.Value(-100)).current;
+    const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
     useEffect(() => {
+        let soundObject: Audio.Sound | null = null;
+
+        const startRinging = async () => {
+            try {
+                // Configure audio mode
+                await Audio.setAudioModeAsync({
+                    allowsRecordingIOS: false,
+                    playsInSilentModeIOS: true,
+                    shouldDuckAndroid: true,
+                    playThroughEarpieceAndroid: false,
+                    staysActiveInBackground: true,
+                });
+
+                // In a real app, use a local asset like require('../assets/ringtone.mp3')
+                // For this demo, we use a standard ringtone URL or fallback to vibration
+                const { sound } = await Audio.Sound.createAsync(
+                    { uri: 'https://vinalive.net/assets/sounds/ringtone_iphone_14.mp3' }, // Placeholder URL
+                    { shouldPlay: true, isLooping: true }
+                );
+                soundObject = sound;
+                setSound(sound);
+
+                // Start Vibration pattern (1s on, 1s off)
+                Vibration.vibrate([1000, 1000, 1000, 1000], true);
+            } catch (error) {
+                console.log('Error playing sound, falling back to vibration only', error);
+                Vibration.vibrate([1000, 1000, 1000, 1000], true);
+            }
+        };
+
+        const stopRinging = async () => {
+            if (soundObject) {
+                try {
+                    await soundObject.stopAsync();
+                    await soundObject.unloadAsync();
+                } catch (e) {
+                    // Ignore unload errors
+                }
+            }
+            if (sound) {
+                try {
+                    await sound.stopAsync();
+                    await sound.unloadAsync();
+                } catch (e) { }
+            }
+            setSound(null);
+            Vibration.cancel();
+        };
+
         if (visible) {
-            // Slide in animation
+            startRinging();
+
+            // Slide up animation
             Animated.spring(slideAnim, {
                 toValue: 0,
                 useNativeDriver: true,
-                tension: 50,
+                tension: 40,
                 friction: 8,
             }).start();
 
-            // Pulse animation for avatar
+            // Avatar Pulse Animation
             Animated.loop(
                 Animated.sequence([
                     Animated.timing(pulseAnim, {
-                        toValue: 1.1,
-                        duration: 500,
+                        toValue: 1.2,
+                        duration: 1000,
                         useNativeDriver: true,
                     }),
                     Animated.timing(pulseAnim, {
                         toValue: 1,
-                        duration: 500,
+                        duration: 1000,
                         useNativeDriver: true,
                     }),
                 ])
             ).start();
+
         } else {
-            slideAnim.setValue(-100);
+            stopRinging();
+            slideAnim.setValue(SCREEN_HEIGHT);
         }
+
+        return () => {
+            stopRinging();
+        };
     }, [visible]);
+
+    const handleReject = async () => {
+        Vibration.cancel();
+        if (sound) {
+            await sound.stopAsync();
+            await sound.unloadAsync();
+        }
+        onReject();
+    };
+
+    const handleAccept = async () => {
+        Vibration.cancel();
+        if (sound) {
+            await sound.stopAsync();
+            await sound.unloadAsync();
+        }
+        onAccept();
+    };
 
     return (
         <Modal
             visible={visible}
-            transparent
+            transparent={false}
             animationType="none"
             statusBarTranslucent
         >
-            <View style={styles.container}>
-                {/* Dark overlay background */}
-                <View style={styles.overlay} />
-
-                <Animated.View
-                    style={[
-                        styles.card,
-                        { transform: [{ translateY: slideAnim }] }
-                    ]}
+            <View style={{ flex: 1, backgroundColor: 'black' }}>
+                <ImageBackground
+                    source={{ uri: callerAvatar || 'https://images.unsplash.com/photo-1557683316-973673baf926?w=800&q=80' }}
+                    style={styles.container}
+                    blurRadius={30}
+                    resizeMode="cover"
                 >
-                    {/* Top Bar */}
-                    <View style={styles.topBar}>
-                        <View style={styles.appInfo}>
-                            <Ionicons
-                                name={isVideo ? "videocam" : "call"}
-                                size={16}
-                                color="#00D26A"
-                            />
-                            <Text style={styles.appName}>
-                                Zyea • {isVideo ? 'Video' : 'Cuộc gọi'}
-                            </Text>
-                        </View>
-                        <Text style={styles.callType}>Đến...</Text>
-                    </View>
-
-                    {/* Caller Info */}
-                    <View style={styles.callerInfo}>
+                    <LinearGradient
+                        colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.6)', '#000000']}
+                        style={styles.gradientOverlay}
+                    >
                         <Animated.View
                             style={[
-                                styles.avatarContainer,
-                                { transform: [{ scale: pulseAnim }] }
+                                styles.contentContainer,
+                                { transform: [{ translateY: slideAnim }] }
                             ]}
                         >
-                            <View style={styles.avatarRing}>
-                                {callerAvatar ? (
-                                    <Image
-                                        source={{ uri: callerAvatar }}
-                                        style={styles.avatar}
-                                    />
-                                ) : (
-                                    <View style={styles.avatarPlaceholder}>
-                                        <Text style={styles.avatarText}>
-                                            {callerName?.[0]?.toUpperCase()}
-                                        </Text>
+                            {/* Top Section: Info */}
+                            <View style={styles.topSection}>
+                                <View style={styles.appBadge}>
+                                    <Ionicons name="chatbubble" size={16} color="white" />
+                                    <Text style={styles.appName}>Vinalive AI</Text>
+                                </View>
+
+                                <View style={styles.avatarWrapper}>
+                                    <Animated.View style={[styles.avatarPulse, { transform: [{ scale: pulseAnim }] }]} />
+                                    <View style={styles.avatarContainer}>
+                                        {callerAvatar ? (
+                                            <Image source={{ uri: callerAvatar }} style={styles.avatar} />
+                                        ) : (
+                                            <Text style={styles.avatarText}>{callerName[0]?.toUpperCase()}</Text>
+                                        )}
                                     </View>
-                                )}
+                                </View>
+
+                                <Text style={styles.callerName}>{callerName}</Text>
+                                <Text style={styles.callStatus}>
+                                    {isVideo ? 'Cuộc gọi video đến...' : 'Cuộc gọi thoại đến...'}
+                                </Text>
+                            </View>
+
+                            {/* Bottom Section: Actions */}
+                            <View style={styles.bottomSection}>
+                                {/* Quick Actions */}
+                                <View style={styles.optionsRow}>
+                                    <TouchableOpacity style={styles.optionBtn}>
+                                        <MaterialIcons name="message" size={24} color="rgba(255,255,255,0.7)" />
+                                        <Text style={styles.optionText}>Nhắn tin</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.optionBtn}>
+                                        <MaterialIcons name="alarm" size={24} color="rgba(255,255,255,0.7)" />
+                                        <Text style={styles.optionText}>Nhắc tôi</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Answer / Decline Buttons */}
+                                <View style={styles.actionsRow}>
+                                    <View style={styles.actionColumn}>
+                                        <TouchableOpacity
+                                            style={[styles.actionButton, styles.declineButton]}
+                                            onPress={handleReject}
+                                            activeOpacity={0.8}
+                                        >
+                                            <MaterialIcons name="call-end" size={32} color="white" />
+                                        </TouchableOpacity>
+                                        <Text style={styles.actionText}>Từ chối</Text>
+                                    </View>
+
+                                    <View style={styles.actionColumn}>
+                                        <TouchableOpacity
+                                            style={[styles.actionButton, styles.acceptButton]}
+                                            onPress={handleAccept}
+                                            activeOpacity={0.8}
+                                        >
+
+                                            <Animated.View
+                                                style={{
+                                                    transform: [{
+                                                        rotate: pulseAnim.interpolate({
+                                                            inputRange: [1, 1.2],
+                                                            outputRange: ['0deg', '-15deg']
+                                                        })
+                                                    }]
+                                                }}
+                                            >
+                                                <Ionicons name={isVideo ? "videocam" : "call"} size={32} color="white" />
+                                            </Animated.View>
+                                        </TouchableOpacity>
+                                        <Text style={styles.actionText}>Trả lời</Text>
+                                    </View>
+                                </View>
                             </View>
                         </Animated.View>
-
-                        <Text style={styles.callerName}>{callerName}</Text>
-                        <Text style={styles.callLabel}>
-                            {isVideo ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến'}
-                        </Text>
-                    </View>
-
-                    {/* Action Buttons */}
-                    <View style={styles.actions}>
-                        {/* Reject Button */}
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={onReject}
-                            activeOpacity={0.7}
-                        >
-                            <View style={[styles.iconCircle, styles.rejectCircle]}>
-                                <MaterialIcons name="call-end" size={28} color="white" />
-                            </View>
-                            <Text style={styles.actionLabel}>Từ chối</Text>
-                        </TouchableOpacity>
-
-                        {/* Accept Button */}
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={onAccept}
-                            activeOpacity={0.7}
-                        >
-                            <View style={[styles.iconCircle, styles.acceptCircle]}>
-                                <Ionicons
-                                    name={isVideo ? "videocam" : "call"}
-                                    size={28}
-                                    color="white"
-                                />
-                            </View>
-                            <Text style={styles.actionLabel}>Trả lời</Text>
-                        </TouchableOpacity>
-                    </View>
-                </Animated.View>
+                    </LinearGradient>
+                </ImageBackground>
             </View>
         </Modal>
     );
@@ -165,115 +256,143 @@ export default function IncomingCallModal({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        justifyContent: 'flex-start',
+        width: '100%',
+        height: '100%',
+    },
+    gradientOverlay: {
+        flex: 1,
+        justifyContent: 'center',
         alignItems: 'center',
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
     },
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    contentContainer: {
+        flex: 1,
+        width: '100%',
+        justifyContent: 'space-between',
+        paddingVertical: 80,
     },
-    card: {
-        width: SCREEN_WIDTH - 32,
-        backgroundColor: 'rgba(30, 30, 40, 0.95)',
+    topSection: {
+        alignItems: 'center',
+        paddingHorizontal: 20,
+    },
+    appBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
         borderRadius: 20,
-        padding: 20,
+        marginBottom: 50,
+        backdropFilter: 'blur(10px)',
+    },
+    appName: {
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    avatarWrapper: {
+        position: 'relative',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 30,
+    },
+    avatarPulse: {
+        position: 'absolute',
+        width: 180,
+        height: 180,
+        borderRadius: 90,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
+    avatarContainer: {
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        backgroundColor: '#333',
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden',
+        borderWidth: 2,
+        borderColor: 'white',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.5,
-        shadowRadius: 20,
-        elevation: 20,
-    },
-    topBar: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    appInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    appName: {
-        color: 'rgba(255,255,255,0.8)',
-        fontSize: 13,
-        fontWeight: '500',
-    },
-    callType: {
-        color: 'rgba(255,255,255,0.5)',
-        fontSize: 13,
-    },
-    callerInfo: {
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    avatarContainer: {
-        marginBottom: 12,
-    },
-    avatarRing: {
-        width: 90,
-        height: 90,
-        borderRadius: 45,
-        borderWidth: 3,
-        borderColor: '#00D26A',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 3,
+        shadowRadius: 10,
+        elevation: 10,
     },
     avatar: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-    },
-    avatarPlaceholder: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: '#0068FF',
-        justifyContent: 'center',
-        alignItems: 'center',
+        width: '100%',
+        height: '100%',
     },
     avatarText: {
-        fontSize: 36,
-        fontWeight: 'bold',
+        fontSize: 48,
         color: 'white',
+        fontWeight: 'bold',
     },
     callerName: {
-        fontSize: 22,
-        fontWeight: '600',
+        fontSize: 34,
+        fontWeight: '700',
         color: 'white',
-        marginBottom: 4,
+        marginBottom: 8,
+        textAlign: 'center',
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
     },
-    callLabel: {
-        fontSize: 14,
-        color: 'rgba(255,255,255,0.6)',
+    callStatus: {
+        fontSize: 18,
+        color: 'rgba(255,255,255,0.7)',
+        fontWeight: '500',
     },
-    actions: {
+    bottomSection: {
+        width: '100%',
+        paddingHorizontal: 40,
+        gap: 60,
+    },
+    optionsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
+        justifyContent: 'space-between',
         paddingHorizontal: 20,
     },
-    actionButton: {
+    optionBtn: {
         alignItems: 'center',
         gap: 8,
     },
-    iconCircle: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        justifyContent: 'center',
+    optionText: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 12,
+    },
+    actionsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
     },
-    rejectCircle: {
+    actionColumn: {
+        alignItems: 'center',
+        gap: 12,
+    },
+    actionButton: {
+        width: 75,
+        height: 75,
+        borderRadius: 37.5,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    declineButton: {
         backgroundColor: '#FF3B30',
     },
-    acceptCircle: {
+    acceptButton: {
         backgroundColor: '#34C759',
     },
-    actionLabel: {
-        color: 'rgba(255,255,255,0.8)',
-        fontSize: 13,
+    actionText: {
+        color: 'white',
+        fontSize: 16,
         fontWeight: '500',
     },
 });

@@ -31,5 +31,6 @@ export type RootStackParamList = {
         isVideo: boolean;
         isIncoming?: boolean;
         channelName?: string;
+        conversationId?: string; // Add conversationId
     };
 };

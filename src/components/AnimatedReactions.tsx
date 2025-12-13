@@ -1,5 +1,17 @@
 import React, { useEffect, useRef } from 'react';
-import { View, TouchableOpacity, Animated, StyleSheet, Text, Image } from 'react-native';
+import { View, TouchableOpacity, Animated, StyleSheet, Text, Platform } from 'react-native';
+import LottieView from 'lottie-react-native';
+
+// Import Lottie animations
+const LOTTIE_ANIMATIONS = {
+    like: require('../assets/lottie/like.json'),
+    love: require('../assets/lottie/love.json'),
+    care: require('../assets/lottie/care.json'),
+    haha: require('../assets/lottie/haha.json'),
+    wow: require('../assets/lottie/wow.json'),
+    sad: require('../assets/lottie/sad.json'),
+    angry: require('../assets/lottie/angry.json'),
+};
 
 // Facebook-style animated reactions
 export interface Reaction {
@@ -29,7 +41,7 @@ interface AnimatedReactionItemProps {
 const AnimatedReactionItem = ({ reaction, index, onSelect, visible }: AnimatedReactionItemProps) => {
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const translateYAnim = useRef(new Animated.Value(30)).current;
-    const bounceAnim = useRef(new Animated.Value(1)).current;
+    const lottieRef = useRef<LottieView>(null);
 
     useEffect(() => {
         if (visible) {
@@ -50,26 +62,10 @@ const AnimatedReactionItem = ({ reaction, index, onSelect, visible }: AnimatedRe
                         useNativeDriver: true,
                     }),
                 ]),
-            ]).start();
-
-            // Continuous subtle bounce animation
-            const bounceLoop = Animated.loop(
-                Animated.sequence([
-                    Animated.timing(bounceAnim, {
-                        toValue: 1.1,
-                        duration: 600,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(bounceAnim, {
-                        toValue: 1,
-                        duration: 600,
-                        useNativeDriver: true,
-                    }),
-                ])
-            );
-            bounceLoop.start();
-
-            return () => bounceLoop.stop();
+            ]).start(() => {
+                // Play Lottie animation when item appears
+                lottieRef.current?.play();
+            });
         } else {
             scaleAnim.setValue(0);
             translateYAnim.setValue(30);
@@ -78,7 +74,7 @@ const AnimatedReactionItem = ({ reaction, index, onSelect, visible }: AnimatedRe
 
     const handlePressIn = () => {
         Animated.spring(scaleAnim, {
-            toValue: 1.8,
+            toValue: 1.5,
             friction: 3,
             tension: 150,
             useNativeDriver: true,
@@ -94,13 +90,15 @@ const AnimatedReactionItem = ({ reaction, index, onSelect, visible }: AnimatedRe
         }).start();
     };
 
+    const lottieSource = LOTTIE_ANIMATIONS[reaction.id as keyof typeof LOTTIE_ANIMATIONS];
+
     return (
         <Animated.View
             style={[
                 styles.reactionItem,
                 {
                     transform: [
-                        { scale: Animated.multiply(scaleAnim, bounceAnim) },
+                        { scale: scaleAnim },
                         { translateY: translateYAnim },
                     ],
                 },
@@ -113,8 +111,20 @@ const AnimatedReactionItem = ({ reaction, index, onSelect, visible }: AnimatedRe
                 activeOpacity={1}
                 style={styles.reactionTouchable}
             >
-                <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
+                {lottieSource ? (
+                    <LottieView
+                        ref={lottieRef}
+                        source={lottieSource}
+                        style={styles.lottieEmoji}
+                        autoPlay
+                        loop
+                        speed={0.8}
+                    />
+                ) : (
+                    <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
+                )}
             </TouchableOpacity>
+            {/* Label tooltip on press */}
         </Animated.View>
     );
 };
@@ -179,6 +189,33 @@ export const getReactionDisplay = (reactionId: string): Reaction | undefined => 
     return REACTIONS.find(r => r.id === reactionId);
 };
 
+// Component to display a single reaction icon (for showing in posts)
+interface ReactionIconProps {
+    reactionId: string;
+    size?: number;
+    autoPlay?: boolean;
+}
+
+export function ReactionIcon({ reactionId, size = 20, autoPlay = false }: ReactionIconProps) {
+    const reaction = getReactionDisplay(reactionId);
+    if (!reaction) return null;
+
+    const lottieSource = LOTTIE_ANIMATIONS[reaction.id as keyof typeof LOTTIE_ANIMATIONS];
+
+    if (lottieSource) {
+        return (
+            <LottieView
+                source={lottieSource}
+                style={{ width: size, height: size }}
+                autoPlay={autoPlay}
+                loop={autoPlay}
+            />
+        );
+    }
+
+    return <Text style={{ fontSize: size * 0.8 }}>{reaction.emoji}</Text>;
+}
+
 export default ReactionDock;
 
 const styles = StyleSheet.create({
@@ -192,8 +229,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: 'white',
         borderRadius: 30,
-        paddingVertical: 8,
-        paddingHorizontal: 8,
+        paddingVertical: 6,
+        paddingHorizontal: 6,
         marginHorizontal: 10,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
@@ -204,15 +241,19 @@ const styles = StyleSheet.create({
     },
     reactionItem: {
         alignItems: 'center',
-        marginHorizontal: 2,
+        marginHorizontal: 1,
     },
     reactionTouchable: {
-        width: 42,
-        height: 42,
+        width: 44,
+        height: 44,
         justifyContent: 'center',
         alignItems: 'center',
     },
+    lottieEmoji: {
+        width: 40,
+        height: 40,
+    },
     reactionEmoji: {
-        fontSize: 30,
+        fontSize: 28,
     },
 });
