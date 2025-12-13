@@ -437,3 +437,36 @@ export async function followUser(userId: string): Promise<void> {
 export async function unfollowUser(userId: string): Promise<void> {
     return apiRequest(`/api/place/users/${userId}/unfollow`, { method: 'POST' });
 }
+
+// ============ PLACE NOTIFICATIONS API ============
+
+export interface PlaceNotification {
+    id: string;
+    type: 'like' | 'comment' | 'share' | 'mention' | 'follow' | 'tag';
+    user: {
+        id: string;
+        name: string;
+        avatar?: string;
+    };
+    postId?: string;
+    postPreview?: string;
+    message: string;
+    createdAt: string;
+    isRead: boolean;
+}
+
+export async function getPlaceNotifications(limit: number = 50): Promise<PlaceNotification[]> {
+    return apiRequest<PlaceNotification[]>(`/api/place/notifications?limit=${limit}`);
+}
+
+export async function getUnreadNotificationCount(): Promise<{ count: number }> {
+    return apiRequest<{ count: number }>('/api/place/notifications/unread-count');
+}
+
+export async function markNotificationAsRead(notificationId: string): Promise<void> {
+    return apiRequest(`/api/place/notifications/${notificationId}/read`, { method: 'PATCH' });
+}
+
+export async function markAllNotificationsAsRead(): Promise<void> {
+    return apiRequest('/api/place/notifications/read-all', { method: 'PATCH' });
+}

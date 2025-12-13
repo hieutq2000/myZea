@@ -346,7 +346,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         >
                             <Ionicons name="search" size={22} color="#333" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}>
+                        <TouchableOpacity
+                            style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}
+                            onPress={() => setPlaceActiveTab('NOTIFICATIONS')}
+                        >
                             <MaterialIcons name="notifications-none" size={24} color="#FF5722" />
                         </TouchableOpacity>
                     </View>

@@ -1418,6 +1418,27 @@ app.post('/api/place/posts/:id/like', authenticateToken, async (req, res) => {
                 [uuidv4(), postId, userId]
             );
             isLiked = true;
+
+            // Create notification for post owner
+            try {
+                const [posts] = await pool.execute(
+                    'SELECT user_id, LEFT(content, 50) as preview FROM posts WHERE id = ?',
+                    [postId]
+                );
+                if (posts.length > 0 && posts[0].user_id !== userId) {
+                    await createNotification(
+                        posts[0].user_id,  // recipient (post owner)
+                        userId,             // actor (who liked)
+                        'like',
+                        postId,
+                        null,
+                        'đã thích bài viết của bạn',
+                        posts[0].preview || ''
+                    );
+                }
+            } catch (notifError) {
+                console.error('Notification error:', notifError);
+            }
         }
 
         res.json({ success: true, isLiked });
@@ -1517,6 +1538,28 @@ app.post('/api/place/posts/:id/comments', authenticateToken, async (req, res) =>
         const [users] = await pool.execute('SELECT name, avatar FROM users WHERE id = ?', [userId]);
         const user = users[0];
 
+        // Create notification for post owner
+        try {
+            const [posts] = await pool.execute(
+                'SELECT user_id, LEFT(content, 50) as preview FROM posts WHERE id = ?',
+                [postId]
+            );
+            if (posts.length > 0 && posts[0].user_id !== userId) {
+                const commentPreview = content.length > 30 ? content.substring(0, 30) + '...' : content;
+                await createNotification(
+                    posts[0].user_id,  // recipient (post owner)
+                    userId,             // actor (who commented)
+                    'comment',
+                    postId,
+                    commentId,
+                    `đã bình luận: "${commentPreview}"`,
+                    posts[0].preview || ''
+                );
+            }
+        } catch (notifError) {
+            console.error('Notification error:', notifError);
+        }
+
         const newComment = {
             id: commentId,
             content,
@@ -1531,6 +1574,106 @@ app.post('/api/place/posts/:id/comments', authenticateToken, async (req, res) =>
         res.json(newComment);
     } catch (error) {
         console.error('Create comment error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// ============ NOTIFICATIONS API ============
+
+// Get notifications for current user
+app.get('/api/place/notifications', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const limit = parseInt(req.query.limit) || 50;
+
+        const [notifications] = await pool.execute(`
+            SELECT 
+                n.id,
+                n.type,
+                n.post_id as postId,
+                n.comment_id as commentId,
+                n.message,
+                n.post_preview as postPreview,
+                n.is_read as isRead,
+                n.created_at as createdAt,
+                u.id as actor_id,
+                u.name as actor_name,
+                u.avatar as actor_avatar
+            FROM place_notifications n
+            JOIN users u ON n.actor_id = u.id
+            WHERE n.recipient_id = ?
+            ORDER BY n.created_at DESC
+            LIMIT ?
+        `, [userId, limit.toString()]);
+
+        const formattedNotifications = notifications.map(n => ({
+            id: n.id,
+            type: n.type,
+            user: {
+                id: n.actor_id,
+                name: n.actor_name,
+                avatar: n.actor_avatar
+            },
+            postId: n.postId,
+            postPreview: n.postPreview,
+            message: n.message,
+            createdAt: new Date(n.createdAt).toISOString(),
+            isRead: !!n.isRead
+        }));
+
+        res.json(formattedNotifications);
+    } catch (error) {
+        console.error('Get notifications error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get unread notification count
+app.get('/api/place/notifications/unread-count', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const [result] = await pool.execute(
+            'SELECT COUNT(*) as count FROM place_notifications WHERE recipient_id = ? AND is_read = FALSE',
+            [userId]
+        );
+        res.json({ count: result[0].count });
+    } catch (error) {
+        console.error('Get unread count error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Mark notification as read
+app.patch('/api/place/notifications/:id/read', authenticateToken, async (req, res) => {
+    try {
+        const notificationId = req.params.id;
+        const userId = req.user.id;
+
+        await pool.execute(
+            'UPDATE place_notifications SET is_read = TRUE WHERE id = ? AND recipient_id = ?',
+            [notificationId, userId]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Mark notification read error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Mark all notifications as read
+app.patch('/api/place/notifications/read-all', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        await pool.execute(
+            'UPDATE place_notifications SET is_read = TRUE WHERE recipient_id = ? AND is_read = FALSE',
+            [userId]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Mark all read error:', error);
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
@@ -1592,9 +1735,54 @@ const optimizeDatabase = async () => {
             console.error('❌ Failed to create post_tags table:', e.message);
         }
 
+        // Create place_notifications table for Place notifications
+        try {
+            await pool.execute(`
+                CREATE TABLE IF NOT EXISTS place_notifications (
+                    id VARCHAR(36) PRIMARY KEY,
+                    recipient_id VARCHAR(36) NOT NULL,
+                    actor_id VARCHAR(36) NOT NULL,
+                    type ENUM('like', 'comment', 'share', 'mention', 'follow', 'tag') NOT NULL,
+                    post_id VARCHAR(36) NULL,
+                    comment_id VARCHAR(36) NULL,
+                    message TEXT,
+                    post_preview VARCHAR(255) NULL,
+                    is_read BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_notifications_recipient (recipient_id),
+                    INDEX idx_notifications_created_at (created_at DESC),
+                    INDEX idx_notifications_recipient_unread (recipient_id, is_read)
+                )
+            `);
+            console.log('✅ place_notifications table created/exists');
+        } catch (e) {
+            console.error('❌ Failed to create place_notifications table:', e.message);
+        }
+
         console.log('✅ Database indexes optimized for performance');
     } catch (error) {
         console.error('DB Optimization warning:', error.message);
+    }
+};
+
+// ============ NOTIFICATION HELPER ============
+// Helper function to create notification
+const createNotification = async (recipientId, actorId, type, postId = null, commentId = null, message = '', postPreview = '') => {
+    // Don't notify yourself
+    if (recipientId === actorId) return;
+
+    try {
+        const notificationId = uuidv4();
+        await pool.execute(
+            `INSERT INTO place_notifications (id, recipient_id, actor_id, type, post_id, comment_id, message, post_preview) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [notificationId, recipientId, actorId, type, postId, commentId, message, postPreview]
+        );
+        console.log(`🔔 Notification created: ${type} for user ${recipientId}`);
+        return notificationId;
+    } catch (error) {
+        console.error('Create notification error:', error);
+        return null;
     }
 };
 

@@ -15,6 +15,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatTime } from '../utils/formatTime';
+import {
+    getPlaceNotifications,
+    markNotificationAsRead as apiMarkAsRead,
+    markAllNotificationsAsRead,
+    PlaceNotification
+} from '../utils/api';
 
 // Mock notification data (later replace with API)
 interface Notification {
@@ -116,12 +122,34 @@ export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNo
     }, []);
 
     const loadNotifications = async () => {
-        // Simulate API call
-        setTimeout(() => {
+        try {
+            const data = await getPlaceNotifications(50);
+            // Map API response to local type (they should be compatible)
+            const mappedData: Notification[] = data.map(n => ({
+                id: n.id,
+                type: n.type as Notification['type'],
+                user: n.user,
+                postId: n.postId,
+                postPreview: n.postPreview,
+                message: n.message,
+                createdAt: n.createdAt,
+                isRead: n.isRead
+            }));
+
+            // If API returns empty, use mock data for demo
+            if (mappedData.length === 0) {
+                setNotifications(MOCK_NOTIFICATIONS);
+            } else {
+                setNotifications(mappedData);
+            }
+        } catch (error) {
+            console.error('Load notifications error:', error);
+            // Fallback to mock data on error
             setNotifications(MOCK_NOTIFICATIONS);
+        } finally {
             setIsLoading(false);
             setIsRefreshing(false);
-        }, 500);
+        }
     };
 
     const handleRefresh = () => {
@@ -129,10 +157,28 @@ export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNo
         loadNotifications();
     };
 
-    const markAsRead = (id: string) => {
+    const markAsRead = async (id: string) => {
+        // Optimistic update
         setNotifications(prev =>
             prev.map(n => n.id === id ? { ...n, isRead: true } : n)
         );
+        // Call API
+        try {
+            await apiMarkAsRead(id);
+        } catch (error) {
+            console.error('Mark as read error:', error);
+        }
+    };
+
+    const handleMarkAllAsRead = async () => {
+        // Optimistic update
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+        // Call API
+        try {
+            await markAllNotificationsAsRead();
+        } catch (error) {
+            console.error('Mark all as read error:', error);
+        }
     };
 
     const handleNotificationPress = (notification: Notification) => {
@@ -232,7 +278,7 @@ export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNo
                         <View style={styles.sectionHeader}>
                             <Text style={styles.sectionTitle}>Gần đây</Text>
                             {unreadCount > 0 && (
-                                <TouchableOpacity onPress={() => setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))}>
+                                <TouchableOpacity onPress={handleMarkAllAsRead}>
                                     <Text style={styles.markAllRead}>Đánh dấu đã đọc</Text>
                                 </TouchableOpacity>
                             )}
