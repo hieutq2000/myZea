@@ -29,6 +29,9 @@ export default function ChatDetailScreen() {
     const [showMediaPicker, setShowMediaPicker] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [partnerTyping, setPartnerTyping] = useState(false);
+    const [replyingTo, setReplyingTo] = useState<any | null>(null);
+    const [lastSeenMessageId, setLastSeenMessageId] = useState<string | null>(null);
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
     const socket = getSocket();
@@ -61,6 +64,29 @@ export default function ChatDetailScreen() {
                     time: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 } : msg));
             });
+            // Typing listeners
+            socket.on('userTyping', (data) => {
+                if (data.conversationId === conversationId && data.userId !== currentUserId) {
+                    setPartnerTyping(true);
+                }
+            });
+            socket.on('userStoppedTyping', (data) => {
+                if (data.conversationId === conversationId && data.userId !== currentUserId) {
+                    setPartnerTyping(false);
+                }
+            });
+            // Revoke listener
+            socket.on('messageRevoked', (data) => {
+                if (data.conversationId === conversationId) {
+                    setMessages(prev => prev.filter(m => m.id !== data.messageId));
+                }
+            });
+            // Read status listener
+            socket.on('messagesRead', (data) => {
+                if (data.conversationId === conversationId) {
+                    setLastSeenMessageId(data.lastMessageId); // Update seen status
+                }
+            });
         }
 
         return () => {
@@ -88,7 +114,8 @@ export default function ChatDetailScreen() {
                 imageUrl: m.imageUrl,
                 sender: m.user._id === currentUserId ? 'me' : 'other',
                 time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                senderId: m.user._id
+                senderId: m.user._id,
+                replyTo: m.replyTo // Map reply info
             }));
             setMessages(mapped);
             scrollToBottom();
@@ -113,7 +140,8 @@ export default function ChatDetailScreen() {
                 imageUrl: msg.imageUrl,
                 sender: msg.user._id === currentUserId ? 'me' : 'other',
                 time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                senderId: msg.user._id
+                senderId: msg.user._id,
+                replyTo: msg.replyTo
             }];
         });
         scrollToBottom();
@@ -152,11 +180,25 @@ export default function ChatDetailScreen() {
                 message: messageText,
                 type: type,
                 imageUrl: imageUrl,
-                tempId: tempId
+                tempId: tempId,
+                replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, type: replyingTo.type } : null
             });
+            socket.emit('userStoppedTyping', { conversationId, userId: currentUserId });
         }
 
         setInputText('');
+        setReplyingTo(null);
+    };
+
+    const handleTextChange = (text: string) => {
+        setInputText(text);
+        if (socket) {
+            if (text.length > 0) {
+                socket.emit('userTyping', { conversationId, userId: currentUserId });
+            } else {
+                socket.emit('userStoppedTyping', { conversationId, userId: currentUserId });
+            }
+        }
     };
 
     const handleEmojiSelect = (emoji: string) => {
@@ -300,21 +342,28 @@ export default function ChatDetailScreen() {
 
     const handleDeleteMessage = (messageId: string) => {
         Alert.alert(
-            'Xóa tin nhắn',
-            'Tin nhắn này sẽ chỉ bị xóa ở phía bạn. Người nhận vẫn sẽ nhìn thấy.',
+            'Tùy chọn tin nhắn',
+            'Bạn muốn làm gì với tin nhắn này?',
             [
                 { text: 'Hủy', style: 'cancel' },
                 {
-                    text: 'Xóa ở phía tôi',
+                    text: 'Trả lời',
+                    onPress: () => {
+                        setReplyingTo(messages.find(m => m.id === messageId));
+                        inputRef.current?.focus();
+                    }
+                },
+                {
+                    text: 'Thu hồi',
                     style: 'destructive',
                     onPress: async () => {
-                        // Optimistic UI update
+                        // Optimistic
                         setMessages(prev => prev.filter(m => m.id !== messageId));
                         try {
                             await deleteMessage(messageId);
+                            if (socket) socket.emit('revokeMessage', { conversationId, messageId });
                         } catch (error) {
                             console.error('Delete message error', error);
-                            // Optionally restore message if failed, but for now we keep it simple
                         }
                     }
                 }
@@ -405,8 +454,19 @@ export default function ChatDetailScreen() {
                         delayLongPress={500}
                         activeOpacity={0.8}
                     >
+                        {item.replyTo && (
+                            <View style={styles.replyPreview}>
+                                <View style={styles.replyBar} />
+                                <Text style={styles.replyText} numberOfLines={1}>
+                                    {item.replyTo.text || (item.replyTo.type === 'image' ? '[Hình ảnh]' : '...')}
+                                </Text>
+                            </View>
+                        )}
                         <Text style={[styles.messageText, { color: '#000' }]}>{item.text}</Text>
                         <Text style={styles.messageTime}>{item.time}</Text>
+                        {isMe && isLast && (
+                            <Text style={styles.seenText}>{lastSeenMessageId === item.id ? 'Đã xem' : 'Đã gửi'}</Text>
+                        )}
                     </TouchableOpacity>
                 )}
             </View>
@@ -433,6 +493,12 @@ export default function ChatDetailScreen() {
                     keyboardDismissMode="interactive"
                 />
 
+                {partnerTyping && (
+                    <View style={styles.typingIndicator}>
+                        <Text style={styles.typingText}>Người ấy đang nhập...</Text>
+                    </View>
+                )}
+
                 {/* Input Container */}
                 <View style={[
                     styles.inputContainer,
@@ -440,6 +506,17 @@ export default function ChatDetailScreen() {
                         ? { marginBottom: showEmojiPicker ? 0 : (keyboardHeight > 0 ? keyboardHeight : 20) }
                         : {}
                 ]}>
+                    {replyingTo && (
+                        <View style={styles.replyInputContainer}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.replyInputLabel}>Đang trả lời:</Text>
+                                <Text style={styles.replyInputText} numberOfLines={1}>{replyingTo.text || '[Phương tiện]'}</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setReplyingTo(null)}>
+                                <Ionicons name="close-circle" size={20} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
                     {/* Attachment Button (Left) */}
                     <TouchableOpacity style={styles.leftButton} onPress={() => setShowMediaPicker(true)}>
                         <Ionicons name="attach" size={28} color="#6B7280" />
@@ -451,7 +528,7 @@ export default function ChatDetailScreen() {
                             ref={inputRef}
                             style={styles.input}
                             value={inputText}
-                            onChangeText={setInputText}
+                            onChangeText={handleTextChange}
                             placeholder="Tin nhắn"
                             placeholderTextColor="#9CA3AF"
                             multiline
@@ -788,5 +865,55 @@ const styles = StyleSheet.create({
     imagePreview: {
         width: SCREEN_WIDTH,
         height: SCREEN_WIDTH,
+    },
+    // Reply Styles
+    replyPreview: {
+        backgroundColor: 'rgba(0,0,0,0.05)',
+        borderLeftWidth: 3,
+        borderLeftColor: '#666',
+        padding: 5,
+        borderRadius: 4,
+        marginBottom: 4,
+    },
+    replyBar: {
+        // Using borderLeft instead
+    },
+    replyText: {
+        color: '#555',
+        fontSize: 12,
+    },
+    seenText: {
+        fontSize: 10,
+        color: '#666',
+        alignSelf: 'flex-end',
+        marginTop: 2,
+    },
+    typingIndicator: {
+        padding: 8,
+        marginLeft: 10,
+        marginBottom: 5,
+    },
+    typingText: {
+        fontSize: 12,
+        color: '#888',
+        fontStyle: 'italic',
+    },
+    replyInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f0f0f0',
+        padding: 8,
+        paddingHorizontal: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#e0e0e0',
+    },
+    replyInputLabel: {
+        fontSize: 10,
+        color: ZALO_BLUE,
+        fontWeight: 'bold',
+    },
+    replyInputText: {
+        fontSize: 12,
+        color: '#333',
     },
 });
