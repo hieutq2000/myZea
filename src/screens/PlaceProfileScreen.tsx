@@ -20,7 +20,7 @@ import {
 import { Ionicons, Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { getUserPosts, followUser, unfollowUser, Post, uploadImage, updateProfile } from '../utils/api';
+import { getUserPosts, followUser, unfollowUser, Post, uploadImage, updateProfile, getUserProfile } from '../utils/api';
 import FacebookImageViewer from '../components/FacebookImageViewer';
 
 const { width } = Dimensions.get('window');
@@ -87,13 +87,28 @@ export default function PlaceProfileScreen({
     React.useEffect(() => {
         let mounted = true;
 
-        const loadPosts = async () => {
+        const loadData = async () => {
             setLoadingPosts(true);
             try {
-                const posts = await getUserPosts(user.id);
-                if (mounted) setUserPosts(posts);
+                const postsPromise = getUserPosts(user.id);
+                // Also fetch profile to get latest avatar/cover
+                const profilePromise = getUserProfile(user.id).catch(err => null);
+
+                const [posts, profile] = await Promise.all([postsPromise, profilePromise]);
+
+                if (mounted) {
+                    if (posts) setUserPosts(posts);
+                    if (profile) {
+                        // Update local state with fresh data from server
+                        setAvatarSource(profile.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=F97316&color=fff&size=200`);
+                        // Force update cover source if server has it, otherwise keep default
+                        if (profile.coverImage) {
+                            setCoverSource(profile.coverImage);
+                        }
+                    }
+                }
             } catch (error) {
-                console.log('Error fetching user posts:', error);
+                console.log('Error fetching user data:', error);
                 // Fallback if available
                 if (mounted && user.posts) setUserPosts(user.posts);
             } finally {
@@ -101,7 +116,7 @@ export default function PlaceProfileScreen({
             }
         };
 
-        if (user?.id) loadPosts();
+        if (user?.id) loadData();
 
         return () => { mounted = false; };
     }, [user?.id]);
@@ -467,7 +482,7 @@ export default function PlaceProfileScreen({
                                                 modalType === 'AVATAR' ? (avatarSource || '') : (coverSource || ''),
                                                 modalType
                                             );
-                                        }, 100);
+                                        }, 500);
                                     }}
                                 >
                                     <View style={styles.btmSheetIconCtx}>

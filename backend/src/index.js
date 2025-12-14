@@ -911,6 +911,7 @@ app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
                 c.id as conversation_id,
                 u.name,
                 u.avatar,
+                u.cover_image,
                 u.id as partner_id,
                 CASE 
                     WHEN m.created_at > IFNULL(cp_me.deleted_at, '1970-01-01') OR m.created_at IS NULL THEN m.content 
@@ -1196,7 +1197,7 @@ app.use('/uploads', express.static(uploadsDir));
 
 // Upload image endpoint
 // Import image-size
-const sizeOf = require('image-size').default;
+const sizeOf = require('image-size');
 
 // ... existing code ...
 
@@ -1246,6 +1247,26 @@ app.post('/api/upload/image', upload.single('image'), (req, res) => {
 // ... existing code ...
 
 // Get posts
+// Get user profile by ID
+app.get('/api/users/:id', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const [users] = await pool.execute(
+            'SELECT id, name, avatar, cover_image as coverImage, voice FROM users WHERE id = ?',
+            [userId]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({ error: 'Người dùng không tồn tại' });
+        }
+
+        res.json(users[0]);
+    } catch (error) {
+        console.error('Get user profile error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
 app.get('/api/place/posts', authenticateToken, async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -1263,6 +1284,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 u.id as author_id,
                 u.name as author_name,
                 u.avatar as author_avatar,
+                u.cover_image as author_cover_image,
                 -- Stats
                 (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes,
                 (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) as comments,
@@ -1276,6 +1298,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 opu.id as op_author_id,
                 opu.name as op_author_name,
                 opu.avatar as op_author_avatar,
+                opu.cover_image as op_author_cover_image,
                 -- Group Info
                 pg.id as group_id,
                 pg.name as group_name,
@@ -1346,7 +1369,8 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                     author: {
                         id: p.op_author_id,
                         name: p.op_author_name,
-                        avatar: p.op_author_avatar
+                        avatar: p.op_author_avatar,
+                        coverImage: p.op_author_cover_image
                     },
                     content: p.op_content,
                     image: opImages.length > 0 ? opImages[0] : null,
@@ -1360,7 +1384,8 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 author: {
                     id: p.author_id,
                     name: p.author_name,
-                    avatar: p.author_avatar
+                    avatar: p.author_avatar,
+                    coverImage: p.author_cover_image
                 },
                 content: p.content,
                 image: images.length > 0 ? images[0] : null,
@@ -1386,7 +1411,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
         if (postIds.length > 0) {
             try {
                 const [taggedRows] = await pool.execute(`
-                    SELECT pt.post_id, u.id, u.name, u.avatar
+                    SELECT pt.post_id, u.id, u.name, u.avatar, u.cover_image
                     FROM post_tags pt
                     JOIN users u ON pt.user_id = u.id
                     WHERE pt.post_id IN (${postIds.map(() => '?').join(',')})
@@ -1399,7 +1424,8 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                     tagsByPost[row.post_id].push({
                         id: row.id,
                         name: row.name,
-                        avatar: row.avatar
+                        avatar: row.avatar,
+                        coverImage: row.cover_image
                     });
                 });
 
@@ -1639,7 +1665,8 @@ app.get('/api/place/posts/:id/comments', authenticateToken, async (req, res) => 
                 c.created_at as createdAt,
                 u.id as userId,
                 u.name as userName,
-                u.avatar as userAvatar
+                u.avatar as userAvatar,
+                u.cover_image as userCoverImage
             FROM post_comments c
             JOIN users u ON c.user_id = u.id
             WHERE c.post_id = ?
@@ -1653,7 +1680,8 @@ app.get('/api/place/posts/:id/comments', authenticateToken, async (req, res) => 
             user: {
                 id: c.userId,
                 name: c.userName,
-                avatar: c.userAvatar
+                avatar: c.userAvatar,
+                coverImage: c.userCoverImage
             }
         }));
 
@@ -1745,7 +1773,8 @@ app.get('/api/place/notifications', authenticateToken, async (req, res) => {
                 n.created_at as createdAt,
                 u.id as actor_id,
                 u.name as actor_name,
-                u.avatar as actor_avatar
+                u.avatar as actor_avatar,
+                u.cover_image as actor_cover_image
             FROM place_notifications n
             JOIN users u ON n.actor_id = u.id
             WHERE n.recipient_id = ?
@@ -1759,7 +1788,8 @@ app.get('/api/place/notifications', authenticateToken, async (req, res) => {
             user: {
                 id: n.actor_id,
                 name: n.actor_name,
-                avatar: n.actor_avatar
+                avatar: n.actor_avatar,
+                coverImage: n.actor_cover_image
             },
             postId: n.postId,
             postPreview: n.postPreview,
@@ -2080,7 +2110,7 @@ app.get('/api/place/groups/:id', authenticateToken, async (req, res) => {
 
         // Get some members for avatar stack
         const [members] = await pool.execute(`
-            SELECT u.id, u.name, u.avatar
+            SELECT u.id, u.name, u.avatar, u.cover_image
             FROM place_group_members gm
             JOIN users u ON gm.user_id = u.id
             WHERE gm.group_id = ?

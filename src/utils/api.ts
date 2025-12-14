@@ -114,6 +114,10 @@ export async function updateProfile(
     });
 }
 
+export async function getUserProfile(userId: string): Promise<User> {
+    return apiRequest<User>(`/api/users/${userId}`);
+}
+
 // ============ EXAM API ============
 
 export interface SaveExamResultResponse {
