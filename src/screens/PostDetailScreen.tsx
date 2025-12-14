@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import {
     View,
     Text,
@@ -87,8 +87,8 @@ export default function PostDetailScreen() {
     // Wrapper for viewing comment images vs post images
     const [viewerImages, setViewerImages] = useState<string[]>([]);
 
-    // Pick Images for Comment
-    const handlePickCommentImages = async () => {
+    // Pick Images for Comment - memoized to prevent re-render
+    const handlePickCommentImages = useCallback(async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             quality: 0.8,
@@ -96,16 +96,16 @@ export default function PostDetailScreen() {
         });
 
         if (!result.canceled && result.assets) {
-            setCommentImages([...commentImages, ...result.assets.map(a => a.uri)]);
+            setCommentImages(prev => [...prev, ...result.assets.map(a => a.uri)]);
         }
-    };
+    }, []);
 
-    const removeCommentImage = (index: number) => {
+    const removeCommentImage = useCallback((index: number) => {
         setCommentImages(prev => prev.filter((_, i) => i !== index));
-    };
+    }, []);
 
-    // Prepare images for viewer
-    const getPostImages = () => {
+    // Prepare images for viewer - memoized to prevent re-render on text input
+    const postImages = useMemo(() => {
         if (!passedPost) return [];
         if (passedPost.images && passedPost.images.length > 0) {
             return passedPost.images.map(img => typeof img === 'string' ? img : img.uri);
@@ -114,14 +114,12 @@ export default function PostDetailScreen() {
             return [typeof passedPost.image === 'string' ? passedPost.image : passedPost.image.uri];
         }
         return [];
-    };
+    }, [passedPost]);
 
-    const postImages = getPostImages();
-
-    const openImageViewer = (index: number) => {
+    const openImageViewer = useCallback((index: number) => {
         setSelectedImageIndex(index);
         setIsImageViewerVisible(true);
-    };
+    }, []);
 
     useEffect(() => {
         loadData();
@@ -141,7 +139,7 @@ export default function PostDetailScreen() {
         }
     };
 
-    const handleSendComment = async () => {
+    const handleSendComment = useCallback(async () => {
         if (!commentText.trim() && commentImages.length === 0) return;
 
         setIsSending(true);
@@ -158,10 +156,10 @@ export default function PostDetailScreen() {
             // In real app, backend returns the comment with images
             const commentWithImages = {
                 ...newComment,
-                images: commentImages.length > 0 ? commentImages : undefined
+                images: commentImages.length > 0 ? [...commentImages] : undefined
             };
 
-            setComments([...comments, commentWithImages]);
+            setComments(prev => [...prev, commentWithImages]);
             setCommentText('');
             setCommentImages([]); // Clear images
             Keyboard.dismiss();
@@ -176,7 +174,7 @@ export default function PostDetailScreen() {
         } finally {
             setIsSending(false);
         }
-    };
+    }, [postId, commentText, commentImages]);
 
     // --- Render Items ---
 
@@ -201,7 +199,8 @@ export default function PostDetailScreen() {
         </LinearGradient>
     );
 
-    const renderPostContent = () => {
+    // Memoized post content to prevent re-render when typing in comment input
+    const postContentMemo = useMemo(() => {
         if (!passedPost) return null;
         return (
             <View style={[styles.postCard, { backgroundColor: colors.card }]}>
@@ -314,9 +313,11 @@ export default function PostDetailScreen() {
                 </View>
             </View>
         );
-    };
+    }, [passedPost, postImages, colors, isDark, comments.length]);
 
-    const renderCommentItem = ({ item }: { item: any }) => ( // Use any to support temporary 'images' prop
+    const renderPostContent = useCallback(() => postContentMemo, [postContentMemo]);
+
+    const renderCommentItem = useCallback(({ item }: { item: any }) => ( // Use any to support temporary 'images' prop
         <View style={styles.commentItem}>
             <Image
                 source={{ uri: item.user.avatar || `https://ui-avatars.com/api/?name=${item.user.name}` }}
@@ -359,7 +360,7 @@ export default function PostDetailScreen() {
                 </View>
             </View>
         </View>
-    );
+    ), [isDark, colors.text]);
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -387,8 +388,12 @@ export default function PostDetailScreen() {
                         </View>
                     )}
                     style={{ flex: 1 }}
-                    removeClippedSubviews={false}
+                    removeClippedSubviews={true}
                     keyboardShouldPersistTaps="handled"
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
+                    initialNumToRender={10}
+                    updateCellsBatchingPeriod={50}
                 />
 
                 {/* Input Bar - Fixed at bottom */}

@@ -618,6 +618,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             <FlatList
                 ref={flatListRef}
                 onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
+                onScrollBeginDrag={() => setActiveReactionPostId(null)} // Close popup when scrolling
                 scrollEventThrottle={16}
                 data={posts}
                 extraData={activeReactionPostId}
@@ -651,6 +652,22 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     </View>
                 )}
             />
+
+            {/* Backdrop overlay to close reaction popup when clicking outside */}
+            {activeReactionPostId && (
+                <TouchableOpacity
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'transparent',
+                    }}
+                    activeOpacity={1}
+                    onPress={() => setActiveReactionPostId(null)}
+                />
+            )}
 
             {/* Create Post Modal */}
             <Modal
@@ -1256,6 +1273,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         marginTop: 8,
         paddingBottom: 4,
+        overflow: 'visible', // Allow ReactionDock popup to overflow
     },
     postHeader: {
         flexDirection: 'row',
@@ -1335,6 +1353,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-around',
         paddingVertical: 10,
+        position: 'relative', // Required for absolute positioned ReactionDock
+        overflow: 'visible', // Allow popup to overflow
+        zIndex: 10, // Ensure popup appears above other elements
     },
     actionButton: {
         flexDirection: 'row',
