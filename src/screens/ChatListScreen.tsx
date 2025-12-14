@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingTop: Platform.OS === 'android' ? 40 : 0,
+        paddingTop: Platform.OS === 'android' ? 50 : 60,
         paddingHorizontal: 16,
         paddingBottom: 8,
         backgroundColor: 'transparent',

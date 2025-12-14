@@ -291,7 +291,7 @@ export default function ChatDetailScreen() {
         <View style={styles.header}>
             <View style={styles.headerLeft}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="white" />
+                    <Ionicons name="chevron-back" size={28} color="#000000" />
                 </TouchableOpacity>
                 <View style={styles.headerAvatarContainer}>
                     {avatar ? (
@@ -319,7 +319,7 @@ export default function ChatDetailScreen() {
                         conversationId, // Pass conversationId
                     })}
                 >
-                    <Ionicons name="call-outline" size={22} color="white" />
+                    <Ionicons name="call-outline" size={24} color="#000000" />
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={styles.headerIcon}
@@ -332,10 +332,10 @@ export default function ChatDetailScreen() {
                         conversationId, // Pass conversationId
                     })}
                 >
-                    <Ionicons name="videocam-outline" size={24} color="white" />
+                    <Ionicons name="videocam-outline" size={26} color="#000000" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.headerIcon}>
-                    <Ionicons name="ellipsis-vertical" size={24} color="white" />
+                    <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
                 </TouchableOpacity>
             </View>
         </View>
@@ -487,7 +487,7 @@ export default function ChatDetailScreen() {
     return (
         <View style={styles.container}>
             <SafeAreaView style={styles.safeTop}>
-                <StatusBar barStyle="light-content" backgroundColor={ZALO_BLUE} />
+                <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
             </SafeAreaView>
             {renderHeader()}
 
@@ -729,25 +729,27 @@ const styles = StyleSheet.create({
         backgroundColor: ZALO_BG,
     },
     safeTop: {
-        backgroundColor: '#000000',
+        backgroundColor: '#FFFFFF',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#000000',
+        backgroundColor: '#FFFFFF',
         paddingTop: Platform.OS === 'android' ? 40 : 0,
         height: Platform.OS === 'android' ? 90 : 50,
         paddingHorizontal: 12,
         paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
     },
     headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     backButton: { padding: 4, marginRight: 4 },
     headerAvatarContainer: { marginRight: 10 },
     headerAvatar: { width: 36, height: 36, borderRadius: 18 },
     headerInfo: { flex: 1 },
-    headerTitle: { color: 'white', fontSize: 17, fontWeight: '600' },
-    headerSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
+    headerTitle: { color: '#000000', fontSize: 17, fontWeight: '600' },
+    headerSubtitle: { color: '#666666', fontSize: 12 },
     headerRight: { flexDirection: 'row', width: 100, justifyContent: 'flex-end' },
     headerIcon: { padding: 4, marginLeft: 15 },
 
