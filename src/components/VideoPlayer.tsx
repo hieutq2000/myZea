@@ -193,13 +193,16 @@ export default function VideoPlayer({
 
     return (
         <>
-            <View style={[styles.container, style, { width: '100%', height: finalHeight }]}>
+            <View
+                key={`container-${hasRealRatio ? 'loaded' : 'loading'}`}
+                style={[styles.container, style, { width: '100%', height: finalHeight }]}
+            >
                 <Video
                     ref={video}
                     style={styles.video}
                     source={{ uri: source }}
                     useNativeControls={useNativeControls}
-                    resizeMode={hasRealRatio ? ResizeMode.CONTAIN : ResizeMode.COVER}
+                    resizeMode={ResizeMode.COVER}
                     isLooping
                     isMuted={isMuted}
                     volume={1.0}

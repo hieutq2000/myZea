@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -16,12 +16,14 @@ import {
     Animated,
     TouchableWithoutFeedback,
     Alert,
+    RefreshControl,
 } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { getUserPosts, followUser, unfollowUser, Post, uploadImage, updateProfile, getUserProfile } from '../utils/api';
 import FacebookImageViewer from '../components/FacebookImageViewer';
+import { formatTime } from '../utils/formatTime';
 
 const { width } = Dimensions.get('window');
 const COVER_HEIGHT = 200;
@@ -69,6 +71,7 @@ export default function PlaceProfileScreen({
     const [userPosts, setUserPosts] = useState<Post[]>([]);
     const [loadingPosts, setLoadingPosts] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     // Image Viewer State
     const [isImageViewerVisible, setIsImageViewerVisible] = useState(false);
@@ -87,59 +90,68 @@ export default function PlaceProfileScreen({
     };
 
 
+    // Load profile data function (reusable for refresh)
+    const loadProfileData = useCallback(async () => {
+        try {
+            const postsPromise = getUserPosts(user.id);
+            // Also fetch profile to get latest avatar/cover and follower info
+            const profilePromise = getUserProfile(user.id).catch(err => null);
+
+            const [posts, profile] = await Promise.all([postsPromise, profilePromise]);
+
+            if (posts) setUserPosts(posts);
+            if (profile) {
+                // Update local state with fresh data from server
+                setAvatarSource(profile.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=F97316&color=fff&size=200`);
+                // Force update cover source if server has it, otherwise keep default
+                if (profile.coverImage) {
+                    setCoverSource(profile.coverImage);
+                }
+                // Update follow status from server
+                if (profile.isFollowing !== undefined) {
+                    setIsFollowing(profile.isFollowing);
+                }
+                // Update follower count from server
+                if (profile.followerCount !== undefined) {
+                    setFollowerCount(profile.followerCount);
+                }
+                // Update following count from server
+                if (profile.followingCount !== undefined) {
+                    setFollowingCount(profile.followingCount);
+                }
+                // Update email if available
+                if (profile.email) {
+                    setUserEmail(profile.email);
+                }
+            }
+        } catch (error) {
+            console.log('Error fetching user data:', error);
+            // Fallback if available
+            if (user.posts) setUserPosts(user.posts);
+        }
+    }, [user?.id]);
+
     // Fetch posts on mount or user change
     React.useEffect(() => {
         let mounted = true;
 
         const loadData = async () => {
             setLoadingPosts(true);
-            try {
-                const postsPromise = getUserPosts(user.id);
-                // Also fetch profile to get latest avatar/cover and follower info
-                const profilePromise = getUserProfile(user.id).catch(err => null);
-
-                const [posts, profile] = await Promise.all([postsPromise, profilePromise]);
-
-                if (mounted) {
-                    if (posts) setUserPosts(posts);
-                    if (profile) {
-                        // Update local state with fresh data from server
-                        setAvatarSource(profile.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=F97316&color=fff&size=200`);
-                        // Force update cover source if server has it, otherwise keep default
-                        if (profile.coverImage) {
-                            setCoverSource(profile.coverImage);
-                        }
-                        // Update follow status from server
-                        if (profile.isFollowing !== undefined) {
-                            setIsFollowing(profile.isFollowing);
-                        }
-                        // Update follower count from server
-                        if (profile.followerCount !== undefined) {
-                            setFollowerCount(profile.followerCount);
-                        }
-                        // Update following count from server
-                        if (profile.followingCount !== undefined) {
-                            setFollowingCount(profile.followingCount);
-                        }
-                        // Update email if available
-                        if (profile.email) {
-                            setUserEmail(profile.email);
-                        }
-                    }
-                }
-            } catch (error) {
-                console.log('Error fetching user data:', error);
-                // Fallback if available
-                if (mounted && user.posts) setUserPosts(user.posts);
-            } finally {
-                if (mounted) setLoadingPosts(false);
-            }
+            await loadProfileData();
+            if (mounted) setLoadingPosts(false);
         };
 
         if (user?.id) loadData();
 
         return () => { mounted = false; };
-    }, [user?.id]);
+    }, [user?.id, loadProfileData]);
+
+    // Pull-to-refresh handler
+    const handleRefresh = useCallback(async () => {
+        setIsRefreshing(true);
+        await loadProfileData();
+        setIsRefreshing(false);
+    }, [loadProfileData]);
 
     const handleToggleFollow = async () => {
         const newStatus = !isFollowing;
@@ -265,7 +277,15 @@ export default function PlaceProfileScreen({
             <ScrollView
                 style={styles.scrollView}
                 showsVerticalScrollIndicator={false}
-                bounces={false}
+                bounces={true}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                        colors={['#F97316']}
+                        tintColor="#F97316"
+                    />
+                }
             >
                 {/* Cover Photo Section */}
                 <View style={styles.coverContainer}>
@@ -417,7 +437,7 @@ export default function PlaceProfileScreen({
                                 <View style={styles.postInfo}>
                                     <Text style={styles.postGroupName}>{userName}</Text>
                                     <View style={styles.postMeta}>
-                                        <Text style={styles.postTime}>{post.time || 'Vừa xong'}</Text>
+                                        <Text style={styles.postTime}>{formatTime(post.createdAt) || 'Vừa xong'}</Text>
                                         <Text style={styles.postDot}>•</Text>
                                         <Ionicons name="globe-outline" size={12} color="#65676B" />
                                     </View>
@@ -429,9 +449,32 @@ export default function PlaceProfileScreen({
 
                             <Text style={styles.postContent}>{post.content}</Text>
 
-                            {post.image && (
-                                <Image source={{ uri: post.image }} style={styles.postImage} resizeMode="cover" />
-                            )}
+                            {/* Post Images */}
+                            {(() => {
+                                // Get images from post (handle both array and single image)
+                                const postImages = post.images && post.images.length > 0
+                                    ? post.images
+                                    : (post.image ? [post.image] : []);
+
+                                if (postImages.length === 0) return null;
+
+                                // Get URI from image (handle string or object format)
+                                const getImageUri = (img: any) => {
+                                    if (!img) return '';
+                                    if (typeof img === 'string') return img;
+                                    return img.uri || img.url || '';
+                                };
+
+                                const firstImageUri = getImageUri(postImages[0]);
+
+                                return firstImageUri ? (
+                                    <Image
+                                        source={{ uri: firstImageUri }}
+                                        style={styles.postImage}
+                                        resizeMode="cover"
+                                    />
+                                ) : null;
+                            })()}
 
                             {/* Post Actions */}
                             <View style={styles.postActionsDivider} />
