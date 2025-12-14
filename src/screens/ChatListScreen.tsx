@@ -447,10 +447,10 @@ export default function ChatListScreen() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
+            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
 
             <LinearGradient
-                colors={['#0068FF', '#0284C7']}
+                colors={['#FFE4D6', '#E0F2FE']} // Pastel Peach to Pastel Blue
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.headerGradient}
@@ -469,7 +469,7 @@ export default function ChatListScreen() {
                             {/* User might be on main tab, but let's keep back button logic if it was there, or maybe hide it if it's main screen.
                                  Assuming it is a stack screen for now.
                              */}
-                            <Ionicons name="arrow-back" size={24} color="#FFFFFF" display="none" />
+                            <Ionicons name="arrow-back" size={24} color="#000000" display="none" />
                         </TouchableOpacity>
                         {/* Avatar in header */}
                         <View style={{ marginRight: 10 }}>
@@ -483,13 +483,13 @@ export default function ChatListScreen() {
                     </View>
                     <View style={styles.headerRight}>
                         <TouchableOpacity style={styles.headerIcon}>
-                            <Ionicons name="create-outline" size={24} color="#FFFFFF" />
+                            <Ionicons name="create-outline" size={24} color="#000000" />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.headerIcon}
                             onPress={() => navigation.navigate('NewChat')}
                         >
-                            <Ionicons name="add-circle-outline" size={26} color="#FFFFFF" />
+                            <Ionicons name="add-circle-outline" size={26} color="#000000" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -497,11 +497,11 @@ export default function ChatListScreen() {
                 {/* Search Bar */}
                 <View style={styles.searchContainer}>
                     <View style={styles.searchBar}>
-                        <Ionicons name="search" size={18} color="#FFFFFF" />
+                        <Ionicons name="search" size={18} color="#9CA3AF" />
                         <TextInput
                             style={styles.searchInput}
                             placeholder="Tìm kiếm"
-                            placeholderTextColor="rgba(255,255,255,0.8)"
+                            placeholderTextColor="#9CA3AF"
                             value={searchText}
                             onChangeText={setSearchText}
                         />
@@ -557,9 +557,12 @@ const styles = StyleSheet.create({
     // Header Gradient
     headerGradient: {
         width: '100%',
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
-        overflow: 'hidden',
+        // Removed border radius to match Apple/Standard flat feel or keep it if desired? 
+        // User asked for "white header", image has no radius visible separating it strongly, just looks like a header. 
+        // But user previously asked for 'vuong ngan cach' removal. 
+        // I will keep radius but small or remove it? The image shows a flat list below.
+        // Actually, if background is white/light, radius matters less. I'll keep it for style.
+        paddingBottom: 4,
     },
 
     // Header
@@ -582,7 +585,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#FFFFFF',
+        color: '#000000',
     },
     headerRight: {
         flexDirection: 'row',
@@ -602,7 +605,7 @@ const styles = StyleSheet.create({
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.2)', // More translucent
+        backgroundColor: '#F3F4F6', // Light gray standard
         borderRadius: 10,
         paddingHorizontal: 12,
         height: 36,
@@ -610,7 +613,7 @@ const styles = StyleSheet.create({
     searchInput: {
         flex: 1,
         marginLeft: 8,
-        color: '#FFFFFF',
+        color: '#000000',
         fontSize: 15,
     },
 
@@ -626,18 +629,18 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
-        backgroundColor: DARK_CARD,
+        backgroundColor: '#E5E7EB', // Gray for inactive
     },
     tabActive: {
-        backgroundColor: '#2C5F9E',
+        backgroundColor: '#1F2937', // Black/Dark Gray for active
     },
     tabText: {
-        color: DARK_TEXT_SECONDARY,
+        color: '#374151',
         fontSize: 13,
         fontWeight: '500',
     },
     tabTextActive: {
-        color: DARK_TEXT,
+        color: '#FFFFFF',
     },
 
     // List

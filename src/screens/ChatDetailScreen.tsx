@@ -512,62 +512,66 @@ export default function ChatDetailScreen() {
 
                 {/* Input Container */}
                 <View style={[
-                    styles.inputContainer,
+                    styles.footer,
                     Platform.OS === 'ios'
                         ? { marginBottom: showEmojiPicker ? 0 : (keyboardHeight > 0 ? keyboardHeight : 20) }
                         : {}
                 ]}>
                     {replyingTo && (
-                        <View style={styles.replyInputContainer}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.replyInputLabel}>Đang trả lời:</Text>
-                                <Text style={styles.replyInputText} numberOfLines={1}>{replyingTo.text || '[Phương tiện]'}</Text>
+                        <View style={styles.replyBarContainer}>
+                            <View style={styles.replyBarAccent} />
+                            <View style={styles.replyBarContent}>
+                                <Text style={styles.replyBarTitle}>Đang trả lời</Text>
+                                <Text style={styles.replyBarMessage} numberOfLines={1}>{replyingTo.text || '[Phương tiện]'}</Text>
                             </View>
-                            <TouchableOpacity onPress={() => setReplyingTo(null)}>
-                                <Ionicons name="close-circle" size={20} color="#666" />
+                            <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyBarClose}>
+                                <Ionicons name="close" size={20} color="#666" />
                             </TouchableOpacity>
                         </View>
                     )}
-                    {/* Attachment Button (Left) */}
-                    <TouchableOpacity style={styles.leftButton} onPress={() => setShowMediaPicker(true)}>
-                        <Ionicons name="add" size={24} color="#FFFFFF" />
-                    </TouchableOpacity>
 
-                    {/* Text Input Wrapper (Center) */}
-                    <View style={styles.inputWrapper}>
-                        <TextInput
-                            ref={inputRef}
-                            style={styles.input}
-                            value={inputText}
-                            onChangeText={handleTextChange}
-                            placeholder="Tin nhắn"
-                            placeholderTextColor="#9CA3AF"
-                            multiline
-                            onFocus={() => {
-                                setShowEmojiPicker(false);
-                                setTimeout(() => scrollToBottom(), 300);
-                            }}
-                        />
-                        {/* Sticker Button (Inside Input) */}
-                        <TouchableOpacity style={styles.stickerInnerButton} onPress={toggleEmojiPicker}>
-                            <Ionicons
-                                name={showEmojiPicker ? "keypad-outline" : "happy-outline"}
-                                size={24}
-                                color="#6B7280"
+                    <View style={styles.inputRow}>
+                        {/* Attachment Button (Left) */}
+                        <TouchableOpacity style={styles.leftButton} onPress={() => setShowMediaPicker(true)}>
+                            <Ionicons name="add" size={24} color="#FFFFFF" />
+                        </TouchableOpacity>
+
+                        {/* Text Input Wrapper (Center) */}
+                        <View style={styles.inputWrapper}>
+                            <TextInput
+                                ref={inputRef}
+                                style={styles.input}
+                                value={inputText}
+                                onChangeText={handleTextChange}
+                                placeholder="Tin nhắn"
+                                placeholderTextColor="#9CA3AF"
+                                multiline
+                                onFocus={() => {
+                                    setShowEmojiPicker(false);
+                                    setTimeout(() => scrollToBottom(), 300);
+                                }}
                             />
-                        </TouchableOpacity>
-                    </View>
+                            {/* Sticker Button (Inside Input) */}
+                            <TouchableOpacity style={styles.stickerInnerButton} onPress={toggleEmojiPicker}>
+                                <Ionicons
+                                    name={showEmojiPicker ? "keypad-outline" : "happy-outline"}
+                                    size={24}
+                                    color="#6B7280"
+                                />
+                            </TouchableOpacity>
+                        </View>
 
-                    {/* Mic or Send Button (Right) */}
-                    {inputText.trim() ? (
-                        <TouchableOpacity style={styles.rightButton} onPress={() => sendMessage()}>
-                            <Ionicons name="send" size={24} color={ZALO_BLUE} />
-                        </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity style={styles.rightButton} onPress={() => Alert.alert('Thông báo', 'Tính năng ghi âm đang phát triển')}>
-                            <Ionicons name="mic-outline" size={28} color="#6B7280" />
-                        </TouchableOpacity>
-                    )}
+                        {/* Mic or Send Button (Right) */}
+                        {inputText.trim() ? (
+                            <TouchableOpacity style={styles.rightButton} onPress={() => sendMessage()}>
+                                <Ionicons name="send" size={24} color={ZALO_BLUE} />
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity style={styles.rightButton} onPress={() => Alert.alert('Thông báo', 'Tính năng ghi âm đang phát triển')}>
+                                <Ionicons name="mic-outline" size={28} color="#6B7280" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </View>
 
                 {/* Emoji Picker */}
@@ -836,14 +840,49 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
 
-    inputContainer: {
+    footer: {
+        backgroundColor: '#FFFFFF',
+        borderTopWidth: 1,
+        borderTopColor: '#F0F0F0',
+    },
+    inputRow: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
         paddingVertical: 10,
         paddingHorizontal: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#F0F0F0',
+    },
+    replyBarContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: '#FAFAFA',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F5F5F5',
+    },
+    replyBarAccent: {
+        width: 4,
+        height: 36,
+        backgroundColor: ZALO_BLUE,
+        borderRadius: 2,
+        marginRight: 10,
+    },
+    replyBarContent: {
+        flex: 1,
+    },
+    replyBarTitle: {
+        color: ZALO_BLUE,
+        fontWeight: '600',
+        fontSize: 14,
+        marginBottom: 2,
+    },
+    replyBarMessage: {
+        color: '#666',
+        fontSize: 14,
+    },
+    replyBarClose: {
+        padding: 4,
     },
     leftButton: {
         width: 30,
