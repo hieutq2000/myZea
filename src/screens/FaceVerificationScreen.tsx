@@ -75,12 +75,16 @@ export default function FaceVerificationScreen({
 
         // Wrap everything in global try-catch to prevent crash
         try {
-            // Check if avatar exists - skip if no avatar
-            if (!avatarBase64 || avatarBase64.length < 100) {
-                console.log('[FaceVerify] No avatar, auto-passing verification');
-                setStatus('success');
-                setMessage('Xác thực thành công!');
-                setTimeout(() => onVerified(), 1000);
+            // Check if avatar exists and is a REAL photo (not ui-avatars.com fallback)
+            const isValidAvatar = avatarBase64 &&
+                avatarBase64.length > 100 &&
+                !avatarBase64.includes('ui-avatars.com') &&
+                !avatarBase64.includes('placeholder');
+
+            if (!isValidAvatar) {
+                console.log('[FaceVerify] No valid avatar - BLOCKING exam');
+                setStatus('failed');
+                setMessage('Bạn cần có ảnh đại diện thật để thi. Vui lòng cập nhật ảnh trong hồ sơ.');
                 return;
             }
 
@@ -300,20 +304,34 @@ export default function FaceVerificationScreen({
 
                 {status === 'failed' && (
                     <View style={styles.failedContainer}>
-                        <TouchableOpacity style={styles.retryBtn} onPress={handleRetry}>
-                            <Ionicons name="refresh" size={24} color={COLORS.white} />
-                            <Text style={styles.retryBtnText}>Thử lại</Text>
-                        </TouchableOpacity>
+                        {/* If message contains "ảnh đại diện" - show update profile button */}
+                        {message.includes('ảnh đại diện') ? (
+                            <>
+                                <Ionicons name="person-circle-outline" size={50} color="#EF4444" />
+                                <Text style={styles.retryHint}>{message}</Text>
+                                <TouchableOpacity style={styles.retryBtn} onPress={onCancel}>
+                                    <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+                                    <Text style={styles.retryBtnText}>Quay lại cập nhật ảnh</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <>
+                                <TouchableOpacity style={styles.retryBtn} onPress={handleRetry}>
+                                    <Ionicons name="refresh" size={24} color={COLORS.white} />
+                                    <Text style={styles.retryBtnText}>Thử lại</Text>
+                                </TouchableOpacity>
 
-                        {retryCount >= 2 && (
-                            <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
-                                <Text style={styles.skipBtnText}>Bỏ qua xác thực</Text>
-                            </TouchableOpacity>
+                                {retryCount >= 2 && (
+                                    <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
+                                        <Text style={styles.skipBtnText}>Bỏ qua xác thực</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                <Text style={styles.retryHint}>
+                                    Đảm bảo khuôn mặt nằm trong khung và đủ ánh sáng
+                                </Text>
+                            </>
                         )}
-
-                        <Text style={styles.retryHint}>
-                            Đảm bảo khuôn mặt nằm trong khung và đủ ánh sáng
-                        </Text>
                     </View>
                 )}
             </View>
