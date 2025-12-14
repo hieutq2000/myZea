@@ -35,14 +35,14 @@ export default function IncomingCallModal({
     onAccept,
     onReject,
 }: IncomingCallModalProps) {
-    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const soundRef = useRef<Audio.Sound | null>(null);
 
     // Animations
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
     useEffect(() => {
-        let soundObject: Audio.Sound | null = null;
+        let isMounted = true;
 
         const startRinging = async () => {
             try {
@@ -61,33 +61,33 @@ export default function IncomingCallModal({
                     { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' }, // Standard Ringtone
                     { shouldPlay: true, isLooping: true }
                 );
-                soundObject = sound;
-                setSound(sound);
 
-                // Start Vibration pattern (1s on, 1s off)
-                Vibration.vibrate([1000, 1000, 1000, 1000], true);
+                if (isMounted) {
+                    soundRef.current = sound;
+                    // Start Vibration pattern (1s on, 1s off)
+                    Vibration.vibrate([1000, 1000, 1000, 1000], true);
+                } else {
+                    // If component unmounted while loading sound, stop it immediately
+                    await sound.stopAsync();
+                    await sound.unloadAsync();
+                }
+
             } catch (error) {
                 console.log('Error playing sound, falling back to vibration only', error);
-                Vibration.vibrate([1000, 1000, 1000, 1000], true);
+                if (isMounted) Vibration.vibrate([1000, 1000, 1000, 1000], true);
             }
         };
 
         const stopRinging = async () => {
-            if (soundObject) {
+            if (soundRef.current) {
                 try {
-                    await soundObject.stopAsync();
-                    await soundObject.unloadAsync();
+                    await soundRef.current.stopAsync();
+                    await soundRef.current.unloadAsync();
                 } catch (e) {
                     // Ignore unload errors
                 }
+                soundRef.current = null;
             }
-            if (sound) {
-                try {
-                    await sound.stopAsync();
-                    await sound.unloadAsync();
-                } catch (e) { }
-            }
-            setSound(null);
             Vibration.cancel();
         };
 
@@ -124,24 +124,31 @@ export default function IncomingCallModal({
         }
 
         return () => {
+            isMounted = false;
             stopRinging();
         };
     }, [visible]);
 
     const handleReject = async () => {
         Vibration.cancel();
-        if (sound) {
-            await sound.stopAsync();
-            await sound.unloadAsync();
+        if (soundRef.current) {
+            try {
+                await soundRef.current.stopAsync();
+                await soundRef.current.unloadAsync();
+            } catch (e) { }
+            soundRef.current = null;
         }
         onReject();
     };
 
     const handleAccept = async () => {
         Vibration.cancel();
-        if (sound) {
-            await sound.stopAsync();
-            await sound.unloadAsync();
+        if (soundRef.current) {
+            try {
+                await soundRef.current.stopAsync();
+                await soundRef.current.unloadAsync();
+            } catch (e) { }
+            soundRef.current = null;
         }
         onAccept();
     };

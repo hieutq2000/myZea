@@ -2433,9 +2433,18 @@ io.on('connection', (socket) => {
                 // Column likely exists
             }
 
+            // Map call types to 'text' for database but keep original type for client if needed
+            // Or better: Assume DB column is ENUM('text', 'image', 'video', 'call_ended', 'call_missed')
+            // Since we got truncation error, it's likely ENUM('text', 'image', 'video').
+
+            let dbType = data.type || 'text';
+            if (dbType === 'call_ended' || dbType === 'call_missed') {
+                dbType = 'text'; // Fallback to 'text' to avoid truncation error
+            }
+
             await pool.execute(
                 'INSERT INTO messages (id, conversation_id, sender_id, content, type, image_url) VALUES (?, ?, ?, ?, ?, ?)',
-                [messageId, conversationId, data.senderId, data.message, data.type || 'text', data.imageUrl || null]
+                [messageId, conversationId, data.senderId, data.message, dbType, data.imageUrl || null]
             );
 
             // Update conversation last message

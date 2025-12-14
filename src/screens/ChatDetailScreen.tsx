@@ -13,16 +13,12 @@ type ChatDetailRouteProp = RouteProp<RootStackParamList, 'ChatDetail'>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ZALO_BLUE = '#0068FF';
-const ZALO_BG = '#E2E9F1';
-const MY_BUBBLE = '#D7F0FF';
-const OTHER_BUBBLE = '#FFFFFF';
+const ZALO_BG = '#FFFFFF'; // White background as seen in image
+const MY_BUBBLE = '#5C3C5D'; // Dark Purple from image
+const OTHER_BUBBLE = '#F2F4F5'; // Very light gray for other
 
+// ... update styles ...
 export default function ChatDetailScreen() {
-    const route = useRoute<ChatDetailRouteProp>();
-    const navigation = useNavigation();
-    const { conversationId, partnerId, userName, avatar } = route.params;
-    const [messages, setMessages] = useState<any[]>([]);
-    const [inputText, setInputText] = useState('');
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -32,6 +28,7 @@ export default function ChatDetailScreen() {
     const [partnerTyping, setPartnerTyping] = useState(false);
     const [replyingTo, setReplyingTo] = useState<any | null>(null);
     const [lastSeenMessageId, setLastSeenMessageId] = useState<string | null>(null);
+    const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
     const socket = getSocket();
@@ -332,7 +329,7 @@ export default function ChatDetailScreen() {
                     <Ionicons name="videocam-outline" size={24} color="white" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.headerIcon}>
-                    <Ionicons name="list-outline" size={24} color="white" />
+                    <Ionicons name="ellipsis-vertical" size={24} color="white" />
                 </TouchableOpacity>
             </View>
         </View>
@@ -340,35 +337,30 @@ export default function ChatDetailScreen() {
 
 
 
-    const handleDeleteMessage = (messageId: string) => {
-        Alert.alert(
-            'Tùy chọn tin nhắn',
-            'Bạn muốn làm gì với tin nhắn này?',
-            [
-                { text: 'Hủy', style: 'cancel' },
-                {
-                    text: 'Trả lời',
-                    onPress: () => {
-                        setReplyingTo(messages.find(m => m.id === messageId));
-                        inputRef.current?.focus();
-                    }
-                },
-                {
-                    text: 'Thu hồi',
-                    style: 'destructive',
-                    onPress: async () => {
-                        // Optimistic
-                        setMessages(prev => prev.filter(m => m.id !== messageId));
-                        try {
-                            await deleteMessage(messageId);
-                            if (socket) socket.emit('revokeMessage', { conversationId, messageId });
-                        } catch (error) {
-                            console.error('Delete message error', error);
-                        }
-                    }
-                }
-            ]
-        );
+    const handleCheckSelectMessage = (item: any) => {
+        setSelectedMessage(item);
+    };
+
+    const handleReplyMessage = () => {
+        if (selectedMessage) {
+            setReplyingTo(selectedMessage);
+            setSelectedMessage(null);
+            inputRef.current?.focus();
+        }
+    };
+
+    const handleDeleteMessageAction = async () => {
+        if (!selectedMessage) return;
+        const messageId = selectedMessage.id;
+        // Optimistic delete
+        setMessages(prev => prev.filter(m => m.id !== messageId));
+        setSelectedMessage(null);
+        try {
+            await deleteMessage(messageId);
+            if (socket) socket.emit('revokeMessage', { conversationId, messageId });
+        } catch (error) {
+            console.error('Delete message error', error);
+        }
     };
 
     const renderMessageItem = ({ item, index }: { item: any, index: number }) => {
@@ -376,7 +368,19 @@ export default function ChatDetailScreen() {
         const nextMessage = messages[index + 1];
         const isLast = index === messages.length - 1 || (nextMessage && nextMessage.senderId !== item.senderId);
         const isImage = item.type === 'image' && item.imageUrl;
-        const isCall = item.type === 'call_missed' || item.type === 'call_ended';
+
+        // Detect call messages - backward compatibility for 'text' type from DB
+        let isCall = item.type === 'call_missed' || item.type === 'call_ended';
+        let callType = item.type;
+
+        // If type became 'text' due to DB but content indicates call
+        if (!isCall && item.text === 'Cuộc gọi thoại bị nhỡ') {
+            isCall = true;
+            callType = 'call_missed';
+        } else if (!isCall && (item.text?.startsWith('Cuộc gọi thoại') && item.text !== 'Cuộc gọi thoại bị nhỡ')) {
+            isCall = true;
+            callType = 'call_ended';
+        }
 
         return (
             <View style={[
@@ -400,7 +404,7 @@ export default function ChatDetailScreen() {
                     <TouchableOpacity
                         style={[styles.imageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
                         onPress={() => setSelectedImage(item.imageUrl)}
-                        onLongPress={() => handleDeleteMessage(item.id)}
+                        onLongPress={() => handleCheckSelectMessage(item)}
                         delayLongPress={500}
                     >
                         <Image
@@ -413,13 +417,13 @@ export default function ChatDetailScreen() {
                 ) : isCall ? (
                     <View style={[styles.callBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
                         <View style={styles.callContent}>
-                            <View style={[styles.callIconBubble, item.type === 'call_missed' ? { backgroundColor: '#FF3B30' } : { backgroundColor: '#34C759' }]}>
+                            <View style={[styles.callIconBubble, callType === 'call_missed' ? { backgroundColor: '#FF3B30' } : { backgroundColor: '#34C759' }]}>
                                 <Ionicons
-                                    name={item.type === 'call_missed' ? "call" : "call"}
+                                    name={callType === 'call_missed' ? "call" : "call"}
                                     size={16}
                                     color="white"
                                 />
-                                {item.type === 'call_missed' && (
+                                {callType === 'call_missed' && (
                                     <View style={{ position: 'absolute', top: 0, right: 0 }}>
                                         <MaterialIcons name="close" size={10} color="white" />
                                     </View>
@@ -427,10 +431,10 @@ export default function ChatDetailScreen() {
                             </View>
                             <View style={styles.callInfo}>
                                 <Text style={styles.callTitle}>
-                                    {item.type === 'call_missed' ? 'Cuộc gọi thoại bị nhỡ' : 'Cuộc gọi thoại'}
+                                    {callType === 'call_missed' ? 'Cuộc gọi thoại bị nhỡ' : 'Cuộc gọi thoại'}
                                 </Text>
                                 <Text style={styles.callSubtitle}>
-                                    {item.type === 'call_missed' ? item.time : item.text || item.callDuration || 'Đã kết thúc'}
+                                    {callType === 'call_missed' ? item.time : item.text || item.callDuration || 'Đã kết thúc'}
                                 </Text>
                             </View>
                         </View>
@@ -442,6 +446,7 @@ export default function ChatDetailScreen() {
                                 avatar,
                                 isVideo: false,
                                 isIncoming: false,
+                                conversationId
                             })}
                         >
                             <Text style={styles.callButtonText}>Gọi lại</Text>
@@ -450,7 +455,7 @@ export default function ChatDetailScreen() {
                 ) : (
                     <TouchableOpacity
                         style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
-                        onLongPress={() => handleDeleteMessage(item.id)}
+                        onLongPress={() => handleCheckSelectMessage(item)}
                         delayLongPress={500}
                         activeOpacity={0.8}
                     >
@@ -462,10 +467,10 @@ export default function ChatDetailScreen() {
                                 </Text>
                             </View>
                         )}
-                        <Text style={[styles.messageText, { color: '#000' }]}>{item.text}</Text>
-                        <Text style={styles.messageTime}>{item.time}</Text>
+                        <Text style={[styles.messageText, { color: isMe ? '#FFFFFF' : '#000000' }]}>{item.text}</Text>
+                        <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF' }]}>{item.time}</Text>
                         {isMe && isLast && (
-                            <Text style={styles.seenText}>{lastSeenMessageId === item.id ? 'Đã xem' : 'Đã gửi'}</Text>
+                            <Text style={[styles.seenText, { color: 'rgba(255,255,255,0.7)' }]}>{lastSeenMessageId === item.id ? 'Đã xem' : 'Đã gửi'}</Text>
                         )}
                     </TouchableOpacity>
                 )}
@@ -519,7 +524,7 @@ export default function ChatDetailScreen() {
                     )}
                     {/* Attachment Button (Left) */}
                     <TouchableOpacity style={styles.leftButton} onPress={() => setShowMediaPicker(true)}>
-                        <Ionicons name="attach" size={28} color="#6B7280" />
+                        <Ionicons name="add" size={24} color="#FFFFFF" />
                     </TouchableOpacity>
 
                     {/* Text Input Wrapper (Center) */}
@@ -539,8 +544,8 @@ export default function ChatDetailScreen() {
                         />
                         {/* Sticker Button (Inside Input) */}
                         <TouchableOpacity style={styles.stickerInnerButton} onPress={toggleEmojiPicker}>
-                            <MaterialIcons
-                                name={showEmojiPicker ? "keyboard" : "sentiment-satisfied-alt"}
+                            <Ionicons
+                                name={showEmojiPicker ? "keypad-outline" : "happy-outline"}
                                 size={24}
                                 color="#6B7280"
                             />
@@ -552,10 +557,10 @@ export default function ChatDetailScreen() {
                         <TouchableOpacity style={styles.rightButton} onPress={() => sendMessage()}>
                             <Ionicons name="send" size={24} color={ZALO_BLUE} />
                         </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity style={styles.rightButton} onPress={() => Alert.alert('Thông báo', 'Tính năng ghi âm đang phát triển')}>
-                            <Ionicons name="mic-outline" size={28} color="#6B7280" />
-                        </TouchableOpacity>
+                    ) : <TouchableOpacity style={styles.menuItem} onPress={() => setSelectedMessage(null)}>
+                        <Text style={styles.menuItemText}>Ghim</Text>
+                        <Ionicons name="pin-outline" size={20} color="white" />
+                    </TouchableOpacity>
                     )}
                 </View>
 
@@ -641,13 +646,13 @@ const styles = StyleSheet.create({
         backgroundColor: ZALO_BG,
     },
     safeTop: {
-        backgroundColor: ZALO_BLUE,
+        backgroundColor: '#000000',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: ZALO_BLUE,
+        backgroundColor: '#000000',
         paddingTop: Platform.OS === 'android' ? 40 : 0,
         height: Platform.OS === 'android' ? 90 : 50,
         paddingHorizontal: 12,
@@ -660,8 +665,8 @@ const styles = StyleSheet.create({
     headerInfo: { flex: 1 },
     headerTitle: { color: 'white', fontSize: 17, fontWeight: '600' },
     headerSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
-    headerRight: { flexDirection: 'row', width: 100, justifyContent: 'space-between' },
-    headerIcon: { padding: 4 },
+    headerRight: { flexDirection: 'row', width: 100, justifyContent: 'flex-end' },
+    headerIcon: { padding: 4, marginLeft: 15 },
 
     keyboardAvoid: { flex: 1 },
     listStyle: { flex: 1 },
@@ -749,32 +754,37 @@ const styles = StyleSheet.create({
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'transparent',
-        paddingVertical: 8,
-        paddingHorizontal: 10,
-        borderTopWidth: 0,
+        backgroundColor: '#FFFFFF',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#F0F0F0',
     },
     leftButton: {
-        padding: 8,
-        marginRight: 8,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: '#000000', // Black circle
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
     },
     inputWrapper: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'transparent',
+        backgroundColor: '#F3F4F6', // Light gray input bg
         borderRadius: 20,
-        paddingHorizontal: 12,
-        minHeight: 40,
-        borderWidth: 1,
-        borderColor: 'rgba(150, 150, 150, 0.4)',
+        paddingHorizontal: 16,
+        height: 40,
+        borderWidth: 0, // No border
     },
     input: {
         flex: 1,
         fontSize: 16,
         maxHeight: 100,
         paddingVertical: 8,
-        color: '#1F2937',
+        color: '#000000',
         marginRight: 4,
     },
     stickerInnerButton: {
@@ -915,5 +925,54 @@ const styles = StyleSheet.create({
     replyInputText: {
         fontSize: 12,
         color: '#333',
+    },
+    // ... (rest of styles)
+    optionsOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)', // Dimmed background
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    optionsContainer: {
+        width: '70%',
+        alignItems: 'center',
+    },
+    reactionBar: {
+        flexDirection: 'row',
+        backgroundColor: '#262626',
+        borderRadius: 30,
+        padding: 8,
+        marginBottom: 10,
+        justifyContent: 'space-between',
+        width: '100%',
+    },
+    reactionButton: {
+        padding: 4,
+    },
+    reactionText: {
+        fontSize: 20,
+    },
+    menuContainer: {
+        backgroundColor: '#262626', // Dark menu background like screenshot
+        borderRadius: 15,
+        width: '60%', // Narrower than reaction bar
+        overflow: 'hidden',
+    },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+    },
+    menuItemText: {
+        fontSize: 16,
+        color: 'white',
+        fontWeight: '500',
+    },
+    menuDivider: {
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: '#3A3A3A',
+        marginLeft: 16,
     },
 });

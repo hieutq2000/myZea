@@ -443,45 +443,70 @@ export default function ChatListScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={DARK_HEADER} />
+            <StatusBar barStyle="light-content" backgroundColor="#2C3E50" />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <Ionicons name="arrow-back" size={24} color={DARK_TEXT} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Chats</Text>
+            <LinearGradient
+                colors={['#2C3E50', '#000000']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.headerGradient}
+            >
+                {/* Header */}
+                <View style={styles.header}>
+                    <View style={styles.headerLeft}>
+                        {/* <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                            <Ionicons name="arrow-back" size={24} color={DARK_TEXT} />
+                        </TouchableOpacity> */}
+                        {/* Image shows avatar then "Chats" ? Actually just "Chats" title. Keeping Back for navigation safety if nested, but looks like main tab.
+                             User image shows Avatar then "Chats".
+                             Let's stick to the current structure but transparent.
+                         */}
+                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                            {/* User might be on main tab, but let's keep back button logic if it was there, or maybe hide it if it's main screen.
+                                 Assuming it is a stack screen for now.
+                             */}
+                            <Ionicons name="arrow-back" size={24} color={DARK_TEXT} display="none" />
+                        </TouchableOpacity>
+                        {/* Avatar in header */}
+                        <View style={{ marginRight: 10 }}>
+                            <Image
+                                source={{ uri: 'https://i.pravatar.cc/150?img=3' }} // Placeholder or current user avatar
+                                style={{ width: 32, height: 32, borderRadius: 16 }}
+                            />
+                            <View style={[styles.onlineDot, { right: 0, bottom: 0 }]} />
+                        </View>
+                        <Text style={styles.headerTitle}>Chats</Text>
+                    </View>
+                    <View style={styles.headerRight}>
+                        <TouchableOpacity style={styles.headerIcon}>
+                            <Ionicons name="create-outline" size={24} color={DARK_TEXT} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerIcon}
+                            onPress={() => navigation.navigate('NewChat')}
+                        >
+                            <Ionicons name="add-circle-outline" size={26} color={DARK_TEXT} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                <View style={styles.headerRight}>
-                    <TouchableOpacity style={styles.headerIcon}>
-                        <Ionicons name="qr-code-outline" size={22} color={DARK_TEXT} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.headerIcon}
-                        onPress={() => navigation.navigate('NewChat')}
-                    >
-                        <Ionicons name="add-outline" size={26} color={DARK_TEXT} />
-                    </TouchableOpacity>
-                </View>
-            </View>
 
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-                <View style={styles.searchBar}>
-                    <Ionicons name="search" size={18} color={DARK_TEXT_SECONDARY} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Tìm kiếm"
-                        placeholderTextColor={DARK_TEXT_SECONDARY}
-                        value={searchText}
-                        onChangeText={setSearchText}
-                    />
+                {/* Search Bar */}
+                <View style={styles.searchContainer}>
+                    <View style={styles.searchBar}>
+                        <Ionicons name="search" size={18} color={DARK_TEXT_SECONDARY} />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Tìm kiếm"
+                            placeholderTextColor={DARK_TEXT_SECONDARY}
+                            value={searchText}
+                            onChangeText={setSearchText}
+                        />
+                    </View>
                 </View>
-            </View>
 
-            {/* Tabs */}
-            {renderTabs()}
+                {/* Tabs */}
+                {renderTabs()}
+            </LinearGradient>
 
             {/* Content */}
             {loading ? (
@@ -525,6 +550,12 @@ const styles = StyleSheet.create({
     },
 
     // Header
+    // Header Gradient
+    headerGradient: {
+        width: '100%',
+    },
+
+    // Header
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -532,7 +563,7 @@ const styles = StyleSheet.create({
         paddingTop: Platform.OS === 'android' ? 40 : 0,
         paddingHorizontal: 16,
         paddingBottom: 8,
-        backgroundColor: DARK_HEADER,
+        backgroundColor: 'transparent',
     },
     headerLeft: {
         flexDirection: 'row',
@@ -559,12 +590,12 @@ const styles = StyleSheet.create({
     searchContainer: {
         paddingHorizontal: 16,
         paddingVertical: 8,
-        backgroundColor: DARK_HEADER,
+        backgroundColor: 'transparent',
     },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: DARK_CARD,
+        backgroundColor: 'rgba(255,255,255,0.1)', // More translucent
         borderRadius: 10,
         paddingHorizontal: 12,
         height: 36,
@@ -581,7 +612,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        backgroundColor: DARK_HEADER,
+        backgroundColor: 'transparent',
         gap: 8,
     },
     tab: {
