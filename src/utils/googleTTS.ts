@@ -1,18 +1,13 @@
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
-import { GEMINI_API_KEY } from './theme';
-import { safeCallApi } from './aiHelper';
 
 /**
- * Gemini AI Native Voice TTS
- * Uses Gemini's audio generation capability for natural Vietnamese voice
+ * Text-to-Speech using expo-speech
+ * Optimized to NOT use Gemini API to save quota
  */
 
 let currentSound: Audio.Sound | null = null;
 let isSpeaking = false;
-
-// Gemini TTS endpoint
-const GEMINI_TTS_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 /**
  * Generate speech using Gemini AI's native voice
@@ -30,14 +25,9 @@ export async function speakWithGoogleTTS(
         isSpeaking = true;
         onStart?.();
 
-        // Try Gemini TTS first
-        const geminiSuccess = await tryGeminiTTS(text, voiceName, onDone, onError);
-
-        if (!geminiSuccess) {
-            // Fallback to expo-speech
-            console.log('Falling back to expo-speech');
-            await useFallbackTTS(text, onDone, onError);
-        }
+        // OPTIMIZED: Skip Gemini API call - use expo-speech directly
+        // This saves significant API quota since TTS doesn't need AI processing
+        await useFallbackTTS(text, onDone, onError);
 
     } catch (error) {
         console.error('TTS error:', error);
@@ -47,54 +37,11 @@ export async function speakWithGoogleTTS(
 }
 
 /**
- * Try to use Gemini's TTS capability
+ * DISABLED: Gemini TTS was calling API unnecessarily
+ * The API response was just text that we then passed to expo-speech anyway
+ * This wasted API quota without providing any benefit
  */
-async function tryGeminiTTS(
-    text: string,
-    voiceName: string,
-    onDone?: () => void,
-    onError?: (error: Error) => void
-): Promise<boolean> {
-    try {
-        // Use Gemini to generate audio-like response
-        // Note: This uses a workaround since direct TTS isn't available via REST
-        const response = await safeCallApi(() => fetch(`${GEMINI_TTS_URL}?key=${GEMINI_API_KEY}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: `Bạn là một người Việt Nam. Hãy đọc đoạn văn sau với giọng ${voiceName === 'Kore' ? 'nữ nhẹ nhàng' : 'nam trầm ấm'}. Chỉ đọc NGUYÊN VĂN, không thêm bớt gì:\n\n"${text}"`
-                    }]
-                }],
-                generationConfig: {
-                    // Request audio if available
-                    responseModalities: ['TEXT'], // Will add AUDIO when supported
-                }
-            }),
-        }));
-
-        if (!response.ok) {
-            console.log('Gemini TTS not available, status:', response.status);
-            return false;
-        }
-
-        // For now, Gemini REST API doesn't support audio output
-        // So we fall back to expo-speech but with the Gemini-processed text
-        const data = await response.json();
-        const processedText = data?.candidates?.[0]?.content?.parts?.[0]?.text || text;
-
-        // Use expo-speech with processed text
-        await useFallbackTTS(processedText.replace(/"/g, ''), onDone, onError);
-        return true;
-
-    } catch (error) {
-        console.error('Gemini TTS error:', error);
-        return false;
-    }
-}
+// async function tryGeminiTTS(...) { ... }
 
 /**
  * Fallback TTS using expo-speech

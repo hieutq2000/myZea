@@ -156,7 +156,7 @@ export default function LiveSessionScreen({
             } catch (error) {
                 console.error('Periodic check error:', error);
             }
-        }, 60000); // Check every 60 seconds (Optimized for Free Quota)
+        }, 90000); // Check every 90 seconds (Optimized for Free Quota - saves ~33% compared to 60s)
 
         return () => clearInterval(checkInterval);
     }, [isExamMode, status, faceVerified, user.avatar, speakText]);
