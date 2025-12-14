@@ -172,7 +172,8 @@ export default function PlaceProfileScreen({
                     setAvatarSource(uploadedUrl);
                     // Update Profile in DB
                     try {
-                        await updateProfile(userName, uploadedUrl); // Keep current name, update avatar
+                        // Keep current name and other vars, update avatar
+                        await updateProfile(userName, uploadedUrl, user?.voice, user?.coverImage);
                         Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện!');
                     } catch (error) {
                         console.error('Update profile failed:', error);
@@ -180,8 +181,15 @@ export default function PlaceProfileScreen({
                     }
                 } else {
                     setCoverSource(uploadedUrl);
-                    // Cover photo API not available yet, just local update
-                    Alert.alert('Thành công', 'Đã cập nhật ảnh bìa (Lưu tạm thời).');
+                    // Update Cover in DB
+                    try {
+                        // Keep current name/avatar, update cover
+                        await updateProfile(userName, user?.avatar, user?.voice, uploadedUrl);
+                        Alert.alert('Thành công', 'Đã cập nhật ảnh bìa!');
+                    } catch (error) {
+                        console.error('Update profile failed:', error);
+                        Alert.alert('Lưu thất bại', 'Ảnh đã tải lên nhưng chưa lưu được vào hồ sơ.');
+                    }
                 }
 
                 setIsUploading(false);

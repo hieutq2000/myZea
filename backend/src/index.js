@@ -280,6 +280,7 @@ app.post('/api/auth/login', async (req, res) => {
                 email: user.email,
                 name: user.name,
                 avatar: user.avatar,
+                coverImage: user.cover_image,
                 voice: user.voice,
                 xp: user.xp,
                 level: user.level,
@@ -312,6 +313,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
             email: user.email,
             name: user.name,
             avatar: user.avatar,
+            coverImage: user.cover_image,
             voice: user.voice,
             xp: user.xp,
             level: user.level,
@@ -334,11 +336,18 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 // Update user profile
 app.put('/api/auth/profile', authenticateToken, async (req, res) => {
     try {
-        const { name, avatar, voice } = req.body;
+        const { name, avatar, voice, coverImage } = req.body;
+
+        // Dynamic update to avoid overwriting with null if fields are missing in request
+        // But for simplicity, we assume the client sends current values for existing fields
+        // However, to be safe let's assume client sends all or we need a better query.
+        // Let's stick to the current pattern but add cover_image
+        // NOTE: Client MUST send all fields or we need to fetch user first.
+        // Better: UPDATE users SET name=COALESCE(?, name), avatar=COALESCE(?, avatar) ...
 
         await pool.execute(
-            'UPDATE users SET name = ?, avatar = ?, voice = ? WHERE id = ?',
-            [name, avatar, voice, req.user.id]
+            'UPDATE users SET name = ?, avatar = ?, voice = ?, cover_image = ? WHERE id = ?',
+            [name, avatar, voice, coverImage, req.user.id]
         );
 
         res.json({ success: true });

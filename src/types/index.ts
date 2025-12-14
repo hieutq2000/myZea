@@ -52,6 +52,7 @@ export interface User {
     email: string;
     name: string;
     avatar?: string;
+    coverImage?: string;
     voice?: AiVoice;
     history?: ExamResult[];
     xp?: number;

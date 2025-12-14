@@ -105,11 +105,12 @@ export async function getCurrentUser(): Promise<User | null> {
 export async function updateProfile(
     name: string,
     avatar?: string,
-    voice?: string
+    voice?: string,
+    coverImage?: string
 ): Promise<void> {
     await apiRequest('/api/auth/profile', {
         method: 'PUT',
-        body: JSON.stringify({ name, avatar, voice }),
+        body: JSON.stringify({ name, avatar, voice, coverImage }),
     });
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Image, Keyboard, Modal, Alert, ActivityIndicator, Dimensions } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
@@ -369,7 +369,7 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const renderMessageItem = ({ item, index }: { item: any, index: number }) => {
+    const renderMessageItem = useCallback(({ item, index }: { item: any, index: number }) => {
         const isMe = item.sender === 'me' || (currentUserId && item.senderId === currentUserId);
         const nextMessage = messages[index + 1];
         const isLast = index === messages.length - 1 || (nextMessage && nextMessage.senderId !== item.senderId);
@@ -482,7 +482,9 @@ export default function ChatDetailScreen() {
                 )}
             </View>
         );
-    };
+    }, [messages, currentUserId, avatar, userName, navigation, partnerId, conversationId, lastSeenMessageId]);
+
+
 
     return (
         <View style={styles.container}>
