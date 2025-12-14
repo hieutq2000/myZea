@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getAvatarUri } from '../utils/media';
 
 interface PlaceMenuScreenProps {
     user: any;
@@ -56,7 +57,7 @@ export default function PlaceMenuScreen({
         },
     ];
 
-    const avatarUri = user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=F97316&color=fff`;
+    const avatarUri = getAvatarUri(user?.avatar, user?.name || 'User');
 
     const renderMenuItem = (item: MenuItem) => {
         const IconComponent = item.iconType === 'material' ? MaterialCommunityIcons :

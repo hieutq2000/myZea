@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiRequest } from '../utils/api';
+import { getAvatarUri } from '../utils/media';
 
 interface Group {
     id: string;
@@ -104,7 +105,7 @@ export default function PlaceGroupsScreen({ onBack, onOpenGroup, onCreateGroup }
     };
 
     const renderGroupItem = ({ item }: { item: Group }) => {
-        const avatarUri = item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=F97316&color=fff&size=100`;
+        const avatarUri = getAvatarUri(item.avatar, item.name);
 
         return (
             <TouchableOpacity
@@ -231,7 +232,7 @@ export default function PlaceGroupsScreen({ onBack, onOpenGroup, onCreateGroup }
                                             activeOpacity={0.7}
                                         >
                                             <Image
-                                                source={{ uri: group.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(group.name)}&background=1877F2&color=fff&size=100` }}
+                                                source={{ uri: getAvatarUri(group.avatar, group.name) }}
                                                 style={styles.suggestedAvatar}
                                             />
                                             <View style={styles.suggestedInfo}>

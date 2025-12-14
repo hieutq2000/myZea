@@ -354,7 +354,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 {/* Composer inside Gradient */}
                 <View style={styles.composerContainer}>
                     <Image
-                        source={{ uri: user?.avatar || `https://ui-avatars.com/api/?name=${user?.name || 'User'}` }}
+                        source={{ uri: getAvatarUri(user?.avatar, user?.name || 'User') }}
                         style={styles.composerAvatar}
                     />
                     <TouchableOpacity
@@ -395,13 +395,13 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                 setPlaceActiveTab('GROUPS');
                             }}>
                                 <Image
-                                    source={{ uri: item.group.avatar || `https://ui-avatars.com/api/?name=${item.group.name}&rounded=true&background=random` }}
+                                    source={{ uri: getAvatarUri(item.group.avatar, item.group.name) }}
                                     style={{ width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: '#eee' }}
                                 />
                             </TouchableOpacity>
                             {/* User Avatar (Small Overlay) */}
                             <Image
-                                source={{ uri: item.author.avatar || `https://ui-avatars.com/api/?name=${item.author.name}` }}
+                                source={{ uri: getAvatarUri(item.author.avatar, item.author.name) }}
                                 style={{
                                     width: 20,
                                     height: 20,
@@ -448,7 +448,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     <>
                         <TouchableOpacity onPress={() => item.author.id !== user.id && handleViewProfile(item.author)}>
                             <Image
-                                source={{ uri: item.author.avatar || `https://ui-avatars.com/api/?name=${item.author.name}` }}
+                                source={{ uri: getAvatarUri(item.author.avatar, item.author.name) }}
                                 style={styles.postAvatar}
                             />
                         </TouchableOpacity>
@@ -505,7 +505,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     <View style={styles.sharedContainer}>
                         <View style={styles.sharedHeader}>
                             <Image
-                                source={{ uri: item.originalPost.author.avatar || `https://ui-avatars.com/api/?name=${item.originalPost.author.name}` }}
+                                source={{ uri: getAvatarUri(item.originalPost.author.avatar, item.originalPost.author.name) }}
                                 style={styles.sharedAvatar}
                             />
                             <View>
@@ -754,7 +754,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         <ScrollView style={[styles.modalBody, { flex: 1 }]} showsVerticalScrollIndicator={false}>
                             <View style={styles.modalUserRow}>
                                 <Image
-                                    source={{ uri: user?.avatar || `https://ui-avatars.com/api/?name=${user?.name || 'User'}` }}
+                                    source={{ uri: getAvatarUri(user?.avatar, user?.name || 'User') }}
                                     style={styles.postAvatar}
                                 />
                                 <Text style={styles.postAuthor}>{user?.name}</Text>
@@ -826,7 +826,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                             paddingVertical: 6,
                                         }}>
                                             <Image
-                                                source={{ uri: user.avatar || `https://ui-avatars.com/api/?name=${user.name}` }}
+                                                source={{ uri: getAvatarUri(user.avatar, user.name) }}
                                                 style={{ width: 20, height: 20, borderRadius: 10, marginRight: 6 }}
                                             />
                                             <Text style={{ fontSize: 13, color: '#333' }}>{user.name}</Text>
@@ -925,7 +925,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                     }}
                                 >
                                     <Image
-                                        source={{ uri: user.avatar || `https://ui-avatars.com/api/?name=${user.name}` }}
+                                        source={{ uri: getAvatarUri(user.avatar, user.name) }}
                                         style={{ width: 44, height: 44, borderRadius: 22, marginRight: 12 }}
                                     />
                                     <Text style={{ fontSize: 15, fontWeight: '500' }}>{user.name}</Text>
@@ -946,7 +946,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                                             marginBottom: 6,
                                         }}>
                                             <Image
-                                                source={{ uri: user.avatar || `https://ui-avatars.com/api/?name=${user.name}` }}
+                                                source={{ uri: getAvatarUri(user.avatar, user.name) }}
                                                 style={{ width: 32, height: 32, borderRadius: 16, marginRight: 10 }}
                                             />
                                             <Text style={{ flex: 1, fontSize: 14, fontWeight: '500' }}>{user.name}</Text>

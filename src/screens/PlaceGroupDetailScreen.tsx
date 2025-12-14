@@ -27,7 +27,7 @@ import TextWithSeeMore from '../components/TextWithSeeMore';
 import VideoPlayer from '../components/VideoPlayer';
 import PhotoGrid from '../components/PhotoGrid';
 import { formatTime } from '../utils/formatTime';
-import { isVideo, getUri } from '../utils/media';
+import { isVideo, getUri, getAvatarUri } from '../utils/media';
 
 interface GroupDetail {
     id: string;
@@ -190,7 +190,7 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
     };
 
     const renderPost = ({ item }: { item: Post }) => {
-        const avatarUri = item.author.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.author.name)}`;
+        const avatarUri = getAvatarUri(item.author.avatar, item.author.name);
 
         return (
             <View style={styles.postCard}>
@@ -271,7 +271,7 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
     }
 
     const coverUri = group.coverImage || 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&q=80';
-    const avatarUri = group.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(group.name)}&background=F97316&color=fff&size=100`;
+    const avatarUri = getAvatarUri(group.avatar, group.name);
 
     return (
         <View style={styles.container}>
@@ -385,7 +385,7 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                                         {group.previewMembers.slice(0, 3).map((member, index) => (
                                             <Image
                                                 key={member.id}
-                                                source={{ uri: member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}` }}
+                                                source={{ uri: getAvatarUri(member.avatar, member.name) }}
                                                 style={[styles.memberAvatarSmall, { marginLeft: index > 0 ? -8 : 0 }]}
                                             />
                                         ))}
@@ -548,7 +548,7 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                         <ScrollView style={[styles.modalBody, { flex: 1 }]} showsVerticalScrollIndicator={false}>
                             <View style={styles.modalUserRow}>
                                 <Image
-                                    source={{ uri: currentUser?.avatar || `https://ui-avatars.com/api/?name=${currentUser?.name || 'User'}` }}
+                                    source={{ uri: getAvatarUri(currentUser?.avatar, currentUser?.name || 'User') }}
                                     style={styles.postAvatar}
                                 />
                                 <View>

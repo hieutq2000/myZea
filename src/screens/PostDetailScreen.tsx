@@ -27,7 +27,7 @@ import FacebookImageViewer from '../components/FacebookImageViewer';
 import TextWithSeeMore from '../components/TextWithSeeMore';
 import * as ImagePicker from 'expo-image-picker';
 import VideoPlayer from '../components/VideoPlayer';
-import { isVideo } from '../utils/media';
+import { isVideo, getAvatarUri } from '../utils/media';
 
 const REACTIONS = [
     { id: 'like', icon: 'https://media.giphy.com/media/l4pTfx2qLszoacZRS/giphy.gif', label: 'Thích', color: '#1877F2' },
@@ -207,7 +207,7 @@ export default function PostDetailScreen() {
                 {/* Post Header */}
                 <View style={styles.postHeader}>
                     <Image
-                        source={{ uri: passedPost.author.avatar || `https://ui-avatars.com/api/?name=${passedPost.author.name}` }}
+                        source={{ uri: getAvatarUri(passedPost.author.avatar, passedPost.author.name) }}
                         style={styles.postAvatar}
                     />
                     <View style={styles.postInfo}>
@@ -320,7 +320,7 @@ export default function PostDetailScreen() {
     const renderCommentItem = useCallback(({ item }: { item: any }) => ( // Use any to support temporary 'images' prop
         <View style={styles.commentItem}>
             <Image
-                source={{ uri: item.user.avatar || `https://ui-avatars.com/api/?name=${item.user.name}` }}
+                source={{ uri: getAvatarUri(item.user.avatar, item.user.name) }}
                 style={styles.commentAvatar}
             />
             <View style={styles.commentRight}>
