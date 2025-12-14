@@ -21,7 +21,7 @@ import {
 import { Ionicons, Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { getUserPosts, followUser, unfollowUser, Post, uploadImage, updateProfile, getUserProfile } from '../utils/api';
+import { getUserPosts, followUser, unfollowUser, Post, uploadImage, updateProfile, getUserProfile, getImageUrl } from '../utils/api';
 import FacebookImageViewer from '../components/FacebookImageViewer';
 import { formatTime } from '../utils/formatTime';
 
@@ -56,9 +56,27 @@ export default function PlaceProfileScreen({
     const [modalVisible, setModalVisible] = useState(false);
     const [modalType, setModalType] = useState<'AVATAR' | 'COVER'>('AVATAR');
 
+    // Helper to get valid image URL with fallback
+    // Uses getImageUrl to handle IP changes automatically
+    const getValidAvatarUrl = (avatar: string | null | undefined, name: string) => {
+        if (avatar && avatar.trim() !== '' && avatar !== 'null' && avatar !== 'undefined') {
+            // Use getImageUrl to convert old IP URLs to current API_URL
+            return getImageUrl(avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=F97316&color=fff&size=200`;
+        }
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=F97316&color=fff&size=200`;
+    };
+
+    const getValidCoverUrl = (cover: string | null | undefined) => {
+        if (cover && cover.trim() !== '' && cover !== 'null' && cover !== 'undefined') {
+            // Use getImageUrl to convert old IP URLs to current API_URL
+            return getImageUrl(cover) || 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=800&q=80';
+        }
+        return 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=800&q=80';
+    };
+
     // Local state for images to update immediately
-    const [avatarSource, setAvatarSource] = useState(user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=F97316&color=fff&size=200`);
-    const [coverSource, setCoverSource] = useState(user?.coverImage || 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=800&q=80');
+    const [avatarSource, setAvatarSource] = useState(getValidAvatarUrl(user?.avatar, user?.name));
+    const [coverSource, setCoverSource] = useState(getValidCoverUrl(user?.coverImage));
 
     const userName = user?.name || 'Người dùng';
     const [userEmail, setUserEmail] = useState(user?.email || 'email@example.com');
@@ -72,6 +90,16 @@ export default function PlaceProfileScreen({
     const [loadingPosts, setLoadingPosts] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // Sync local state when user prop changes (e.g., after fetching fresh data)
+    React.useEffect(() => {
+        // Always update to ensure we have valid URLs with fallbacks
+        setAvatarSource(getValidAvatarUrl(user?.avatar, user?.name));
+        setCoverSource(getValidCoverUrl(user?.coverImage));
+        if (user?.email) {
+            setUserEmail(user.email);
+        }
+    }, [user?.avatar, user?.coverImage, user?.email, user?.name]);
 
     // Image Viewer State
     const [isImageViewerVisible, setIsImageViewerVisible] = useState(false);
@@ -101,12 +129,9 @@ export default function PlaceProfileScreen({
 
             if (posts) setUserPosts(posts);
             if (profile) {
-                // Update local state with fresh data from server
-                setAvatarSource(profile.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=F97316&color=fff&size=200`);
-                // Force update cover source if server has it, otherwise keep default
-                if (profile.coverImage) {
-                    setCoverSource(profile.coverImage);
-                }
+                // Update local state with fresh data from server using helper functions
+                setAvatarSource(getValidAvatarUrl(profile.avatar, profile.name));
+                setCoverSource(getValidCoverUrl(profile.coverImage));
                 // Update follow status from server
                 if (profile.isFollowing !== undefined) {
                     setIsFollowing(profile.isFollowing);
@@ -216,22 +241,30 @@ export default function PlaceProfileScreen({
 
                 // 2. Update State & Database
                 if (modalType === 'AVATAR') {
+                    console.log('[PlaceProfile] Setting avatar to:', uploadedUrl);
                     setAvatarSource(uploadedUrl);
                     // Update Profile in DB
                     try {
                         // Keep current name and other vars, update avatar
-                        await updateProfile(userName, uploadedUrl, user?.voice, user?.coverImage);
+                        // Use coverSource (local state) instead of user?.coverImage to preserve recent changes
+                        console.log('[PlaceProfile] Calling updateProfile with avatar:', uploadedUrl.substring(0, 50));
+                        await updateProfile(userName, uploadedUrl, user?.voice, coverSource);
+                        console.log('[PlaceProfile] Avatar updated successfully!');
                         Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện!');
                     } catch (error) {
                         console.error('Update profile failed:', error);
                         Alert.alert('Lưu thất bại', 'Ảnh đã tải lên nhưng chưa lưu được vào hồ sơ.');
                     }
                 } else {
+                    console.log('[PlaceProfile] Setting cover to:', uploadedUrl);
                     setCoverSource(uploadedUrl);
                     // Update Cover in DB
                     try {
                         // Keep current name/avatar, update cover
-                        await updateProfile(userName, user?.avatar, user?.voice, uploadedUrl);
+                        // Use avatarSource (local state) instead of user?.avatar to preserve recent changes
+                        console.log('[PlaceProfile] Calling updateProfile with cover:', uploadedUrl.substring(0, 50));
+                        await updateProfile(userName, avatarSource, user?.voice, uploadedUrl);
+                        console.log('[PlaceProfile] Cover updated successfully!');
                         Alert.alert('Thành công', 'Đã cập nhật ảnh bìa!');
                     } catch (error) {
                         console.error('Update profile failed:', error);
@@ -322,6 +355,11 @@ export default function PlaceProfileScreen({
                             <Image
                                 source={{ uri: avatarSource || undefined }}
                                 style={styles.avatar}
+                                onError={() => {
+                                    // Fallback to UI Avatars if image fails to load
+                                    console.log('[PlaceProfile] Avatar failed to load, using fallback');
+                                    setAvatarSource(getValidAvatarUrl(null, userName));
+                                }}
                             />
                             {/* Camera Icon for Avatar - Only if Own Profile */}
                             {isOwnProfile && (

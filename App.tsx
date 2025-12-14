@@ -281,7 +281,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     setUser(updatedUser);
 
     try {
-      await updateProfile(updatedUser.name, updatedUser.avatar, updatedUser.voice);
+      await updateProfile(updatedUser.name, updatedUser.avatar, updatedUser.voice, updatedUser.coverImage);
     } catch (error) {
       console.error('Failed to sync profile:', error);
     }

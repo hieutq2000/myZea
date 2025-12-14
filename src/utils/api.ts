@@ -6,6 +6,36 @@ import { User, ExamResult } from '../types';
 // For production: https://your-domain.com
 export const API_URL = 'http://192.168.0.102:3001';
 
+/**
+ * Convert a relative image path to full URL
+ * Handles both relative paths (/uploads/...) and full URLs (http://...)
+ * This ensures images work even when WiFi IP changes
+ */
+export function getImageUrl(path: string | null | undefined): string | undefined {
+    if (!path || path.trim() === '') return undefined;
+
+    // Already a full URL (http:// or https:// or data:)
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+        // Check if it's an old URL with different IP - convert to relative
+        if (path.includes('/uploads/') && !path.startsWith(API_URL)) {
+            // Extract relative path from old full URL
+            const match = path.match(/\/uploads\/[^/]+$/);
+            if (match) {
+                return `${API_URL}${match[0]}`;
+            }
+        }
+        return path;
+    }
+
+    // Relative path - prepend API_URL
+    if (path.startsWith('/')) {
+        return `${API_URL}${path}`;
+    }
+
+    // Just filename or other format
+    return `${API_URL}/uploads/${path}`;
+}
+
 const TOKEN_KEY = 'auth_token';
 
 // ============ TOKEN MANAGEMENT ============

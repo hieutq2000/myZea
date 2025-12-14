@@ -345,11 +345,18 @@ app.put('/api/auth/profile', authenticateToken, async (req, res) => {
         // NOTE: Client MUST send all fields or we need to fetch user first.
         // Better: UPDATE users SET name=COALESCE(?, name), avatar=COALESCE(?, avatar) ...
 
+        console.log('📝 Updating profile for user:', req.user.id);
+        console.log('   - name:', name);
+        console.log('   - avatar:', avatar ? avatar.substring(0, 50) + '...' : 'null');
+        console.log('   - voice:', voice);
+        console.log('   - coverImage:', coverImage ? coverImage.substring(0, 50) + '...' : 'null');
+
         await pool.execute(
-            'UPDATE users SET name = ?, avatar = ?, voice = ?, cover_image = ? WHERE id = ?',
-            [name, avatar, voice, coverImage, req.user.id]
+            'UPDATE users SET name = COALESCE(?, name), avatar = COALESCE(?, avatar), voice = COALESCE(?, voice), cover_image = COALESCE(?, cover_image) WHERE id = ?',
+            [name || null, avatar || null, voice || null, coverImage || null, req.user.id]
         );
 
+        console.log('✅ Profile updated successfully');
         res.json({ success: true });
     } catch (error) {
         console.error('Update profile error:', error);
@@ -1232,10 +1239,14 @@ app.post('/api/upload/image', upload.single('image'), async (req, res) => {
             return res.status(400).json({ error: 'Không có file được upload' });
         }
 
-        // Get the host from request or use default
+        // NEW: Return relative path instead of full URL
+        // This makes URLs work regardless of IP changes
+        const relativePath = `/uploads/${req.file.filename}`;
+
+        // Also provide full URL for backward compatibility
         const host = req.headers.host || 'localhost:3001';
         const protocol = req.protocol || 'http';
-        const imageUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
+        const fullUrl = `${protocol}://${host}${relativePath}`;
 
         // Calculate dimensions
         let dimensions = { width: 0, height: 0 };
@@ -1256,10 +1267,11 @@ app.post('/api/upload/image', upload.single('image'), async (req, res) => {
             console.error('Error calculating dimensions:', err);
         }
 
-        console.log('📸 Media uploaded:', imageUrl, dimensions);
+        console.log('📸 Media uploaded:', relativePath, '(full:', fullUrl, ')', dimensions);
         res.json({
             success: true,
-            url: imageUrl,
+            url: relativePath,  // Return relative path - frontend will prepend API_URL
+            fullUrl: fullUrl,   // Also provide full URL for debugging
             filename: req.file.filename,
             width: dimensions.width,
             height: dimensions.height
