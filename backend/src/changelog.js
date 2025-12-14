@@ -4,6 +4,17 @@
 
 const CHANGELOG = [
     {
+        version: "1.0.4",
+        date: "14/12/2024",
+        title: "FIX LỖI HIỂN THỊ HỒ SƠ & UPLOAD",
+        changes: [
+            "✅ Fix đồng bộ ảnh đại diện và ảnh bìa khi xem profile người khác",
+            "🛠️ Sửa lỗi thư viện upload ảnh",
+            "🔄 Cập nhật cấu hình Server mới",
+            "⚡ Tối ưu hiệu năng load Profile"
+        ]
+    },
+    {
         version: "1.0.2",
         date: "14/12/2024",
         title: "TỐI ƯU GIAO DIỆN CHAT & LIGHT THEME",
