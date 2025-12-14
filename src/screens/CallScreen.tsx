@@ -291,24 +291,39 @@ export default function CallScreen() {
 
     const toggleMute = () => {
         if (agoraEngineRef.current) {
-            agoraEngineRef.current.muteLocalAudioStream(!isMuted);
-            setIsMuted(!isMuted);
+            const newMutedState = !isMuted;
+            const result = agoraEngineRef.current.muteLocalAudioStream(newMutedState);
+            if (result === 0) {
+                setIsMuted(newMutedState);
+                console.log('Microphone toggled:', newMutedState ? 'Muted' : 'Unmuted');
+            } else {
+                console.warn('Failed to toggle microphone, error code:', result);
+                // Force state update anyway in case of UI sync issue, or handle error appropriately
+                setIsMuted(newMutedState);
+            }
         }
     };
 
     const toggleSpeaker = () => {
         if (agoraEngineRef.current) {
-            agoraEngineRef.current.setEnableSpeakerphone(!isSpeakerOn);
-            setIsSpeakerOn(!isSpeakerOn);
+            const newSpeakerState = !isSpeakerOn;
+            const result = agoraEngineRef.current.setEnableSpeakerphone(newSpeakerState);
+            if (result === 0) {
+                setIsSpeakerOn(newSpeakerState);
+                console.log('Speaker toggled:', newSpeakerState ? 'On' : 'Off');
+            } else {
+                console.warn('Failed to toggle speaker, error code:', result);
+                setIsSpeakerOn(newSpeakerState);
+            }
         }
     };
 
     const toggleVideo = () => {
         if (agoraEngineRef.current) {
             if (isVideoEnabled) {
-                agoraEngineRef.current.disableVideo();
+                agoraEngineRef.current.enableLocalVideo(false);
             } else {
-                agoraEngineRef.current.enableVideo();
+                agoraEngineRef.current.enableLocalVideo(true);
                 agoraEngineRef.current.startPreview();
             }
             setIsVideoEnabled(!isVideoEnabled);
@@ -346,6 +361,9 @@ export default function CallScreen() {
                     <RtcSurfaceView style={styles.remoteVideo} canvas={{ uid: remoteUid }} />
                     <View style={styles.localVideoContainer}>
                         <RtcSurfaceView style={styles.localVideo} canvas={{ uid: 0 }} />
+                        <TouchableOpacity style={styles.switchCameraBtn} onPress={switchCamera}>
+                            <Ionicons name="camera-reverse" size={20} color="white" />
+                        </TouchableOpacity>
                     </View>
                 </View>
             ) : (
@@ -385,19 +403,37 @@ export default function CallScreen() {
 
                 <View style={styles.bottomControls}>
                     <View style={styles.controlsRow}>
-                        <TouchableOpacity style={[styles.controlButton, isMuted && styles.controlButtonActive]} onPress={toggleMute}>
-                            <Ionicons name={isMuted ? "mic-off-outline" : "mic-outline"} size={28} color="white" />
+                        <TouchableOpacity style={styles.controlButton} onPress={toggleMute}>
+                            <View style={[styles.iconContainer, isMuted && styles.iconContainerActive]}>
+                                <Ionicons
+                                    name={isMuted ? "mic-off" : "mic"}
+                                    size={28}
+                                    color={isMuted ? "#000" : "#fff"}
+                                />
+                            </View>
                             <Text style={styles.controlLabel}>Mic</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]} onPress={toggleSpeaker}>
-                            <Ionicons name={isSpeakerOn ? "volume-high-outline" : "volume-low-outline"} size={28} color="white" />
+                        <TouchableOpacity style={styles.controlButton} onPress={toggleSpeaker}>
+                            <View style={[styles.iconContainer, isSpeakerOn && styles.iconContainerActive]}>
+                                <Ionicons
+                                    name={isSpeakerOn ? "volume-high" : "volume-low"}
+                                    size={28}
+                                    color={isSpeakerOn ? "#000" : "#fff"}
+                                />
+                            </View>
                             <Text style={styles.controlLabel}>Loa ngoài</Text>
                         </TouchableOpacity>
 
                         {isVideo && (
-                            <TouchableOpacity style={[styles.controlButton, !isVideoEnabled && styles.controlButtonActive]} onPress={toggleVideo}>
-                                <Ionicons name={isVideoEnabled ? "videocam-outline" : "videocam-off-outline"} size={28} color="white" />
+                            <TouchableOpacity style={styles.controlButton} onPress={toggleVideo}>
+                                <View style={[styles.iconContainer, !isVideoEnabled && styles.iconContainerActive]}>
+                                    <Ionicons
+                                        name={isVideoEnabled ? "videocam" : "videocam-off"}
+                                        size={28}
+                                        color={!isVideoEnabled ? "#000" : "#fff"}
+                                    />
+                                </View>
                                 <Text style={styles.controlLabel}>Camera</Text>
                             </TouchableOpacity>
                         )}
@@ -451,6 +487,17 @@ const styles = StyleSheet.create({
     },
     localVideo: {
         flex: 1,
+    },
+    switchCameraBtn: {
+        position: 'absolute',
+        bottom: 5,
+        right: 5,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     audioCallContent: {
         alignItems: 'center',
@@ -540,8 +587,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 8,
     },
-    controlButtonActive: {
-        opacity: 0.7,
+    iconContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    iconContainerActive: {
+        backgroundColor: '#FFFFFF',
     },
     controlLabel: {
         color: 'white',

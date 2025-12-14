@@ -171,6 +171,17 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
             isVideo: data.isVideo,
           });
         });
+
+        // Handle caller hanging up before accept
+        socket.on('callEnded', (data: any) => {
+          console.log('Call ended by caller:', data);
+          setIncomingCall((prev) => {
+            if (prev.visible && prev.callerId === data.callerId) {
+              return { ...prev, visible: false };
+            }
+            return prev;
+          });
+        });
       }
     } else {
       disconnectSocket();
@@ -181,6 +192,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       if (socket && socketListener) {
         socket.off('receiveMessage', socketListener);
         socket.off('incomingCall');
+        socket.off('callEnded');
       }
     };
   }, [user?.id]);
