@@ -35,6 +35,8 @@ export default function ChatDetailScreen() {
     const [replyingTo, setReplyingTo] = useState<any | null>(null);
     const [lastSeenMessageId, setLastSeenMessageId] = useState<string | null>(null);
     const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
+    const [isPartnerOnline, setIsPartnerOnline] = useState(false);
+    const [partnerLastSeen, setPartnerLastSeen] = useState<Date | null>(null);
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
     const socket = getSocket();
@@ -90,6 +92,22 @@ export default function ChatDetailScreen() {
                     setLastSeenMessageId(data.lastMessageId); // Update seen status
                 }
             });
+
+            // Online status listeners
+            socket.on('userOnline', (data) => {
+                if (data.userId === partnerId) {
+                    setIsPartnerOnline(true);
+                }
+            });
+            socket.on('userOffline', (data) => {
+                if (data.userId === partnerId) {
+                    setIsPartnerOnline(false);
+                    setPartnerLastSeen(new Date());
+                }
+            });
+
+            // Request partner's online status
+            socket.emit('checkUserOnline', { userId: partnerId });
         }
 
         return () => {
@@ -287,6 +305,25 @@ export default function ChatDetailScreen() {
         }
     };
 
+    // Format last seen time like Facebook
+    const formatLastSeen = () => {
+        if (isPartnerOnline) return 'Đang hoạt động';
+        if (partnerTyping) return 'Đang nhập...';
+        if (!partnerLastSeen) return 'Vừa mới truy cập';
+
+        const now = new Date();
+        const diff = now.getTime() - partnerLastSeen.getTime();
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (minutes < 1) return 'Vừa mới truy cập';
+        if (minutes < 60) return `Hoạt động ${minutes} phút trước`;
+        if (hours < 24) return `Hoạt động ${hours} giờ trước`;
+        if (days < 7) return `Hoạt động ${days} ngày trước`;
+        return 'Hoạt động từ lâu';
+    };
+
     const renderHeader = () => (
         <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -301,10 +338,16 @@ export default function ChatDetailScreen() {
                             <Text style={{ color: 'white', fontSize: 14 }}>{userName?.[0]}</Text>
                         </View>
                     )}
+                    {/* Online indicator dot */}
+                    {isPartnerOnline && (
+                        <View style={styles.onlineIndicator} />
+                    )}
                 </View>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle} numberOfLines={1}>{userName}</Text>
-                    <Text style={styles.headerSubtitle}>Vừa mới truy cập</Text>
+                    <Text style={[styles.headerSubtitle, isPartnerOnline && { color: '#31A24C' }]}>
+                        {formatLastSeen()}
+                    </Text>
                 </View>
             </View>
             <View style={styles.headerRight}>
@@ -751,8 +794,19 @@ const styles = StyleSheet.create({
     },
     headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     backButton: { padding: 4, marginRight: 4 },
-    headerAvatarContainer: { marginRight: 10 },
+    headerAvatarContainer: { marginRight: 10, position: 'relative' },
     headerAvatar: { width: 36, height: 36, borderRadius: 18 },
+    onlineIndicator: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: '#31A24C', // Facebook green
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+    },
     headerInfo: { flex: 1 },
     headerTitle: { color: '#000000', fontSize: 17, fontWeight: '600' },
     headerSubtitle: { color: '#666666', fontSize: 12 },
@@ -844,8 +898,7 @@ const styles = StyleSheet.create({
 
     footer: {
         backgroundColor: '#FFFFFF',
-        borderTopWidth: 1,
-        borderTopColor: '#F0F0F0',
+        // Removed borderTop to make input area cleaner
     },
     inputRow: {
         flexDirection: 'row',

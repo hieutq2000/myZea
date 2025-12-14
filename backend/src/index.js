@@ -23,6 +23,14 @@ const io = new Server(server, {
 // Make io available in routes (if needed later)
 app.set('io', io);
 
+// Track online users: Map<userId, Set<socketId>>
+const onlineUsers = new Map();
+
+// Helper function to check if user is online
+function isUserOnline(userId) {
+    return onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
+}
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Increase limit for images
 
@@ -2667,13 +2675,34 @@ io.on('connection', (socket) => {
     // User joins their own room for private messages
     socket.on('join', (userId) => {
         socket.join(userId);
+        socket.userId = userId; // Store userId on socket for disconnect handling
         console.log(`User ${userId} joined room`);
 
-        // Update user status
+        // Track online status
+        if (!onlineUsers.has(userId)) {
+            onlineUsers.set(userId, new Set());
+        }
+        onlineUsers.get(userId).add(socket.id);
+
+        // Broadcast to all that this user is online
+        io.emit('userOnline', { userId });
+
+        // Update user status in database
         pool.execute(
             "UPDATE users SET status = 'online', last_seen = NOW() WHERE id = ?",
             [userId]
         ).catch(err => console.error('Update status error:', err));
+    });
+
+    // Check if a specific user is online
+    socket.on('checkUserOnline', ({ userId }) => {
+        const isOnline = isUserOnline(userId);
+        socket.emit('userOnlineStatus', { userId, isOnline });
+
+        // If online, also emit userOnline
+        if (isOnline) {
+            socket.emit('userOnline', { userId });
+        }
     });
 
     // Handle sending messages
@@ -2859,7 +2888,26 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
-        // We could track offline status here if we mapped socket.id to userId
+
+        // Remove from online users tracking
+        const userId = socket.userId;
+        if (userId && onlineUsers.has(userId)) {
+            onlineUsers.get(userId).delete(socket.id);
+
+            // If no more sockets for this user, they're offline
+            if (onlineUsers.get(userId).size === 0) {
+                onlineUsers.delete(userId);
+
+                // Broadcast to all that this user is offline
+                io.emit('userOffline', { userId });
+
+                // Update database
+                pool.execute(
+                    "UPDATE users SET status = 'offline', last_seen = NOW() WHERE id = ?",
+                    [userId]
+                ).catch(err => console.error('Update offline status error:', err));
+            }
+        }
     });
 });
 
