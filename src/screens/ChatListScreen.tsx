@@ -450,9 +450,10 @@ export default function ChatListScreen() {
             <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
 
             <LinearGradient
-                colors={['#FFE4D6', '#E0F2FE']} // Pastel Peach to Pastel Blue
+                colors={['#FFE4D6', '#E0F2FE', '#FFFFFF']} // Pastel Peach -> Blue -> White (fade out)
+                locations={[0, 0.4, 0.9]} // Adjust locations to keep color at top and white at bottom
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+                end={{ x: 0.8, y: 1 }} // Slanted fade
                 style={styles.headerGradient}
             >
                 {/* Header */}
