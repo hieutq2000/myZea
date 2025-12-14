@@ -557,10 +557,10 @@ export default function ChatDetailScreen() {
                         <TouchableOpacity style={styles.rightButton} onPress={() => sendMessage()}>
                             <Ionicons name="send" size={24} color={ZALO_BLUE} />
                         </TouchableOpacity>
-                    ) : <TouchableOpacity style={styles.menuItem} onPress={() => setSelectedMessage(null)}>
-                        <Text style={styles.menuItemText}>Ghim</Text>
-                        <Ionicons name="pin-outline" size={20} color="white" />
-                    </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity style={styles.rightButton} onPress={() => Alert.alert('Thông báo', 'Tính năng ghi âm đang phát triển')}>
+                            <Ionicons name="mic-outline" size={28} color="#6B7280" />
+                        </TouchableOpacity>
                     )}
                 </View>
 
@@ -635,6 +635,83 @@ export default function ChatDetailScreen() {
                         />
                     )}
                 </View>
+            </Modal>
+
+            {/* Message Options Modal */}
+            <Modal
+                visible={!!selectedMessage}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setSelectedMessage(null)}
+            >
+                <TouchableOpacity
+                    style={styles.optionsOverlay}
+                    activeOpacity={1}
+                    onPress={() => setSelectedMessage(null)}
+                >
+                    <View style={styles.optionsContainer}>
+                        {/* Reactions */}
+                        <View style={styles.reactionBar}>
+                            {['❤️', '👍', '👎', '🔥', '🥰', '👏', '😂', '⬇️'].map((emoji, index) => (
+                                <TouchableOpacity key={index} style={styles.reactionButton}>
+                                    <Text style={styles.reactionText}>{emoji}</Text>
+                                </TouchableOpacity>
+                            ))}
+                            <TouchableOpacity style={styles.reactionButton}>
+                                <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Menu Items */}
+                        <View style={styles.menuContainer}>
+                            <TouchableOpacity style={styles.menuItem} onPress={handleReplyMessage}>
+                                <Text style={styles.menuItemText}>Trả lời</Text>
+                                <Ionicons name="arrow-undo-outline" size={20} color="white" />
+                            </TouchableOpacity>
+                            <View style={styles.menuDivider} />
+
+                            <TouchableOpacity style={styles.menuItem} onPress={() => { console.log('Copy'); setSelectedMessage(null); }}>
+                                <Text style={styles.menuItemText}>Sao chép</Text>
+                                <Ionicons name="copy-outline" size={20} color="white" />
+                            </TouchableOpacity>
+                            <View style={styles.menuDivider} />
+
+                            {selectedMessage?.sender === 'me' && (
+                                <>
+                                    <TouchableOpacity style={styles.menuItem} onPress={() => { console.log('Edit'); setSelectedMessage(null); }}>
+                                        <Text style={styles.menuItemText}>Sửa</Text>
+                                        <Ionicons name="create-outline" size={20} color="white" />
+                                    </TouchableOpacity>
+                                    <View style={styles.menuDivider} />
+                                </>
+                            )}
+
+
+                            <TouchableOpacity style={styles.menuItem} onPress={() => setSelectedMessage(null)}>
+                                <Text style={styles.menuItemText}>Ghim</Text>
+                                <Ionicons name="pin-outline" size={20} color="white" />
+                            </TouchableOpacity>
+                            <View style={styles.menuDivider} />
+
+                            <TouchableOpacity style={styles.menuItem} onPress={() => setSelectedMessage(null)}>
+                                <Text style={styles.menuItemText}>Chuyển tiếp</Text>
+                                <Ionicons name="arrow-redo-outline" size={20} color="white" />
+                            </TouchableOpacity>
+                            <View style={styles.menuDivider} />
+
+                            <TouchableOpacity style={styles.menuItem} onPress={handleDeleteMessageAction}>
+                                <Text style={[styles.menuItemText, { color: '#FF3B30' }]}>Xóa</Text>
+                                <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                            </TouchableOpacity>
+                            <View style={styles.menuDivider} />
+
+                            <TouchableOpacity style={styles.menuItem} onPress={() => setSelectedMessage(null)}>
+                                <Text style={styles.menuItemText}>Chọn</Text>
+                                <Ionicons name="checkmark-circle-outline" size={20} color="white" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </TouchableOpacity>
             </Modal>
         </View>
     );
