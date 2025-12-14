@@ -90,7 +90,9 @@ const AnimatedReactionItem = ({ reaction, index, onSelect, visible }: AnimatedRe
         }).start();
     };
 
-    const lottieSource = LOTTIE_ANIMATIONS[reaction.id as keyof typeof LOTTIE_ANIMATIONS];
+    // Temporarily disable Lottie - use emoji instead until proper Lottie files are ready
+    // const lottieSource = LOTTIE_ANIMATIONS[reaction.id as keyof typeof LOTTIE_ANIMATIONS];
+    const lottieSource = null; // Force use emoji
 
     return (
         <Animated.View

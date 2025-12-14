@@ -48,8 +48,8 @@ export default function PlaceProfileScreen({
     onMessage,
 }: PlaceProfileScreenProps) {
     // Mock follow state (should be from user prop or API)
-    const [isFollowing, setIsFollowing] = useState(user?.isFollowing ?? true);
-    // Defaulting to true to match the 'Đang theo dõi' screenshot example
+    const [isFollowing, setIsFollowing] = useState(user?.isFollowing ?? false);
+    // Defaulting to false - will be updated from API
     const [newPostText, setNewPostText] = useState('');
     const [modalVisible, setModalVisible] = useState(false);
     const [modalType, setModalType] = useState<'AVATAR' | 'COVER'>('AVATAR');
@@ -59,7 +59,11 @@ export default function PlaceProfileScreen({
     const [coverSource, setCoverSource] = useState(user?.coverImage || 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=800&q=80');
 
     const userName = user?.name || 'Người dùng';
-    const userEmail = user?.email || 'email@example.com';
+    const [userEmail, setUserEmail] = useState(user?.email || 'email@example.com');
+
+    // Follower/Following state
+    const [followerCount, setFollowerCount] = useState(0);
+    const [followingCount, setFollowingCount] = useState(0);
 
     // Real Data State
     const [userPosts, setUserPosts] = useState<Post[]>([]);
@@ -91,7 +95,7 @@ export default function PlaceProfileScreen({
             setLoadingPosts(true);
             try {
                 const postsPromise = getUserPosts(user.id);
-                // Also fetch profile to get latest avatar/cover
+                // Also fetch profile to get latest avatar/cover and follower info
                 const profilePromise = getUserProfile(user.id).catch(err => null);
 
                 const [posts, profile] = await Promise.all([postsPromise, profilePromise]);
@@ -104,6 +108,22 @@ export default function PlaceProfileScreen({
                         // Force update cover source if server has it, otherwise keep default
                         if (profile.coverImage) {
                             setCoverSource(profile.coverImage);
+                        }
+                        // Update follow status from server
+                        if (profile.isFollowing !== undefined) {
+                            setIsFollowing(profile.isFollowing);
+                        }
+                        // Update follower count from server
+                        if (profile.followerCount !== undefined) {
+                            setFollowerCount(profile.followerCount);
+                        }
+                        // Update following count from server
+                        if (profile.followingCount !== undefined) {
+                            setFollowingCount(profile.followingCount);
+                        }
+                        // Update email if available
+                        if (profile.email) {
+                            setUserEmail(profile.email);
                         }
                     }
                 }
@@ -222,7 +242,7 @@ export default function PlaceProfileScreen({
         { icon: 'clock-outline', label: `${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} sáng Giờ địa phương` },
         { icon: 'map-marker-outline', label: 'LC HN1 15 Hoàng Như Tiếp' },
         { icon: 'email-outline', label: userEmail },
-        { icon: 'account-group-outline', label: 'Có 2 người theo dõi' },
+        { icon: 'account-group-outline', label: `Có ${followerCount} người theo dõi` },
     ];
 
     return (

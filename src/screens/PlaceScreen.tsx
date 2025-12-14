@@ -525,7 +525,20 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     <View style={styles.postImagesContainer}>
                         {/* Check if single video */}
                         {(item.images?.length === 1 || (!item.images?.length && item.image)) && isVideo(item.images?.[0] || item.image || '') ? (
-                            <VideoPlayer source={getUri(item.images?.[0] || item.image)} style={{ width: '100%' }} />
+                            (() => {
+                                // Get video source with dimensions if available
+                                const videoSource = item.images?.[0] || item.image;
+                                const videoUri = getUri(videoSource);
+                                const videoDimensions = typeof videoSource === 'object' ? videoSource : null;
+                                return (
+                                    <VideoPlayer
+                                        source={videoUri}
+                                        style={{ width: '100%' }}
+                                        videoWidth={videoDimensions?.width}
+                                        videoHeight={videoDimensions?.height}
+                                    />
+                                );
+                            })()
                         ) : (
                             <PhotoGrid
                                 images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}

@@ -59,6 +59,10 @@ export interface User {
     level?: number;
     badges?: string[];
     createdExams?: CustomExam[];
+    // Profile/Follow info
+    followerCount?: number;
+    followingCount?: number;
+    isFollowing?: boolean;
 }
 
 export enum AuthView {

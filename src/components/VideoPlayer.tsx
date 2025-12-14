@@ -21,6 +21,9 @@ interface VideoPlayerProps {
     paused?: boolean;
     useNativeControls?: boolean;
     showFullscreenButton?: boolean;
+    // Optional: pre-provided video dimensions for immediate correct sizing
+    videoWidth?: number;
+    videoHeight?: number;
 }
 
 const MAX_VIDEO_HEIGHT = 450; // Max height like Facebook
@@ -31,7 +34,9 @@ export default function VideoPlayer({
     style,
     paused = true,
     useNativeControls = false,
-    showFullscreenButton = true
+    showFullscreenButton = true,
+    videoWidth,
+    videoHeight
 }: VideoPlayerProps) {
     const video = useRef<Video>(null);
     const fullscreenVideo = useRef<Video>(null);
@@ -39,7 +44,19 @@ export default function VideoPlayer({
     const [status, setStatus] = useState<AVPlaybackStatus | {}>({});
     const [isLoading, setIsLoading] = useState(true);
     const [isMuted, setIsMuted] = useState(false);
-    const [videoRatio, setVideoRatio] = useState(16 / 9);
+
+    // Check if we have pre-provided dimensions
+    const hasProvidedDimensions = videoWidth && videoHeight && videoHeight > 0;
+
+    // Calculate initial ratio from props if available, otherwise use a neutral default
+    const initialRatio = hasProvidedDimensions
+        ? videoWidth / videoHeight
+        : 16 / 9; // Default while loading
+    const [videoRatio, setVideoRatio] = useState(initialRatio);
+
+    // Track if we have the real ratio (from props or onLoad)
+    const [hasRealRatio, setHasRealRatio] = useState(!!hasProvidedDimensions);
+
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showControls, setShowControls] = useState(true);
     const [duration, setDuration] = useState(0);
@@ -145,9 +162,34 @@ export default function VideoPlayer({
         }
     };
 
-    // Calculate height with max limit
+    // Calculate height based on video ratio - Facebook style
+    // Horizontal videos (ratio > 1): max height limit to prevent too tall
+    // Vertical videos (ratio < 1): allow taller to show full video like Facebook
+    // Square/near-square (ratio ~ 1): use calculated height
+    const isVerticalVideo = videoRatio < 0.9; // Allow near-square to use full height
+    const isHorizontalVideo = videoRatio > 1.2;
     const calculatedHeight = SCREEN_WIDTH / videoRatio;
-    const finalHeight = Math.min(calculatedHeight, MAX_VIDEO_HEIGHT);
+
+    // Max height based on orientation:
+    // - Horizontal: 450px max (reasonable for landscape)
+    // - Vertical: 85% of screen height (allows tall videos like Facebook Reels)
+    // - Square: use calculated height up to 65% screen
+    let maxHeight: number;
+    if (isHorizontalVideo) {
+        maxHeight = MAX_VIDEO_HEIGHT; // 450px
+    } else if (isVerticalVideo) {
+        maxHeight = SCREEN_HEIGHT * 0.85; // Vertical: 85% screen
+    } else {
+        maxHeight = SCREEN_HEIGHT * 0.65; // Square: 65% screen
+    }
+
+    // Also set a minimum height so videos aren't too small
+    const minHeight = 200;
+    const finalHeight = Math.max(minHeight, Math.min(calculatedHeight, maxHeight));
+
+    // Always use COVER to fill the container completely (like Facebook)
+    // This ensures no letterbox and video always fills width
+    // Some cropping may occur for videos that don't match container ratio
 
     return (
         <>
@@ -157,7 +199,7 @@ export default function VideoPlayer({
                     style={styles.video}
                     source={{ uri: source }}
                     useNativeControls={useNativeControls}
-                    resizeMode={ResizeMode.CONTAIN}
+                    resizeMode={hasRealRatio ? ResizeMode.CONTAIN : ResizeMode.COVER}
                     isLooping
                     isMuted={isMuted}
                     volume={1.0}
@@ -167,6 +209,7 @@ export default function VideoPlayer({
                         if (status.naturalSize && status.naturalSize.height > 0) {
                             const r = status.naturalSize.width / status.naturalSize.height;
                             setVideoRatio(r);
+                            setHasRealRatio(true); // Now we have real dimensions
                         }
                         setIsLoading(false);
                     }}

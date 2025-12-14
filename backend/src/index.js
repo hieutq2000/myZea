@@ -1198,11 +1198,35 @@ app.use('/uploads', express.static(uploadsDir));
 // Upload image endpoint
 // Import image-size
 const sizeOf = require('image-size');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
+
+// Helper to get video dimensions using ffprobe
+async function getVideoDimensions(filePath) {
+    try {
+        // Try ffprobe command
+        const { stdout } = await execPromise(
+            `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "${filePath}"`
+        );
+        const parts = stdout.trim().split('x');
+        if (parts.length === 2) {
+            return {
+                width: parseInt(parts[0], 10) || 0,
+                height: parseInt(parts[1], 10) || 0
+            };
+        }
+    } catch (e) {
+        console.log('ffprobe not available or failed, using default video dimensions');
+    }
+    // Default to 16:9 aspect ratio (common for videos)
+    return { width: 1920, height: 1080 };
+}
 
 // ... existing code ...
 
 // Upload image endpoint
-app.post('/api/upload/image', upload.single('image'), (req, res) => {
+app.post('/api/upload/image', upload.single('image'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'Không có file được upload' });
@@ -1216,21 +1240,23 @@ app.post('/api/upload/image', upload.single('image'), (req, res) => {
         // Calculate dimensions
         let dimensions = { width: 0, height: 0 };
         try {
-            // Only calculate for images, not videos
             if (req.file.mimetype.startsWith('image/')) {
-                // Try catch for image size calculation
+                // Image: use image-size
                 try {
                     const dimensionsResult = sizeOf(req.file.path);
                     dimensions = dimensionsResult;
                 } catch (e) {
                     console.log('Size calculation failed', e);
                 }
+            } else if (req.file.mimetype.startsWith('video/')) {
+                // Video: use ffprobe or default
+                dimensions = await getVideoDimensions(req.file.path);
             }
         } catch (err) {
-            console.error('Error calculating image size:', err);
+            console.error('Error calculating dimensions:', err);
         }
 
-        console.log('📸 Image uploaded:', imageUrl, dimensions);
+        console.log('📸 Media uploaded:', imageUrl, dimensions);
         res.json({
             success: true,
             url: imageUrl,
@@ -1240,19 +1266,21 @@ app.post('/api/upload/image', upload.single('image'), (req, res) => {
         });
     } catch (error) {
         console.error('Upload error:', error);
-        res.status(500).json({ error: 'Lỗi khi upload ảnh' });
+        res.status(500).json({ error: 'Lỗi khi upload' });
     }
 });
 
 // ... existing code ...
 
 // Get posts
-// Get user profile by ID
+// Get user profile by ID (enhanced with follower info)
 app.get('/api/users/:id', authenticateToken, async (req, res) => {
     try {
         const userId = req.params.id;
+        const currentUserId = req.user.id;
+
         const [users] = await pool.execute(
-            'SELECT id, name, avatar, cover_image as coverImage, voice FROM users WHERE id = ?',
+            'SELECT id, name, email, avatar, cover_image as coverImage, voice FROM users WHERE id = ?',
             [userId]
         );
 
@@ -1260,9 +1288,220 @@ app.get('/api/users/:id', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'Người dùng không tồn tại' });
         }
 
-        res.json(users[0]);
+        // Get follower count
+        let followerCount = 0;
+        let followingCount = 0;
+        let isFollowing = false;
+
+        try {
+            const [followerRows] = await pool.execute(
+                'SELECT COUNT(*) as count FROM user_follows WHERE following_id = ?',
+                [userId]
+            );
+            followerCount = followerRows[0]?.count || 0;
+
+            const [followingRows] = await pool.execute(
+                'SELECT COUNT(*) as count FROM user_follows WHERE follower_id = ?',
+                [userId]
+            );
+            followingCount = followingRows[0]?.count || 0;
+
+            // Check if current user is following this user
+            const [isFollowingRows] = await pool.execute(
+                'SELECT id FROM user_follows WHERE follower_id = ? AND following_id = ?',
+                [currentUserId, userId]
+            );
+            isFollowing = isFollowingRows.length > 0;
+        } catch (e) {
+            // Table might not exist yet
+            console.log('Follower info not available:', e.message);
+        }
+
+        res.json({
+            ...users[0],
+            followerCount,
+            followingCount,
+            isFollowing
+        });
     } catch (error) {
         console.error('Get user profile error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get posts by specific user
+app.get('/api/place/users/:userId/posts', authenticateToken, async (req, res) => {
+    try {
+        const targetUserId = req.params.userId;
+        const currentUserId = req.user.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const offset = (page - 1) * limit;
+
+        const [posts] = await pool.execute(`
+            SELECT 
+                p.id, 
+                p.content, 
+                p.image_url as image, 
+                p.created_at as createdAt,
+                u.id as author_id,
+                u.name as author_name,
+                u.avatar as author_avatar,
+                (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes,
+                (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) as comments,
+                (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ?) as isLiked
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.user_id = ?
+            ORDER BY p.created_at DESC
+            LIMIT ? OFFSET ?
+        `, [currentUserId, targetUserId, limit.toString(), offset.toString()]);
+
+        // Helper to fix localhost URLs
+        const fixImageUrl = (url) => {
+            if (!url) return null;
+            const host = req.headers.host || 'localhost:3001';
+            if (url.includes('/uploads/')) {
+                const path = url.split('/uploads/')[1];
+                return `http://${host}/uploads/${path}`;
+            }
+            return url.replace(/localhost:3001/g, host).replace(/127.0.0.1:3001/g, host);
+        };
+
+        const processImages = (dbImageString) => {
+            let processedImages = [];
+            if (dbImageString) {
+                try {
+                    const parsed = JSON.parse(dbImageString);
+                    if (Array.isArray(parsed)) {
+                        processedImages = parsed.map(item => {
+                            if (typeof item === 'string') {
+                                return fixImageUrl(item);
+                            } else if (item && typeof item === 'object') {
+                                return {
+                                    ...item,
+                                    uri: fixImageUrl(item.url || item.uri)
+                                };
+                            }
+                            return item;
+                        });
+                    } else {
+                        processedImages = [fixImageUrl(dbImageString)];
+                    }
+                } catch {
+                    processedImages = [fixImageUrl(dbImageString)];
+                }
+            }
+            return processedImages;
+        };
+
+        const formattedPosts = posts.map(p => {
+            let images = processImages(p.image);
+            return {
+                id: p.id,
+                author: {
+                    id: p.author_id,
+                    name: p.author_name,
+                    avatar: p.author_avatar
+                },
+                content: p.content,
+                image: images.length > 0 ? images[0] : null,
+                images: images,
+                createdAt: formatDateForClient(p.createdAt),
+                likes: p.likes,
+                isLiked: p.isLiked > 0,
+                comments: p.comments,
+                views: 0,
+                shares: 0
+            };
+        });
+
+        res.json(formattedPosts);
+    } catch (error) {
+        console.error('Get user posts error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Follow a user
+app.post('/api/place/users/:userId/follow', authenticateToken, async (req, res) => {
+    try {
+        const targetUserId = req.params.userId;
+        const currentUserId = req.user.id;
+
+        if (targetUserId === currentUserId) {
+            return res.status(400).json({ error: 'Không thể theo dõi chính mình' });
+        }
+
+        // Ensure table exists
+        try {
+            await pool.execute(`
+                CREATE TABLE IF NOT EXISTS user_follows (
+                    id VARCHAR(36) PRIMARY KEY,
+                    follower_id VARCHAR(36) NOT NULL,
+                    following_id VARCHAR(36) NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_follow (follower_id, following_id),
+                    INDEX idx_follower (follower_id),
+                    INDEX idx_following (following_id)
+                )
+            `);
+        } catch (e) {
+            // Table might already exist
+        }
+
+        // Check if already following
+        const [existing] = await pool.execute(
+            'SELECT id FROM user_follows WHERE follower_id = ? AND following_id = ?',
+            [currentUserId, targetUserId]
+        );
+
+        if (existing.length > 0) {
+            return res.json({ success: true, message: 'Đã theo dõi' });
+        }
+
+        // Insert follow record
+        await pool.execute(
+            'INSERT INTO user_follows (id, follower_id, following_id) VALUES (?, ?, ?)',
+            [uuidv4(), currentUserId, targetUserId]
+        );
+
+        // Create notification for target user
+        try {
+            await createNotification(
+                targetUserId,
+                currentUserId,
+                'follow',
+                null,
+                null,
+                'đã bắt đầu theo dõi bạn',
+                ''
+            );
+        } catch (notifError) {
+            console.error('Follow notification error:', notifError);
+        }
+
+        res.json({ success: true, message: 'Đã theo dõi thành công' });
+    } catch (error) {
+        console.error('Follow user error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Unfollow a user
+app.post('/api/place/users/:userId/unfollow', authenticateToken, async (req, res) => {
+    try {
+        const targetUserId = req.params.userId;
+        const currentUserId = req.user.id;
+
+        await pool.execute(
+            'DELETE FROM user_follows WHERE follower_id = ? AND following_id = ?',
+            [currentUserId, targetUserId]
+        );
+
+        res.json({ success: true, message: 'Đã bỏ theo dõi thành công' });
+    } catch (error) {
+        console.error('Unfollow user error:', error);
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
