@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "1.0.2",
+        date: "14/12/2024",
+        title: "TỐI ƯU GIAO DIỆN CHAT & LIGHT THEME",
+        changes: [
+            "✨ Giao diện Chat mới: Sáng sủa, hiện đại (Light Theme)",
+            "🎨 Header Chat Gradient xanh tươi mới",
+            "📱 Tối ưu hiển thị tràn viền (Translucent Status Bar)",
+            "🖼️ Hiển thị Avatar thực người dùng",
+            "🛠️ Fix lỗi crash và menu tùy chọn tin nhắn",
+            "📞 Cải thiện hiển thị tin nhắn cuộc gọi"
+        ]
+    },
+    {
         version: "1.0.1",
         date: "12/12/2024",
         title: "LÀM MỚI GIAO DIỆN ĐĂNG NHẬP",

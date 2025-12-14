@@ -13,12 +13,12 @@ import { getSocket } from '../utils/socket';
 import { getConversations, Conversation, getCurrentUser, pinConversation, muteConversation, deleteConversation } from '../utils/api';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// Dark Theme Colors (like Zalo Dark Mode)
-const DARK_BG = '#1A1A1A';
-const DARK_HEADER = '#1A1A1A';
-const DARK_CARD = '#262626';
-const DARK_TEXT = '#FFFFFF';
-const DARK_TEXT_SECONDARY = '#8E8E93';
+// Light Theme Colors
+const DARK_BG = '#FFFFFF';
+const DARK_HEADER = '#FFFFFF';
+const DARK_CARD = '#F5F5F5';
+const DARK_TEXT = '#000000';
+const DARK_TEXT_SECONDARY = '#666666';
 const ZALO_BLUE = '#0068FF';
 const ONLINE_GREEN = '#34C759';
 
@@ -450,7 +450,7 @@ export default function ChatListScreen() {
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
 
             <LinearGradient
-                colors={['#2C3E50', '#000000']}
+                colors={['#0068FF', '#0284C7']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.headerGradient}
@@ -469,7 +469,7 @@ export default function ChatListScreen() {
                             {/* User might be on main tab, but let's keep back button logic if it was there, or maybe hide it if it's main screen.
                                  Assuming it is a stack screen for now.
                              */}
-                            <Ionicons name="arrow-back" size={24} color={DARK_TEXT} display="none" />
+                            <Ionicons name="arrow-back" size={24} color="#FFFFFF" display="none" />
                         </TouchableOpacity>
                         {/* Avatar in header */}
                         <View style={{ marginRight: 10 }}>
@@ -483,13 +483,13 @@ export default function ChatListScreen() {
                     </View>
                     <View style={styles.headerRight}>
                         <TouchableOpacity style={styles.headerIcon}>
-                            <Ionicons name="create-outline" size={24} color={DARK_TEXT} />
+                            <Ionicons name="create-outline" size={24} color="#FFFFFF" />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.headerIcon}
                             onPress={() => navigation.navigate('NewChat')}
                         >
-                            <Ionicons name="add-circle-outline" size={26} color={DARK_TEXT} />
+                            <Ionicons name="add-circle-outline" size={26} color="#FFFFFF" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -497,11 +497,11 @@ export default function ChatListScreen() {
                 {/* Search Bar */}
                 <View style={styles.searchContainer}>
                     <View style={styles.searchBar}>
-                        <Ionicons name="search" size={18} color={DARK_TEXT_SECONDARY} />
+                        <Ionicons name="search" size={18} color="#FFFFFF" />
                         <TextInput
                             style={styles.searchInput}
                             placeholder="Tìm kiếm"
-                            placeholderTextColor={DARK_TEXT_SECONDARY}
+                            placeholderTextColor="rgba(255,255,255,0.8)"
                             value={searchText}
                             onChangeText={setSearchText}
                         />
@@ -557,6 +557,9 @@ const styles = StyleSheet.create({
     // Header Gradient
     headerGradient: {
         width: '100%',
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        overflow: 'hidden',
     },
 
     // Header
@@ -579,7 +582,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: DARK_TEXT,
+        color: '#FFFFFF',
     },
     headerRight: {
         flexDirection: 'row',
@@ -599,7 +602,7 @@ const styles = StyleSheet.create({
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.1)', // More translucent
+        backgroundColor: 'rgba(255,255,255,0.2)', // More translucent
         borderRadius: 10,
         paddingHorizontal: 12,
         height: 36,
@@ -607,7 +610,7 @@ const styles = StyleSheet.create({
     searchInput: {
         flex: 1,
         marginLeft: 8,
-        color: DARK_TEXT,
+        color: '#FFFFFF',
         fontSize: 15,
     },
 
