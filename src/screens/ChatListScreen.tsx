@@ -31,6 +31,7 @@ export default function ChatListScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [currentUser, setCurrentUser] = useState<any>(null);
     const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
     const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
     const [activeTab, setActiveTab] = useState<TabType>('all');
@@ -100,7 +101,10 @@ export default function ChatListScreen() {
     useEffect(() => {
         const fetchUser = async () => {
             const user = await getCurrentUser();
-            if (user) setCurrentUserId(user.id);
+            if (user) {
+                setCurrentUserId(user.id);
+                setCurrentUser(user);
+            }
         };
         fetchUser();
     }, []);
@@ -442,8 +446,8 @@ export default function ChatListScreen() {
     );
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#2C3E50" />
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
 
             <LinearGradient
                 colors={['#2C3E50', '#000000']}
@@ -470,7 +474,7 @@ export default function ChatListScreen() {
                         {/* Avatar in header */}
                         <View style={{ marginRight: 10 }}>
                             <Image
-                                source={{ uri: 'https://i.pravatar.cc/150?img=3' }} // Placeholder or current user avatar
+                                source={{ uri: currentUser?.avatar || 'https://i.pravatar.cc/150?img=3' }} // Placeholder or current user avatar
                                 style={{ width: 32, height: 32, borderRadius: 16 }}
                             />
                             <View style={[styles.onlineDot, { right: 0, bottom: 0 }]} />
@@ -539,7 +543,7 @@ export default function ChatListScreen() {
                     }
                 />
             )}
-        </SafeAreaView>
+        </View>
     );
 }
 

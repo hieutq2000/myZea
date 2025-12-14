@@ -19,6 +19,12 @@ const OTHER_BUBBLE = '#F2F4F5'; // Very light gray for other
 
 // ... update styles ...
 export default function ChatDetailScreen() {
+    const navigation = useNavigation<any>(); // Using any to avoid complex typing issues temporarily
+    const route = useRoute<ChatDetailRouteProp>();
+    const { conversationId, partnerId, userName, avatar } = route.params;
+
+    const [messages, setMessages] = useState<any[]>([]);
+    const [inputText, setInputText] = useState('');
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
