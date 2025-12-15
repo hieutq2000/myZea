@@ -142,7 +142,35 @@ export const REACTIONS: Reaction[] = [
     },
 ];
 
-// ... (keep existing constants)
+// ============================================================
+// HELPER FUNCTIONS
+// ============================================================
+
+/**
+ * Trigger haptic feedback (soft impact) - safe fallback if not available
+ */
+const triggerHaptic = () => {
+    if (Platform.OS !== 'web' && Haptics) {
+        try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } catch (e) {
+            // Haptics not available
+        }
+    }
+};
+
+/**
+ * Trigger stronger haptic for selection - safe fallback if not available
+ */
+const triggerSelectionHaptic = () => {
+    if (Platform.OS !== 'web' && Haptics) {
+        try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } catch (e) {
+            // Haptics not available
+        }
+    }
+};
 
 // ============================================================
 // EMOJI ITEM COMPONENT
@@ -236,7 +264,291 @@ const EmojiItem = React.memo(({
     );
 });
 
-// ... (keep existing ReactionBar and ReactionButton components)
+// ============================================================
+// REACTION BAR COMPONENT
+// ============================================================
+
+interface ReactionBarProps {
+    isVisible: boolean;
+    hoveredIndex: number;
+    onSelect: (reaction: Reaction) => void;
+}
+
+/**
+ * The floating reaction bar containing all emoji options
+ */
+const ReactionBar = React.memo(({
+    isVisible,
+    hoveredIndex,
+    onSelect,
+}: ReactionBarProps) => {
+    // Bar container animation
+    const containerScale = useSharedValue(0);
+    const containerOpacity = useSharedValue(0);
+
+    React.useEffect(() => {
+        if (isVisible) {
+            containerScale.value = withSpring(1, {
+                damping: 15,
+                stiffness: 200,
+            });
+            containerOpacity.value = withTiming(1, { duration: 200 });
+        } else {
+            containerScale.value = withTiming(0.5, { duration: 150 });
+            containerOpacity.value = withTiming(0, { duration: 150 });
+        }
+    }, [isVisible]);
+
+    const containerStyle = useAnimatedStyle(() => ({
+        opacity: containerOpacity.value,
+        transform: [
+            { scale: containerScale.value },
+            {
+                translateY: interpolate(
+                    containerScale.value,
+                    [0, 1],
+                    [20, 0],
+                    Extrapolation.CLAMP
+                ),
+            },
+        ],
+    }));
+
+    if (!isVisible) return null;
+
+    return (
+        <Animated.View style={[styles.reactionBar, containerStyle]}>
+            <View style={styles.reactionBarInner}>
+                {REACTIONS.map((reaction, index) => (
+                    <EmojiItem
+                        key={reaction.id}
+                        reaction={reaction}
+                        index={index}
+                        isHovered={hoveredIndex === index}
+                        isVisible={isVisible}
+                        anyHovered={hoveredIndex >= 0}
+                    />
+                ))}
+            </View>
+            {/* Arrow pointing down */}
+            <View style={styles.arrow} />
+        </Animated.View>
+    );
+});
+
+// ============================================================
+// MAIN REACTION BUTTON COMPONENT
+// ============================================================
+
+interface ReactionButtonProps {
+    /** Currently selected reaction (null if none) */
+    selectedReaction: Reaction | null;
+    /** Callback when a reaction is selected */
+    onReactionSelect: (reaction: Reaction | null) => void;
+    /** Optional: Custom button style */
+    buttonStyle?: object;
+    /** Optional: Custom text style */
+    textStyle?: object;
+}
+
+/**
+ * Main reaction button with long press to show reaction bar
+ */
+export function ReactionButton({
+    selectedReaction,
+    onReactionSelect,
+    buttonStyle,
+    textStyle,
+}: ReactionButtonProps) {
+    // State
+    const [isBarVisible, setIsBarVisible] = React.useState(false);
+    const [hoveredIndex, setHoveredIndex] = React.useState(-1);
+
+    // Shared values for gesture tracking
+    const fingerX = useSharedValue(0);
+    const fingerY = useSharedValue(0);
+    const isLongPressing = useSharedValue(false);
+
+    // Calculate which emoji is being hovered based on finger position
+    const calcHoveredIndex = useCallback((x: number, y: number) => {
+        'worklet';
+        // Reaction bar dimensions
+        const barWidth = REACTIONS.length * (EMOJI_SIZE + EMOJI_SPACING) + BAR_PADDING * 2;
+        const startX = -barWidth / 2 + BAR_PADDING + EMOJI_SIZE / 2;
+
+        // Check if finger is in the reaction bar area (above button)
+        if (y > -40 || y < -120) {
+            return -1;
+        }
+
+        // Calculate which emoji based on X position
+        for (let i = 0; i < REACTIONS.length; i++) {
+            const emojiCenterX = startX + i * (EMOJI_SIZE + EMOJI_SPACING);
+            const halfWidth = (EMOJI_SIZE + EMOJI_SPACING) / 2;
+            if (x >= emojiCenterX - halfWidth && x <= emojiCenterX + halfWidth) {
+                return i;
+            }
+        }
+        return -1;
+    }, []);
+
+    // Handle reaction selection
+    const handleSelect = useCallback((index: number) => {
+        if (index >= 0 && index < REACTIONS.length) {
+            const reaction = REACTIONS[index];
+            // Toggle off if same reaction
+            if (selectedReaction?.id === reaction.id) {
+                onReactionSelect(null);
+            } else {
+                onReactionSelect(reaction);
+            }
+            triggerSelectionHaptic();
+        }
+        setIsBarVisible(false);
+        setHoveredIndex(-1);
+    }, [selectedReaction, onReactionSelect]);
+
+    // Handle simple tap (quick like/unlike)
+    const handleTap = useCallback(() => {
+        if (selectedReaction) {
+            // Unlike
+            onReactionSelect(null);
+        } else {
+            // Like
+            onReactionSelect(REACTIONS[0]); // Default to 👍
+        }
+        triggerHaptic();
+    }, [selectedReaction, onReactionSelect]);
+
+    // Show reaction bar
+    const showBar = useCallback(() => {
+        setIsBarVisible(true);
+        triggerHaptic();
+    }, []);
+
+    // Hide reaction bar
+    const hideBar = useCallback(() => {
+        setIsBarVisible(false);
+        setHoveredIndex(-1);
+    }, []);
+
+    // Update hovered index
+    const updateHovered = useCallback((index: number) => {
+        setHoveredIndex(prev => {
+            if (prev !== index && index >= 0) {
+                triggerHaptic();
+            }
+            return index;
+        });
+    }, []);
+
+    // Combined gesture for tap and long press with drag
+    const gesture = useMemo(() =>
+        Gesture.Pan()
+            .activateAfterLongPress(LONG_PRESS_DURATION)
+            .onStart((e) => {
+                'worklet';
+                isLongPressing.value = true;
+                fingerX.value = e.x;
+                fingerY.value = e.y;
+                runOnJS(showBar)();
+            })
+            .onUpdate((e) => {
+                'worklet';
+                fingerX.value = e.x;
+                fingerY.value = e.y;
+                const idx = calcHoveredIndex(e.x, e.y);
+                runOnJS(updateHovered)(idx);
+            })
+            .onEnd((e) => {
+                'worklet';
+                isLongPressing.value = false;
+                const idx = calcHoveredIndex(e.x, e.y);
+                runOnJS(handleSelect)(idx);
+            })
+            .onFinalize(() => {
+                'worklet';
+                if (!isLongPressing.value) {
+                    runOnJS(hideBar)();
+                }
+            }),
+        [calcHoveredIndex, showBar, hideBar, handleSelect, updateHovered]
+    );
+
+    // Tap gesture for quick like/unlike
+    const tapGesture = useMemo(() =>
+        Gesture.Tap()
+            .maxDuration(LONG_PRESS_DURATION - 100)
+            .onEnd(() => {
+                'worklet';
+                runOnJS(handleTap)();
+            }),
+        [handleTap]
+    );
+
+    // Combine gestures
+    const combinedGesture = Gesture.Race(gesture, tapGesture);
+
+    // Button animation when selected
+    const buttonScale = useSharedValue(1);
+
+    React.useEffect(() => {
+        buttonScale.value = withSequence(
+            withSpring(0.9, { damping: 10, stiffness: 400 }),
+            withSpring(1, SPRING_CONFIG)
+        );
+    }, [selectedReaction]);
+
+    const buttonAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: buttonScale.value }],
+    }));
+
+    // Render selected reaction or default
+    const renderButtonContent = () => {
+        if (selectedReaction) {
+            return (
+                <>
+                    <Text style={styles.selectedEmoji}>{selectedReaction.emoji}</Text>
+                    <Text style={[styles.buttonText, { color: selectedReaction.color }, textStyle]}>
+                        {selectedReaction.label}
+                    </Text>
+                </>
+            );
+        }
+        return (
+            <>
+                <Text style={{ fontSize: 18 }}>😊</Text>
+                <Text style={[styles.buttonText, textStyle]}>Thích</Text>
+            </>
+        );
+    };
+
+    return (
+        <View style={styles.container}>
+            {/* Reaction bar (positioned above button) */}
+            <ReactionBar
+                isVisible={isBarVisible}
+                hoveredIndex={hoveredIndex}
+                onSelect={(reaction) => {
+                    if (selectedReaction?.id === reaction.id) {
+                        onReactionSelect(null);
+                    } else {
+                        onReactionSelect(reaction);
+                    }
+                    triggerSelectionHaptic();
+                    setIsBarVisible(false);
+                }}
+            />
+
+            {/* Main button */}
+            <GestureDetector gesture={combinedGesture}>
+                <Animated.View style={[styles.button, buttonAnimatedStyle, buttonStyle]}>
+                    {renderButtonContent()}
+                </Animated.View>
+            </GestureDetector>
+        </View>
+    );
+}
 
 // ============================================================
 // STYLES
@@ -247,7 +559,7 @@ const styles = StyleSheet.create({
         position: 'relative',
         alignItems: 'center',
     },
-    // ... (keep existing button styles)
+
     button: {
         flexDirection: 'row',
         alignItems: 'center',
