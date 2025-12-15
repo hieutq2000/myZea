@@ -35,8 +35,11 @@ import {
     updateWallet,
     getMonthlySalary,
     setMonthlySalary,
+    clearAllFinanceData,
 } from '../../utils/finance/storage';
 import { getCategoryById } from '../../utils/finance/categories';
+import SwipeableTransactionItem from '../../components/SwipeableTransactionItem';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const { width } = Dimensions.get('window');
 
@@ -222,6 +225,35 @@ export default function FinanceHomeScreen() {
         setShowBalanceModal(true);
     };
 
+    // Xóa tất cả dữ liệu
+    const handleClearAllData = () => {
+        Alert.alert(
+            '⚠️ Xóa tất cả dữ liệu',
+            'Bạn có chắc muốn xóa TOÀN BỘ dữ liệu tài chính?\n\nHành động này KHÔNG THỂ hoàn tác!',
+            [
+                { text: 'Hủy', style: 'cancel' },
+                {
+                    text: 'Xóa tất cả',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await clearAllFinanceData();
+                        // Reset state
+                        setTotalBalance(0);
+                        setMonthlyStats({ income: 0, expense: 0, balance: 0 });
+                        setTodayStats({ income: 0, expense: 0 });
+                        setRecentTransactions([]);
+                        setMonthlySalaryState(0);
+                        // Hiện modal nhập số dư ban đầu
+                        setIsFirstTime(true);
+                        setShowBalanceModal(true);
+                        Alert.alert('Thành công', 'Đã xóa tất cả dữ liệu tài chính!');
+                        loadData();
+                    },
+                },
+            ]
+        );
+    };
+
     const handleAddTransaction = (type: 'income' | 'expense') => {
         navigation.navigate('FinanceAddTransaction' as any, { type });
     };
@@ -235,35 +267,23 @@ export default function FinanceHomeScreen() {
         return '0%';
     };
 
-    // Render giao dịch
+    // Render giao dịch với swipe
     const renderTransaction = (txn: Transaction) => {
         const category = getCategoryById(txn.categoryId);
-        const isExpense = txn.type === 'expense';
 
         return (
-            <TouchableOpacity
+            <SwipeableTransactionItem
                 key={txn.id}
-                style={styles.transactionItem}
-                onPress={() => handleTransactionPress(txn)}
-                activeOpacity={0.7}
-            >
-                <View style={[styles.txnIcon, { backgroundColor: category?.color + '30' }]}>
-                    <Ionicons
-                        name={category?.icon as any || 'help-outline'}
-                        size={20}
-                        color={category?.color || '#6B7280'}
-                    />
-                </View>
-                <View style={styles.txnInfo}>
-                    <Text style={styles.txnDesc} numberOfLines={1}>
-                        {txn.description || category?.name}
-                    </Text>
-                    <Text style={styles.txnDate}>{formatDate(txn.date)}</Text>
-                </View>
-                <Text style={[styles.txnAmount, { color: isExpense ? '#EF4444' : '#10B981' }]}>
-                    {isExpense ? '-' : '+'}{formatMoney(txn.amount)}
-                </Text>
-            </TouchableOpacity>
+                transaction={txn}
+                category={category}
+                onEdit={() => {
+                    navigation.navigate('FinanceAddTransaction' as any, {
+                        type: txn.type,
+                        editTransaction: txn,
+                    });
+                }}
+                onDelete={() => handleDeleteTransaction(txn)}
+            />
         );
     };
 
@@ -282,9 +302,28 @@ export default function FinanceHomeScreen() {
                             <Text style={styles.totalBalanceSmall}>{formatMoney(totalBalance)}</Text>
                             <Text style={styles.totalBalanceLabel}>Tổng số dư</Text>
                         </View>
-                        <TouchableOpacity style={styles.walletBtn}>
-                            <Text style={styles.walletBtnText}>Đổi ví</Text>
+                        <TouchableOpacity
+                            style={styles.walletBtn}
+                            onPress={() => {
+                                Alert.alert(
+                                    '⚙️ Cài đặt',
+                                    'Chọn một tùy chọn:',
+                                    [
+                                        { text: 'Sửa số dư', onPress: handleEditBalance },
+                                        { text: 'Nhập lương', onPress: handleOpenSalaryModal },
+                                        {
+                                            text: '🗑️ Xóa tất cả dữ liệu',
+                                            style: 'destructive',
+                                            onPress: handleClearAllData
+                                        },
+                                        { text: 'Đóng', style: 'cancel' },
+                                    ]
+                                );
+                            }}
+                        >
+                            <Ionicons name="settings-outline" size={20} color="#A78BFA" />
                         </TouchableOpacity>
+
                     </View>
                 </SafeAreaView>
             </View>
@@ -393,8 +432,46 @@ export default function FinanceHomeScreen() {
                     </TouchableOpacity>
                 </View>
 
+                {/* Menu Grid */}
+                <View style={styles.menuGrid}>
+                    <TouchableOpacity style={styles.menuItem}>
+                        <View style={[styles.menuIcon, { backgroundColor: '#0EA5E920' }]}>
+                            <Ionicons name="wallet-outline" size={22} color="#0EA5E9" />
+                        </View>
+                        <Text style={styles.menuText}>Ví</Text>
+                        <Text style={styles.menuCount}>{wallets.length}/3</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.menuItem}>
+                        <View style={[styles.menuIcon, { backgroundColor: '#F59E0B20' }]}>
+                            <Ionicons name="flag-outline" size={22} color="#F59E0B" />
+                        </View>
+                        <Text style={styles.menuText}>Mục tiêu</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => navigation.navigate('FinanceCalendar' as any)}
+                    >
+                        <View style={[styles.menuIcon, { backgroundColor: '#6366F120' }]}>
+                            <Ionicons name="calendar-outline" size={22} color="#6366F1" />
+                        </View>
+                        <Text style={styles.menuText}>Lịch</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => navigation.navigate('FinanceStatistics' as any)}
+                    >
+                        <View style={[styles.menuIcon, { backgroundColor: '#EC489920' }]}>
+                            <Ionicons name="pie-chart-outline" size={22} color="#EC4899" />
+                        </View>
+                        <Text style={styles.menuText}>Thống kê</Text>
+                    </TouchableOpacity>
+                </View>
 
                 {/* Recent Transactions */}
+
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Giao dịch gần đây</Text>
@@ -858,5 +935,37 @@ const styles = StyleSheet.create({
     skipBtnText: {
         color: '#6B7280',
         fontSize: 14,
+    },
+    // Menu Grid
+    menuGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginBottom: 20,
+    },
+    menuItem: {
+        width: '47%',
+        backgroundColor: '#1A1A2E',
+        padding: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+    },
+    menuIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    menuText: {
+        color: '#FFF',
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    menuCount: {
+        color: '#6B7280',
+        fontSize: 12,
+        marginTop: 2,
     },
 });
