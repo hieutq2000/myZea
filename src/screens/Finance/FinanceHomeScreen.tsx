@@ -87,6 +87,9 @@ export default function FinanceHomeScreen() {
     const [salaryInput, setSalaryInput] = useState('');
     const [monthlySalary, setMonthlySalaryState] = useState(0);
 
+    // Ẩn/hiện số dư
+    const [hideBalance, setHideBalance] = useState(false);
+
     // Load data
     const loadData = async () => {
         try {
@@ -350,12 +353,42 @@ export default function FinanceHomeScreen() {
                             </View>
                             <Text style={styles.userName}>{wallets[0]?.name || 'Ví chính'}</Text>
                         </View>
-                        <TouchableOpacity onPress={handleEditBalance}>
+                        <TouchableOpacity onPress={() => {
+                            Alert.alert(
+                                '⚙️ Cài đặt ví',
+                                'Chọn một tùy chọn:',
+                                [
+                                    { text: '💰 Sửa số dư', onPress: handleEditBalance },
+                                    { text: '📝 Đổi tên ví', onPress: () => { } },
+                                    {
+                                        text: '🗑️ Xóa tất cả dữ liệu',
+                                        style: 'destructive',
+                                        onPress: handleClearAllData
+                                    },
+                                    { text: 'Đóng', style: 'cancel' },
+                                ]
+                            );
+                        }}>
                             <Ionicons name="settings-outline" size={22} color="rgba(255,255,255,0.8)" />
                         </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.mainBalance}>{formatMoney(totalBalance)}</Text>
+
+                    <View style={styles.balanceRow}>
+                        <Text style={styles.mainBalance}>
+                            {hideBalance ? '••••••••' : formatMoney(totalBalance)}
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => setHideBalance(!hideBalance)}
+                            style={styles.eyeButton}
+                        >
+                            <Ionicons
+                                name={hideBalance ? 'eye-off' : 'eye'}
+                                size={22}
+                                color="rgba(255,255,255,0.8)"
+                            />
+                        </TouchableOpacity>
+                    </View>
 
                     <View style={styles.percentBadge}>
                         <Text style={styles.percentText}>{getPercentChange()} so với tháng trước</Text>
@@ -368,9 +401,12 @@ export default function FinanceHomeScreen() {
                         style={styles.actionItem}
                         onPress={() => navigation.navigate('FinanceVoiceInput' as any)}
                     >
-                        <View style={[styles.actionIcon, { backgroundColor: '#10B981' }]}>
-                            <Ionicons name="mic" size={22} color="#FFF" />
-                        </View>
+                        <LinearGradient
+                            colors={['#9333EA', '#7C3AED']}
+                            style={styles.actionIcon}
+                        >
+                            <Ionicons name="mic" size={24} color="#FFF" />
+                        </LinearGradient>
                         <Text style={styles.actionLabel}>Nhập bằng{'\n'}giọng nói</Text>
                     </TouchableOpacity>
 
@@ -378,9 +414,12 @@ export default function FinanceHomeScreen() {
                         style={styles.actionItem}
                         onPress={() => handleAddTransaction('expense')}
                     >
-                        <View style={[styles.actionIcon, { backgroundColor: '#F59E0B' }]}>
-                            <Ionicons name="remove" size={22} color="#FFF" />
-                        </View>
+                        <LinearGradient
+                            colors={['#F97316', '#EA580C']}
+                            style={styles.actionIcon}
+                        >
+                            <Ionicons name="receipt" size={24} color="#FFF" />
+                        </LinearGradient>
                         <Text style={styles.actionLabel}>Nhập{'\n'}Chi tiêu</Text>
                     </TouchableOpacity>
 
@@ -388,19 +427,26 @@ export default function FinanceHomeScreen() {
                         style={styles.actionItem}
                         onPress={() => handleAddTransaction('income')}
                     >
-                        <View style={[styles.actionIcon, { backgroundColor: '#3B82F6' }]}>
-                            <Ionicons name="add" size={22} color="#FFF" />
-                        </View>
+                        <LinearGradient
+                            colors={['#3B82F6', '#2563EB']}
+                            style={styles.actionIcon}
+                        >
+                            <Ionicons name="add" size={28} color="#FFF" />
+                        </LinearGradient>
                         <Text style={styles.actionLabel}>Nhập{'\n'}Thu nhập</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.actionItem}>
-                        <View style={[styles.actionIcon, { backgroundColor: '#8B5CF6' }]}>
-                            <Ionicons name="flag" size={22} color="#FFF" />
-                        </View>
+                        <LinearGradient
+                            colors={['#6366F1', '#4F46E5']}
+                            style={styles.actionIcon}
+                        >
+                            <Ionicons name="flag" size={24} color="#FFF" />
+                        </LinearGradient>
                         <Text style={styles.actionLabel}>Thiết lập{'\n'}Mục tiêu</Text>
                     </TouchableOpacity>
                 </View>
+
 
                 {/* Monthly Stats Cards */}
                 <View style={styles.statsRow}>
@@ -471,8 +517,7 @@ export default function FinanceHomeScreen() {
                 </View>
 
                 {/* Recent Transactions */}
-
-                <View style={styles.section}>
+                <View style={styles.transactionSection}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Giao dịch gần đây</Text>
                         <TouchableOpacity>
@@ -492,6 +537,7 @@ export default function FinanceHomeScreen() {
                         </View>
                     )}
                 </View>
+
 
                 <View style={{ height: 100 }} />
             </ScrollView>
@@ -726,7 +772,18 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '500',
     },
+    // Balance Row with Eye Button
+    balanceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    eyeButton: {
+        padding: 4,
+    },
     // Action Buttons
+
     actionRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -737,13 +794,14 @@ const styles = StyleSheet.create({
         width: (width - 32 - 36) / 4,
     },
     actionIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 14,
+        width: 56,
+        height: 56,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 8,
+        marginBottom: 10,
     },
+
     actionLabel: {
         color: '#9CA3AF',
         fontSize: 11,
@@ -806,7 +864,15 @@ const styles = StyleSheet.create({
         color: '#8B5CF6',
         fontSize: 13,
     },
+    // Transaction Section with rounded border
+    transactionSection: {
+        backgroundColor: '#1A1A2E',
+        borderRadius: 20,
+        padding: 16,
+        marginBottom: 24,
+    },
     // Transactions
+
     transactionList: {
         gap: 8,
     },

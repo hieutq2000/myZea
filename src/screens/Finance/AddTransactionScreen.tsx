@@ -1,15 +1,14 @@
 /**
  * AddTransactionScreen - Màn hình thêm giao dịch
  * 
- * Features:
- * - Máy tính tích hợp để nhập số tiền
- * - Chọn danh mục trực quan
- * - Nhập mô tả
- * - Chọn ngày
- * - Nhập bằng giọng nói (AI parse)
+ * Layout giống ảnh mẫu với:
+ * - Tab Chi phí / Thu nhập
+ * - Chi tiết giao dịch (tên, số tiền, ngày)
+ * - Chọn ví
+ * - Danh mục dạng grid
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -20,109 +19,63 @@ import {
     Platform,
     ScrollView,
     TextInput,
-    Modal,
     Alert,
-    Vibration,
+    Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useTheme } from '../../context/ThemeContext';
-import { Transaction, TransactionType } from '../../types/finance';
+import { TransactionType, Wallet } from '../../types/finance';
 import { addTransaction, getWallets } from '../../utils/finance/storage';
-import { getCategoriesByType, Category, findCategoryFromText } from '../../utils/finance/categories';
+import { getCategoriesByType, Category } from '../../utils/finance/categories';
 
-// Format số tiền hiển thị
-const formatDisplayNumber = (num: string): string => {
-    if (!num || num === '0') return '0';
-    const parts = num.split('.');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return parts.join('.');
-};
-
-// Parse số từ display format
-const parseDisplayNumber = (str: string): number => {
-    return parseFloat(str.replace(/,/g, '')) || 0;
-};
+const { width } = Dimensions.get('window');
 
 export default function AddTransactionScreen() {
     const navigation = useNavigation();
     const route = useRoute();
-    const { colors, isDark } = useTheme();
 
-    // Params từ navigation
+    // Params
     const params = route.params as { walletId?: string; type?: TransactionType } | undefined;
 
     // State
     const [type, setType] = useState<TransactionType>(params?.type || 'expense');
-    const [amount, setAmount] = useState('0');
-    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
     const [description, setDescription] = useState('');
+    const [amount, setAmount] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [wallets, setWallets] = useState<Wallet[]>([]);
+    const [selectedWalletId, setSelectedWalletId] = useState<string>(params?.walletId || '');
+    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Lấy danh mục theo loại
+    // Load wallets
+    useEffect(() => {
+        loadWallets();
+    }, []);
+
+    const loadWallets = async () => {
+        const data = await getWallets();
+        setWallets(data);
+        if (!selectedWalletId && data.length > 0) {
+            setSelectedWalletId(data[0].id);
+        }
+    };
+
+    // Get categories
     const categories = getCategoriesByType(type);
 
-    // Xử lý bấm nút máy tính
-    const handlePress = useCallback((value: string) => {
-        Vibration.vibrate(10); // Haptic nhẹ
+    // Format date display
+    const formatDateDisplay = (dateStr: string) => {
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
 
-        if (value === 'C') {
-            setAmount('0');
-            return;
-        }
+    // Get selected wallet
+    const selectedWallet = wallets.find(w => w.id === selectedWalletId);
 
-        if (value === '⌫') {
-            setAmount(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
-            return;
-        }
-
-        if (value === '.') {
-            if (amount.includes('.')) return;
-            setAmount(prev => prev + '.');
-            return;
-        }
-
-        // Operators - tính toán đơn giản
-        if (['+', '-', '×', '÷'].includes(value)) {
-            // Đơn giản: chỉ lưu operator để tính sau
-            setAmount(prev => {
-                if (['+', '-', '×', '÷'].includes(prev.slice(-1))) {
-                    return prev.slice(0, -1) + value;
-                }
-                return prev + value;
-            });
-            return;
-        }
-
-        if (value === '=') {
-            try {
-                // Replace operators và tính
-                const expr = amount
-                    .replace(/×/g, '*')
-                    .replace(/÷/g, '/');
-                const result = eval(expr); // eslint-disable-line no-eval
-                setAmount(String(Math.round(result * 100) / 100));
-            } catch {
-                // Nếu lỗi, giữ nguyên
-            }
-            return;
-        }
-
-        // Số
-        setAmount(prev => {
-            if (prev === '0' && value !== '.') return value;
-            // Giới hạn độ dài
-            if (prev.replace(/[^0-9]/g, '').length >= 12) return prev;
-            return prev + value;
-        });
-    }, [amount]);
-
-    // Lưu giao dịch
+    // Handle save
     const handleSave = async () => {
-        const numAmount = parseDisplayNumber(amount);
+        const numAmount = parseFloat(amount.replace(/[^0-9.]/g, '')) || 0;
 
         if (numAmount <= 0) {
             Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
@@ -137,11 +90,8 @@ export default function AddTransactionScreen() {
         setIsSubmitting(true);
 
         try {
-            const wallets = await getWallets();
-            const walletId = params?.walletId || wallets[0]?.id || 'wallet_default';
-
             await addTransaction({
-                walletId,
+                walletId: selectedWalletId || wallets[0]?.id || 'wallet_default',
                 type,
                 amount: numAmount,
                 categoryId: selectedCategory.id,
@@ -153,222 +103,162 @@ export default function AddTransactionScreen() {
             navigation.goBack();
         } catch (error) {
             console.error('Error saving transaction:', error);
-            Alert.alert('Lỗi', 'Không thể lưu giao dịch. Vui lòng thử lại.');
+            Alert.alert('Lỗi', 'Không thể lưu giao dịch');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // Render nút máy tính
-    const renderCalcButton = (value: string, flex = 1, bgColor?: string, textColor?: string) => (
-        <TouchableOpacity
-            key={value}
-            style={[
-                styles.calcButton,
-                {
-                    flex,
-                    backgroundColor: bgColor || (isDark ? '#2D2D2D' : '#F3F4F6'),
-                },
-            ]}
-            onPress={() => handlePress(value)}
-            activeOpacity={0.7}
-        >
-            <Text style={[
-                styles.calcButtonText,
-                { color: textColor || colors.text }
-            ]}>
-                {value}
-            </Text>
-        </TouchableOpacity>
-    );
-
-    // Render danh mục trong modal
-    const renderCategoryItem = (category: Category) => (
-        <TouchableOpacity
-            key={category.id}
-            style={[
-                styles.categoryItem,
-                selectedCategory?.id === category.id && {
-                    backgroundColor: category.color + '20',
-                    borderColor: category.color,
-                    borderWidth: 2,
-                },
-            ]}
-            onPress={() => {
-                setSelectedCategory(category);
-                setShowCategoryModal(false);
-            }}
-        >
-            <View style={[styles.categoryIcon, { backgroundColor: category.color + '20' }]}>
-                <Ionicons name={category.icon as any} size={24} color={category.color} />
-            </View>
-            <Text style={[styles.categoryName, { color: colors.text }]}>{category.name}</Text>
-        </TouchableOpacity>
-    );
-
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.container}>
             <StatusBar barStyle="light-content" />
 
             {/* Header */}
-            <LinearGradient
-                colors={type === 'expense' ? ['#EF4444', '#DC2626'] : ['#10B981', '#059669']}
-                style={styles.header}
-            >
+            <View style={styles.header}>
                 <SafeAreaView>
                     <View style={styles.headerContent}>
+                        <Text style={styles.headerTitle}>Giao dịch mới</Text>
                         <TouchableOpacity onPress={() => navigation.goBack()}>
-                            <Ionicons name="close" size={28} color="#FFF" />
-                        </TouchableOpacity>
-                        <Text style={styles.headerTitle}>
-                            {type === 'expense' ? 'Chi tiêu' : 'Thu nhập'}
-                        </Text>
-                        <TouchableOpacity
-                            onPress={handleSave}
-                            disabled={isSubmitting}
-                            style={styles.saveButton}
-                        >
-                            <Text style={styles.saveButtonText}>
-                                {isSubmitting ? 'Đang lưu...' : 'Lưu'}
-                            </Text>
+                            <Ionicons name="close" size={24} color="#FFF" />
                         </TouchableOpacity>
                     </View>
 
-                    {/* Type Switcher */}
-                    <View style={styles.typeSwitcher}>
+                    {/* Type Tabs */}
+                    <View style={styles.typeTabs}>
                         <TouchableOpacity
-                            style={[
-                                styles.typeButton,
-                                type === 'expense' && styles.typeButtonActive,
-                            ]}
+                            style={[styles.typeTab, type === 'expense' && styles.typeTabExpenseActive]}
                             onPress={() => {
                                 setType('expense');
                                 setSelectedCategory(null);
                             }}
                         >
-                            <Text style={[
-                                styles.typeButtonText,
-                                type === 'expense' && styles.typeButtonTextActive,
-                            ]}>Chi tiêu</Text>
+                            <Ionicons name="remove-circle" size={18} color={type === 'expense' ? '#FFF' : '#9CA3AF'} />
+                            <Text style={[styles.typeTabText, type === 'expense' && styles.typeTabTextActive]}>
+                                Chi phí
+                            </Text>
                         </TouchableOpacity>
+
                         <TouchableOpacity
-                            style={[
-                                styles.typeButton,
-                                type === 'income' && styles.typeButtonActive,
-                            ]}
+                            style={[styles.typeTab, type === 'income' && styles.typeTabIncomeActive]}
                             onPress={() => {
                                 setType('income');
                                 setSelectedCategory(null);
                             }}
                         >
-                            <Text style={[
-                                styles.typeButtonText,
-                                type === 'income' && styles.typeButtonTextActive,
-                            ]}>Thu nhập</Text>
+                            <Ionicons name="trending-up" size={18} color={type === 'income' ? '#FFF' : '#9CA3AF'} />
+                            <Text style={[styles.typeTabText, type === 'income' && styles.typeTabTextActive]}>
+                                Thu nhập
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </SafeAreaView>
-            </LinearGradient>
-
-            {/* Amount Display */}
-            <View style={styles.amountContainer}>
-                <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>Số tiền</Text>
-                <Text style={[
-                    styles.amountValue,
-                    { color: type === 'expense' ? '#EF4444' : '#10B981' }
-                ]}>
-                    {type === 'expense' ? '-' : '+'}{formatDisplayNumber(amount)}đ
-                </Text>
             </View>
 
-            {/* Category & Description */}
-            <View style={styles.infoSection}>
-                <TouchableOpacity
-                    style={[styles.infoRow, { backgroundColor: colors.card }]}
-                    onPress={() => setShowCategoryModal(true)}
-                >
-                    {selectedCategory ? (
-                        <>
-                            <View style={[styles.categoryIconSmall, { backgroundColor: selectedCategory.color + '20' }]}>
-                                <Ionicons name={selectedCategory.icon as any} size={20} color={selectedCategory.color} />
-                            </View>
-                            <Text style={[styles.infoText, { color: colors.text }]}>{selectedCategory.name}</Text>
-                        </>
-                    ) : (
-                        <>
-                            <Ionicons name="grid-outline" size={20} color={colors.textSecondary} />
-                            <Text style={[styles.infoText, { color: colors.textSecondary }]}>Chọn danh mục</Text>
-                        </>
-                    )}
-                    <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                {/* Chi tiết giao dịch */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Chi tiết giao dịch</Text>
 
-                <View style={[styles.infoRow, { backgroundColor: colors.card }]}>
-                    <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
-                    <TextInput
-                        style={[styles.descriptionInput, { color: colors.text }]}
-                        placeholder="Ghi chú (tùy chọn)"
-                        placeholderTextColor={colors.textSecondary}
-                        value={description}
-                        onChangeText={setDescription}
-                    />
-                </View>
-            </View>
-
-            {/* Calculator */}
-            <View style={[styles.calculator, { backgroundColor: isDark ? '#1F1F1F' : '#E5E7EB' }]}>
-                <View style={styles.calcRow}>
-                    {renderCalcButton('C', 1, '#EF4444', '#FFF')}
-                    {renderCalcButton('⌫')}
-                    {renderCalcButton('÷', 1, type === 'expense' ? '#FEE2E2' : '#D1FAE5', type === 'expense' ? '#EF4444' : '#10B981')}
-                    {renderCalcButton('×', 1, type === 'expense' ? '#FEE2E2' : '#D1FAE5', type === 'expense' ? '#EF4444' : '#10B981')}
-                </View>
-                <View style={styles.calcRow}>
-                    {renderCalcButton('7')}
-                    {renderCalcButton('8')}
-                    {renderCalcButton('9')}
-                    {renderCalcButton('-', 1, type === 'expense' ? '#FEE2E2' : '#D1FAE5', type === 'expense' ? '#EF4444' : '#10B981')}
-                </View>
-                <View style={styles.calcRow}>
-                    {renderCalcButton('4')}
-                    {renderCalcButton('5')}
-                    {renderCalcButton('6')}
-                    {renderCalcButton('+', 1, type === 'expense' ? '#FEE2E2' : '#D1FAE5', type === 'expense' ? '#EF4444' : '#10B981')}
-                </View>
-                <View style={styles.calcRow}>
-                    {renderCalcButton('1')}
-                    {renderCalcButton('2')}
-                    {renderCalcButton('3')}
-                    {renderCalcButton('=', 1, type === 'expense' ? '#EF4444' : '#10B981', '#FFF')}
-                </View>
-                <View style={styles.calcRow}>
-                    {renderCalcButton('0', 2)}
-                    {renderCalcButton('000')}
-                    {renderCalcButton('.')}
-                </View>
-            </View>
-
-            {/* Category Modal */}
-            <Modal
-                visible={showCategoryModal}
-                animationType="slide"
-                transparent
-                onRequestClose={() => setShowCategoryModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-                        <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: colors.text }]}>Chọn danh mục</Text>
-                            <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
-                                <Ionicons name="close" size={24} color={colors.text} />
-                            </TouchableOpacity>
+                    <View style={styles.inputGroup}>
+                        <View style={styles.inputRow}>
+                            <Ionicons name="text-outline" size={20} color="#6B7280" />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Tên giao dịch"
+                                placeholderTextColor="#6B7280"
+                                value={description}
+                                onChangeText={setDescription}
+                            />
                         </View>
-                        <ScrollView contentContainerStyle={styles.categoryGrid}>
-                            {categories.map(renderCategoryItem)}
-                        </ScrollView>
+
+                        <View style={styles.divider} />
+
+                        <View style={styles.inputRow}>
+                            <Text style={styles.currencySymbol}>$</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Số tiền"
+                                placeholderTextColor="#6B7280"
+                                keyboardType="numeric"
+                                value={amount}
+                                onChangeText={setAmount}
+                            />
+                        </View>
+
+                        <View style={styles.divider} />
+
+                        <TouchableOpacity style={styles.inputRow}>
+                            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                            <Text style={styles.inputText}>{formatDateDisplay(date)}</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
-            </Modal>
+
+                {/* Chọn ví */}
+                <View style={styles.section}>
+                    <TouchableOpacity style={styles.walletSelector}>
+                        <View style={styles.walletInfo}>
+                            <Ionicons name="wallet-outline" size={20} color="#6B7280" />
+                            <Text style={styles.walletName}>{selectedWallet?.name || 'Chọn ví'}</Text>
+                        </View>
+                        <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Danh mục */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Danh mục</Text>
+
+                    <View style={styles.categoryGrid}>
+                        {categories.map((cat) => (
+                            <TouchableOpacity
+                                key={cat.id}
+                                style={[
+                                    styles.categoryItem,
+                                    selectedCategory?.id === cat.id && styles.categoryItemSelected,
+                                ]}
+                                onPress={() => setSelectedCategory(cat)}
+                            >
+                                <View style={[
+                                    styles.categoryIcon,
+                                    { backgroundColor: cat.color + '20' },
+                                    selectedCategory?.id === cat.id && { backgroundColor: cat.color },
+                                ]}>
+                                    <Ionicons
+                                        name={cat.icon as any}
+                                        size={20}
+                                        color={selectedCategory?.id === cat.id ? '#FFF' : cat.color}
+                                    />
+                                </View>
+                                <Text style={[
+                                    styles.categoryName,
+                                    selectedCategory?.id === cat.id && styles.categoryNameSelected,
+                                ]}>
+                                    {cat.name}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
+                <View style={{ height: 100 }} />
+            </ScrollView>
+
+            {/* Save Button */}
+            <View style={styles.footer}>
+                <TouchableOpacity
+                    style={[
+                        styles.saveButton,
+                        { backgroundColor: type === 'expense' ? '#3B82F6' : '#10B981' },
+                    ]}
+                    onPress={handleSave}
+                    disabled={isSubmitting}
+                >
+                    <Text style={styles.saveButtonText}>
+                        {isSubmitting ? 'Đang lưu...' : 'Lưu'}
+                    </Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
@@ -376,8 +266,10 @@ export default function AddTransactionScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: '#0F0F23',
     },
     header: {
+        backgroundColor: '#0F0F23',
         paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     },
     headerContent: {
@@ -389,148 +281,153 @@ const styles = StyleSheet.create({
     },
     headerTitle: {
         fontSize: 18,
-        fontWeight: 'bold',
-        color: '#FFF',
-    },
-    saveButton: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        borderRadius: 20,
-    },
-    saveButtonText: {
-        color: '#FFF',
         fontWeight: '600',
+        color: '#FFF',
     },
-    typeSwitcher: {
+    // Type Tabs
+    typeTabs: {
         flexDirection: 'row',
         marginHorizontal: 16,
         marginBottom: 16,
-        padding: 4,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        borderRadius: 12,
-    },
-    typeButton: {
-        flex: 1,
-        paddingVertical: 10,
-        alignItems: 'center',
-        borderRadius: 10,
-    },
-    typeButtonActive: {
-        backgroundColor: '#FFF',
-    },
-    typeButtonText: {
-        color: 'rgba(255,255,255,0.7)',
-        fontWeight: '600',
-    },
-    typeButtonTextActive: {
-        color: '#1F2937',
-    },
-    amountContainer: {
-        paddingVertical: 24,
-        alignItems: 'center',
-    },
-    amountLabel: {
-        fontSize: 14,
-        marginBottom: 8,
-    },
-    amountValue: {
-        fontSize: 40,
-        fontWeight: 'bold',
-    },
-    infoSection: {
-        paddingHorizontal: 16,
-        gap: 8,
-        marginBottom: 16,
-    },
-    infoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 14,
-        borderRadius: 12,
         gap: 12,
     },
-    infoText: {
-        flex: 1,
-        fontSize: 15,
-    },
-    categoryIconSmall: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    descriptionInput: {
-        flex: 1,
-        fontSize: 15,
-    },
-    calculator: {
-        flex: 1,
-        padding: 8,
-        gap: 8,
-    },
-    calcRow: {
+    typeTab: {
         flex: 1,
         flexDirection: 'row',
-        gap: 8,
-    },
-    calcButton: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
         borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
+        backgroundColor: '#1A1A2E',
+        gap: 8,
     },
-    calcButtonText: {
-        fontSize: 24,
-        fontWeight: '500',
+    typeTabExpenseActive: {
+        backgroundColor: '#EF4444',
     },
-    modalOverlay: {
+    typeTabIncomeActive: {
+        backgroundColor: '#10B981',
+    },
+    typeTabText: {
+        color: '#9CA3AF',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    typeTabTextActive: {
+        color: '#FFF',
+    },
+    content: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
+        paddingHorizontal: 16,
     },
-    modalContent: {
-        maxHeight: '70%',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        paddingTop: 16,
+    // Section
+    section: {
+        marginBottom: 24,
     },
-    modalHeader: {
+    sectionTitle: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 12,
+    },
+    // Input Group
+    inputGroup: {
+        backgroundColor: '#1A1A2E',
+        borderRadius: 16,
+        overflow: 'hidden',
+    },
+    inputRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.1)',
+        paddingHorizontal: 16,
+        paddingVertical: 16,
+        gap: 12,
     },
-    modalTitle: {
+    input: {
+        flex: 1,
+        color: '#FFF',
+        fontSize: 16,
+    },
+    inputText: {
+        flex: 1,
+        color: '#FFF',
+        fontSize: 16,
+    },
+    currencySymbol: {
+        color: '#6B7280',
         fontSize: 18,
-        fontWeight: 'bold',
+        fontWeight: '600',
     },
+    divider: {
+        height: 1,
+        backgroundColor: '#2D2D4A',
+        marginHorizontal: 16,
+    },
+    // Wallet Selector
+    walletSelector: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#1A1A2E',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 16,
+    },
+    walletInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    walletName: {
+        color: '#FFF',
+        fontSize: 16,
+    },
+    // Category Grid
     categoryGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        padding: 16,
-        gap: 12,
+        gap: 10,
     },
     categoryItem: {
-        width: '30%',
+        width: (width - 32 - 30) / 4,
         alignItems: 'center',
-        padding: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        backgroundColor: '#1A1A2E',
         borderRadius: 12,
-        backgroundColor: 'transparent',
+    },
+    categoryItemSelected: {
+        backgroundColor: '#2D2D4A',
     },
     categoryIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 40,
+        height: 40,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 8,
+        marginBottom: 6,
     },
     categoryName: {
-        fontSize: 12,
+        color: '#9CA3AF',
+        fontSize: 11,
         textAlign: 'center',
+    },
+    categoryNameSelected: {
+        color: '#FFF',
+    },
+    // Footer
+    footer: {
+        padding: 16,
+        paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+        backgroundColor: '#0F0F23',
+    },
+    saveButton: {
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    saveButtonText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });
