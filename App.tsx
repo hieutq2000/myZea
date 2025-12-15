@@ -46,6 +46,8 @@ import { initSocket, disconnectSocket, getSocket } from './src/utils/socket';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync, schedulePushNotification } from './src/utils/notifications';
 import FinanceHomeScreen from './src/screens/Finance/FinanceHomeScreen';
+import AddTransactionScreen from './src/screens/Finance/AddTransactionScreen';
+import VoiceInputScreen from './src/screens/Finance/VoiceInputScreen';
 
 // Configure Notifications to show alert when app is in foreground
 Notifications.setNotificationHandler({
@@ -571,6 +573,16 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
           name="FinanceHome"
           component={FinanceHomeScreen}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="FinanceAddTransaction"
+          component={AddTransactionScreen}
+          options={{ headerShown: false, presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="FinanceVoiceInput"
+          component={VoiceInputScreen}
+          options={{ headerShown: false, presentation: 'modal' }}
         />
       </Stack.Navigator>
 

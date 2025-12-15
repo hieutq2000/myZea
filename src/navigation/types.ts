@@ -40,6 +40,7 @@ export type RootStackParamList = {
         walletId?: string;
         type?: 'income' | 'expense';
     };
+    FinanceVoiceInput: undefined;
     FinanceWallets: undefined;
     FinanceGoals: undefined;
     FinanceCalendar: undefined;

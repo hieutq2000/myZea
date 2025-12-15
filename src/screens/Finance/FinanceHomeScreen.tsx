@@ -1,14 +1,9 @@
 /**
  * FinanceHomeScreen - Màn hình chính quản lý tài chính
- * 
- * Features:
- * - Hiển thị số dư tổng
- * - Danh sách giao dịch gần đây
- * - Nút thêm giao dịch (tay + giọng nói)
- * - Truy cập nhanh: Ví, Mục tiêu, Thống kê, Lịch
+ * Layout giống app mẫu: Dark theme với gradient card
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -20,6 +15,10 @@ import {
     Platform,
     RefreshControl,
     Alert,
+    Modal,
+    TextInput,
+    KeyboardAvoidingView,
+    Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,10 +31,14 @@ import {
     getTransactions,
     calculateTotalBalance,
     getMonthlyStats,
-    addTransaction,
     deleteTransaction,
+    updateWallet,
+    getMonthlySalary,
+    setMonthlySalary,
 } from '../../utils/finance/storage';
-import { getCategoryById, ALL_CATEGORIES } from '../../utils/finance/categories';
+import { getCategoryById } from '../../utils/finance/categories';
+
+const { width } = Dimensions.get('window');
 
 // Format số tiền
 const formatMoney = (amount: number): string => {
@@ -65,10 +68,21 @@ export default function FinanceHomeScreen() {
     // State
     const [totalBalance, setTotalBalance] = useState(0);
     const [monthlyStats, setMonthlyStats] = useState({ income: 0, expense: 0, balance: 0 });
+    const [todayStats, setTodayStats] = useState({ income: 0, expense: 0 });
     const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
     const [wallets, setWallets] = useState<Wallet[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+
+    // Modal nhập số dư
+    const [showBalanceModal, setShowBalanceModal] = useState(false);
+    const [balanceInput, setBalanceInput] = useState('');
+    const [isFirstTime, setIsFirstTime] = useState(false);
+
+    // Modal nhập lương tháng
+    const [showSalaryModal, setShowSalaryModal] = useState(false);
+    const [salaryInput, setSalaryInput] = useState('');
+    const [monthlySalary, setMonthlySalaryState] = useState(0);
 
     // Load data
     const loadData = async () => {
@@ -82,10 +96,27 @@ export default function FinanceHomeScreen() {
             const now = new Date();
             const stats = await getMonthlyStats(now.getFullYear(), now.getMonth() + 1);
 
+            // Tính thu/chi hôm nay
+            const todayStr = now.toISOString().split('T')[0];
+            const todayTxns = transactionsData.filter(t => t.date === todayStr);
+            const todayIncome = todayTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+            const todayExpense = todayTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
             setWallets(walletsData);
-            setRecentTransactions(transactionsData.slice(0, 10)); // 10 giao dịch gần nhất
+            setRecentTransactions(transactionsData.slice(0, 10));
             setTotalBalance(balance);
             setMonthlyStats(stats);
+            setTodayStats({ income: todayIncome, expense: todayExpense });
+
+            // Lấy lương tháng
+            const salary = await getMonthlySalary();
+            setMonthlySalaryState(salary);
+
+            // Kiểm tra lần đầu dùng app
+            if (transactionsData.length === 0 && walletsData[0]?.balance === 0) {
+                setIsFirstTime(true);
+                setShowBalanceModal(true);
+            }
         } catch (error) {
             console.error('Error loading finance data:', error);
         } finally {
@@ -93,24 +124,84 @@ export default function FinanceHomeScreen() {
         }
     };
 
-    // Load khi màn hình focus
     useFocusEffect(
         useCallback(() => {
             loadData();
         }, [])
     );
 
-    // Pull to refresh
     const onRefresh = async () => {
         setRefreshing(true);
         await loadData();
         setRefreshing(false);
     };
 
-    // Xóa giao dịch
+    // Lưu số dư ban đầu
+    const handleSaveInitialBalance = async () => {
+        const amount = parseFloat(balanceInput.replace(/[^0-9]/g, ''));
+        if (isNaN(amount)) {
+            Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
+            return;
+        }
+
+        if (wallets.length > 0) {
+            await updateWallet(wallets[0].id, { balance: amount });
+            setShowBalanceModal(false);
+            setIsFirstTime(false);
+            loadData();
+        }
+    };
+
+    // Lưu lương tháng
+    const handleSaveSalary = async () => {
+        const amount = parseFloat(salaryInput.replace(/[^0-9]/g, ''));
+        if (isNaN(amount) || amount <= 0) {
+            Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
+            return;
+        }
+
+        await setMonthlySalary(amount);
+        setMonthlySalaryState(amount);
+        setShowSalaryModal(false);
+    };
+
+    // Mở modal nhập lương
+    const handleOpenSalaryModal = () => {
+        setSalaryInput(monthlySalary > 0 ? monthlySalary.toString() : '');
+        setShowSalaryModal(true);
+    };
+
+
+    // Xử lý tap vào giao dịch
+    const handleTransactionPress = (txn: Transaction) => {
+        const category = getCategoryById(txn.categoryId);
+
+        Alert.alert(
+            txn.description || category?.name || 'Giao dịch',
+            `${txn.type === 'expense' ? 'Chi' : 'Thu'}: ${formatMoney(txn.amount)}\nDanh mục: ${category?.name}\nNgày: ${formatDate(txn.date)}`,
+            [
+                { text: 'Đóng', style: 'cancel' },
+                {
+                    text: 'Sửa',
+                    onPress: () => {
+                        navigation.navigate('FinanceAddTransaction' as any, {
+                            type: txn.type,
+                            editTransaction: txn,
+                        });
+                    },
+                },
+                {
+                    text: 'Xóa',
+                    style: 'destructive',
+                    onPress: () => handleDeleteTransaction(txn),
+                },
+            ]
+        );
+    };
+
     const handleDeleteTransaction = (txn: Transaction) => {
         Alert.alert(
-            'Xóa giao dịch',
+            'Xác nhận xóa',
             `Bạn có chắc muốn xóa giao dịch "${txn.description}"?`,
             [
                 { text: 'Hủy', style: 'cancel' },
@@ -126,6 +217,24 @@ export default function FinanceHomeScreen() {
         );
     };
 
+    const handleEditBalance = () => {
+        setBalanceInput(wallets[0]?.balance?.toString() || '0');
+        setShowBalanceModal(true);
+    };
+
+    const handleAddTransaction = (type: 'income' | 'expense') => {
+        navigation.navigate('FinanceAddTransaction' as any, { type });
+    };
+
+    // Tính % so với tháng trước
+    const getPercentChange = () => {
+        // Giả lập - cần implement so sánh với tháng trước
+        if (monthlyStats.income > 0) {
+            return '+100.0%';
+        }
+        return '0%';
+    };
+
     // Render giao dịch
     const renderTransaction = (txn: Transaction) => {
         const category = getCategoryById(txn.categoryId);
@@ -134,195 +243,171 @@ export default function FinanceHomeScreen() {
         return (
             <TouchableOpacity
                 key={txn.id}
-                style={[styles.transactionItem, { backgroundColor: colors.card }]}
-                onLongPress={() => handleDeleteTransaction(txn)}
+                style={styles.transactionItem}
+                onPress={() => handleTransactionPress(txn)}
                 activeOpacity={0.7}
             >
-                <View style={[styles.categoryIcon, { backgroundColor: category?.color + '20' }]}>
+                <View style={[styles.txnIcon, { backgroundColor: category?.color + '30' }]}>
                     <Ionicons
                         name={category?.icon as any || 'help-outline'}
-                        size={24}
+                        size={20}
                         color={category?.color || '#6B7280'}
                     />
                 </View>
-                <View style={styles.transactionInfo}>
-                    <Text style={[styles.transactionDesc, { color: colors.text }]} numberOfLines={1}>
+                <View style={styles.txnInfo}>
+                    <Text style={styles.txnDesc} numberOfLines={1}>
                         {txn.description || category?.name}
                     </Text>
-                    <Text style={[styles.transactionMeta, { color: colors.textSecondary }]}>
-                        {category?.name} • {formatDate(txn.date)}
-                    </Text>
+                    <Text style={styles.txnDate}>{formatDate(txn.date)}</Text>
                 </View>
-                <Text style={[
-                    styles.transactionAmount,
-                    { color: isExpense ? '#EF4444' : '#10B981' }
-                ]}>
+                <Text style={[styles.txnAmount, { color: isExpense ? '#EF4444' : '#10B981' }]}>
                     {isExpense ? '-' : '+'}{formatMoney(txn.amount)}
                 </Text>
             </TouchableOpacity>
         );
     };
 
-    // Thêm giao dịch test (tạm thời)
-    const handleAddTestTransaction = async (type: 'income' | 'expense') => {
-        const category = type === 'expense'
-            ? ALL_CATEGORIES.find(c => c.id === 'food')
-            : ALL_CATEGORIES.find(c => c.id === 'salary');
-
-        await addTransaction({
-            walletId: wallets[0]?.id || 'wallet_default',
-            type,
-            amount: type === 'expense' ? Math.floor(Math.random() * 200000) + 10000 : Math.floor(Math.random() * 5000000) + 1000000,
-            categoryId: category?.id || 'other',
-            description: type === 'expense' ? 'Ăn sáng' : 'Nhận lương',
-            date: new Date().toISOString().split('T')[0],
-            createdBy: 'manual',
-        });
-
-        loadData();
-    };
-
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" />
 
-            {/* Header */}
-            <LinearGradient
-                colors={['#10B981', '#059669']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.header}
-            >
+            {/* Dark Header */}
+            <View style={styles.header}>
                 <SafeAreaView>
-                    <View style={styles.headerContent}>
+                    <View style={styles.headerTop}>
                         <TouchableOpacity onPress={() => navigation.goBack()}>
                             <Ionicons name="arrow-back" size={24} color="#FFF" />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Quản lý chi tiêu</Text>
-                        <TouchableOpacity>
-                            <Ionicons name="settings-outline" size={24} color="#FFF" />
+                        <View style={styles.headerCenter}>
+                            <Text style={styles.totalBalanceSmall}>{formatMoney(totalBalance)}</Text>
+                            <Text style={styles.totalBalanceLabel}>Tổng số dư</Text>
+                        </View>
+                        <TouchableOpacity style={styles.walletBtn}>
+                            <Text style={styles.walletBtnText}>Đổi ví</Text>
                         </TouchableOpacity>
                     </View>
-
-                    {/* Balance Card */}
-                    <View style={styles.balanceCard}>
-                        <Text style={styles.balanceLabel}>Tổng số dư</Text>
-                        <Text style={styles.balanceAmount}>{formatMoney(totalBalance)}</Text>
-
-                        <View style={styles.statsRow}>
-                            <View style={styles.statItem}>
-                                <View style={[styles.statIcon, { backgroundColor: 'rgba(16, 185, 129, 0.3)' }]}>
-                                    <Ionicons name="arrow-down" size={16} color="#FFF" />
-                                </View>
-                                <View>
-                                    <Text style={styles.statLabel}>Thu tháng này</Text>
-                                    <Text style={styles.statValue}>+{formatMoney(monthlyStats.income)}</Text>
-                                </View>
-                            </View>
-                            <View style={styles.statDivider} />
-                            <View style={styles.statItem}>
-                                <View style={[styles.statIcon, { backgroundColor: 'rgba(239, 68, 68, 0.3)' }]}>
-                                    <Ionicons name="arrow-up" size={16} color="#FFF" />
-                                </View>
-                                <View>
-                                    <Text style={styles.statLabel}>Chi tháng này</Text>
-                                    <Text style={styles.statValue}>-{formatMoney(monthlyStats.expense)}</Text>
-                                </View>
-                            </View>
-                        </View>
-                    </View>
                 </SafeAreaView>
-            </LinearGradient>
+            </View>
 
             <ScrollView
-                style={styles.content}
+                style={styles.scrollView}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFF" />
                 }
             >
-                {/* Quick Actions */}
-                <View style={styles.section}>
-                    <View style={styles.quickActions}>
-                        <TouchableOpacity
-                            style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
-                            onPress={() => handleAddTestTransaction('income')}
-                        >
-                            <Ionicons name="add-circle-outline" size={24} color="#FFF" />
-                            <Text style={styles.actionText}>Thêm Thu</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.actionBtn, { backgroundColor: '#EF4444' }]}
-                            onPress={() => handleAddTestTransaction('expense')}
-                        >
-                            <Ionicons name="remove-circle-outline" size={24} color="#FFF" />
-                            <Text style={styles.actionText}>Thêm Chi</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.actionBtn, { backgroundColor: '#8B5CF6' }]}
-                            onPress={() => Alert.alert('Giọng nói', 'Tính năng đang phát triển')}
-                        >
-                            <Ionicons name="mic-outline" size={24} color="#FFF" />
-                            <Text style={styles.actionText}>Nói</Text>
+                {/* Main Balance Card */}
+                <LinearGradient
+                    colors={['#6366F1', '#8B5CF6', '#A855F7']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.balanceCard}
+                >
+                    <View style={styles.cardHeader}>
+                        <View style={styles.userInfo}>
+                            <View style={styles.avatar}>
+                                <Ionicons name="person" size={20} color="#8B5CF6" />
+                            </View>
+                            <Text style={styles.userName}>{wallets[0]?.name || 'Ví chính'}</Text>
+                        </View>
+                        <TouchableOpacity onPress={handleEditBalance}>
+                            <Ionicons name="settings-outline" size={22} color="rgba(255,255,255,0.8)" />
                         </TouchableOpacity>
                     </View>
-                </View>
 
-                {/* Menu Grid */}
-                <View style={styles.section}>
-                    <View style={styles.menuGrid}>
-                        <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card }]}>
-                            <View style={[styles.menuIcon, { backgroundColor: '#E0F2FE' }]}>
-                                <Ionicons name="wallet-outline" size={24} color="#0EA5E9" />
-                            </View>
-                            <Text style={[styles.menuText, { color: colors.text }]}>Ví</Text>
-                            <Text style={[styles.menuCount, { color: colors.textSecondary }]}>{wallets.length}/3</Text>
-                        </TouchableOpacity>
+                    <Text style={styles.mainBalance}>{formatMoney(totalBalance)}</Text>
 
-                        <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card }]}>
-                            <View style={[styles.menuIcon, { backgroundColor: '#FEF3C7' }]}>
-                                <Ionicons name="flag-outline" size={24} color="#F59E0B" />
-                            </View>
-                            <Text style={[styles.menuText, { color: colors.text }]}>Mục tiêu</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card }]}>
-                            <View style={[styles.menuIcon, { backgroundColor: '#E0E7FF' }]}>
-                                <Ionicons name="calendar-outline" size={24} color="#6366F1" />
-                            </View>
-                            <Text style={[styles.menuText, { color: colors.text }]}>Lịch</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card }]}>
-                            <View style={[styles.menuIcon, { backgroundColor: '#FCE7F3' }]}>
-                                <Ionicons name="pie-chart-outline" size={24} color="#EC4899" />
-                            </View>
-                            <Text style={[styles.menuText, { color: colors.text }]}>Thống kê</Text>
-                        </TouchableOpacity>
+                    <View style={styles.percentBadge}>
+                        <Text style={styles.percentText}>{getPercentChange()} so với tháng trước</Text>
                     </View>
+                </LinearGradient>
+
+                {/* Action Buttons */}
+                <View style={styles.actionRow}>
+                    <TouchableOpacity
+                        style={styles.actionItem}
+                        onPress={() => navigation.navigate('FinanceVoiceInput' as any)}
+                    >
+                        <View style={[styles.actionIcon, { backgroundColor: '#10B981' }]}>
+                            <Ionicons name="mic" size={22} color="#FFF" />
+                        </View>
+                        <Text style={styles.actionLabel}>Nhập bằng{'\n'}giọng nói</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.actionItem}
+                        onPress={() => handleAddTransaction('expense')}
+                    >
+                        <View style={[styles.actionIcon, { backgroundColor: '#F59E0B' }]}>
+                            <Ionicons name="remove" size={22} color="#FFF" />
+                        </View>
+                        <Text style={styles.actionLabel}>Nhập{'\n'}Chi tiêu</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.actionItem}
+                        onPress={() => handleAddTransaction('income')}
+                    >
+                        <View style={[styles.actionIcon, { backgroundColor: '#3B82F6' }]}>
+                            <Ionicons name="add" size={22} color="#FFF" />
+                        </View>
+                        <Text style={styles.actionLabel}>Nhập{'\n'}Thu nhập</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.actionItem}>
+                        <View style={[styles.actionIcon, { backgroundColor: '#8B5CF6' }]}>
+                            <Ionicons name="flag" size={22} color="#FFF" />
+                        </View>
+                        <Text style={styles.actionLabel}>Thiết lập{'\n'}Mục tiêu</Text>
+                    </TouchableOpacity>
                 </View>
+
+                {/* Monthly Stats Cards */}
+                <View style={styles.statsRow}>
+                    <View style={styles.statCard}>
+                        <View style={styles.statHeader}>
+                            <View style={[styles.statDot, { backgroundColor: '#EF4444' }]} />
+                            <Text style={styles.statTitle}>Chi phí</Text>
+                        </View>
+                        <Text style={styles.statSubtitle}>Tháng này</Text>
+                        <Text style={[styles.statAmount, { color: '#EF4444' }]}>
+                            {formatMoney(monthlyStats.expense)}
+                        </Text>
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.statCard}
+                        onPress={handleOpenSalaryModal}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.statHeader}>
+                            <View style={[styles.statDot, { backgroundColor: '#10B981' }]} />
+                            <Text style={styles.statTitle}>Thu nhập</Text>
+                            <Ionicons name="create-outline" size={14} color="#6B7280" style={{ marginLeft: 4 }} />
+                        </View>
+                        <Text style={styles.statSubtitle}>Lương tháng</Text>
+                        <Text style={[styles.statAmount, { color: '#10B981' }]}>
+                            {monthlySalary > 0 ? formatMoney(monthlySalary) : 'Chưa nhập'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
 
                 {/* Recent Transactions */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Giao dịch gần đây</Text>
+                        <Text style={styles.sectionTitle}>Giao dịch gần đây</Text>
                         <TouchableOpacity>
-                            <Text style={{ color: colors.primary }}>Xem tất cả</Text>
+                            <Text style={styles.seeAll}>Xem tất cả</Text>
                         </TouchableOpacity>
                     </View>
 
                     {recentTransactions.length === 0 ? (
-                        <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
-                            <Ionicons name="receipt-outline" size={48} color={colors.textSecondary} />
-                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                                Chưa có giao dịch nào
-                            </Text>
-                            <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
-                                Bấm "Thêm Thu" hoặc "Thêm Chi" để bắt đầu
-                            </Text>
+                        <View style={styles.emptyState}>
+                            <Ionicons name="receipt-outline" size={48} color="#6B7280" />
+                            <Text style={styles.emptyText}>Chưa có giao dịch nào</Text>
+                            <Text style={styles.emptyHint}>Bấm "Nhập Chi tiêu" hoặc "Nhập Thu nhập" để bắt đầu</Text>
                         </View>
                     ) : (
                         <View style={styles.transactionList}>
@@ -333,86 +418,300 @@ export default function FinanceHomeScreen() {
 
                 <View style={{ height: 100 }} />
             </ScrollView>
+
+            {/* Modal nhập số dư ban đầu */}
+            <Modal
+                visible={showBalanceModal}
+                animationType="slide"
+                transparent
+                onRequestClose={() => !isFirstTime && setShowBalanceModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>
+                                {isFirstTime ? '👋 Chào mừng!' : 'Điều chỉnh số dư'}
+                            </Text>
+                            {!isFirstTime && (
+                                <TouchableOpacity onPress={() => setShowBalanceModal(false)}>
+                                    <Ionicons name="close" size={24} color="#FFF" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        <Text style={styles.modalDesc}>
+                            {isFirstTime
+                                ? 'Để bắt đầu, hãy nhập số tiền bạn đang có trong ví:'
+                                : 'Nhập số dư hiện tại của ví:'}
+                        </Text>
+
+                        <TextInput
+                            style={styles.balanceInput}
+                            placeholder="Ví dụ: 5000000"
+                            placeholderTextColor="#6B7280"
+                            keyboardType="numeric"
+                            value={balanceInput}
+                            onChangeText={setBalanceInput}
+                            autoFocus
+                        />
+
+                        <View style={styles.quickAmounts}>
+                            {[1000000, 5000000, 10000000, 20000000].map((amount) => (
+                                <TouchableOpacity
+                                    key={amount}
+                                    style={styles.quickAmountBtn}
+                                    onPress={() => setBalanceInput(amount.toString())}
+                                >
+                                    <Text style={styles.quickAmountText}>
+                                        {formatMoney(amount).replace('đ', '')}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.saveBalanceBtn}
+                            onPress={handleSaveInitialBalance}
+                        >
+                            <Text style={styles.saveBalanceBtnText}>Xác nhận</Text>
+                        </TouchableOpacity>
+
+                        {isFirstTime && (
+                            <TouchableOpacity
+                                style={styles.skipBtn}
+                                onPress={() => {
+                                    setShowBalanceModal(false);
+                                    setIsFirstTime(false);
+                                }}
+                            >
+                                <Text style={styles.skipBtnText}>Bỏ qua, tôi sẽ nhập sau</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Modal nhập lương tháng */}
+            <Modal
+                visible={showSalaryModal}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setShowSalaryModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>💰 Nhập lương tháng</Text>
+                            <TouchableOpacity onPress={() => setShowSalaryModal(false)}>
+                                <Ionicons name="close" size={24} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.modalDesc}>
+                            Nhập số tiền lương bạn nhận được mỗi tháng:
+                        </Text>
+
+                        <TextInput
+                            style={styles.balanceInput}
+                            placeholder="Ví dụ: 15000000"
+                            placeholderTextColor="#6B7280"
+                            keyboardType="numeric"
+                            value={salaryInput}
+                            onChangeText={setSalaryInput}
+                            autoFocus
+                        />
+
+                        <View style={styles.quickAmounts}>
+                            {[8000000, 10000000, 15000000, 20000000, 30000000].map((amount) => (
+                                <TouchableOpacity
+                                    key={amount}
+                                    style={styles.quickAmountBtn}
+                                    onPress={() => setSalaryInput(amount.toString())}
+                                >
+                                    <Text style={styles.quickAmountText}>
+                                        {(amount / 1000000)}tr
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.saveBalanceBtn, { backgroundColor: '#10B981' }]}
+                            onPress={handleSaveSalary}
+                        >
+                            <Text style={styles.saveBalanceBtnText}>Lưu lương tháng</Text>
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </View>
     );
 }
 
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: '#0F0F23', // Dark navy background
     },
     header: {
+        backgroundColor: '#0F0F23',
         paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-        paddingBottom: 20,
     },
-    headerContent: {
+    headerTop: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingVertical: 12,
     },
-    headerTitle: {
+    headerCenter: {
+        alignItems: 'center',
+    },
+    totalBalanceSmall: {
+        color: '#FFF',
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#FFF',
     },
-    balanceCard: {
-        marginHorizontal: 16,
-        padding: 20,
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        borderRadius: 20,
+    totalBalanceLabel: {
+        color: '#9CA3AF',
+        fontSize: 12,
     },
-    balanceLabel: {
-        color: 'rgba(255,255,255,0.8)',
-        fontSize: 14,
+    walletBtn: {
+        backgroundColor: 'rgba(139, 92, 246, 0.3)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
     },
-    balanceAmount: {
-        color: '#FFF',
-        fontSize: 32,
-        fontWeight: 'bold',
-        marginVertical: 8,
+    walletBtnText: {
+        color: '#A78BFA',
+        fontSize: 13,
+        fontWeight: '500',
     },
-    statsRow: {
-        flexDirection: 'row',
-        marginTop: 16,
-    },
-    statItem: {
+    scrollView: {
         flex: 1,
+    },
+    scrollContent: {
+        paddingHorizontal: 16,
+        paddingTop: 8,
+    },
+    // Balance Card
+    balanceCard: {
+        borderRadius: 24,
+        padding: 20,
+        marginBottom: 20,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    userInfo: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 10,
     },
-    statIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+    avatar: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FFF',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    statLabel: {
-        color: 'rgba(255,255,255,0.7)',
-        fontSize: 11,
-    },
-    statValue: {
+    userName: {
         color: '#FFF',
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
     },
-    statDivider: {
-        width: 1,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        marginHorizontal: 8,
+    mainBalance: {
+        color: '#FFF',
+        fontSize: 36,
+        fontWeight: 'bold',
+        marginBottom: 12,
     },
-    content: {
+    percentBadge: {
+        backgroundColor: 'rgba(16, 185, 129, 0.3)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        alignSelf: 'flex-start',
+    },
+    percentText: {
+        color: '#10B981',
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    // Action Buttons
+    actionRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 20,
+    },
+    actionItem: {
+        alignItems: 'center',
+        width: (width - 32 - 36) / 4,
+    },
+    actionIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    actionLabel: {
+        color: '#9CA3AF',
+        fontSize: 11,
+        textAlign: 'center',
+        lineHeight: 14,
+    },
+    // Stats Cards
+    statsRow: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 24,
+    },
+    statCard: {
         flex: 1,
-        marginTop: -10,
+        backgroundColor: '#1A1A2E',
+        borderRadius: 16,
+        padding: 16,
     },
-    scrollContent: {
-        paddingTop: 20,
+    statHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 4,
     },
+    statDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    statTitle: {
+        color: '#FFF',
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    statSubtitle: {
+        color: '#6B7280',
+        fontSize: 12,
+        marginBottom: 8,
+    },
+    statAmount: {
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
+    // Section
     section: {
-        paddingHorizontal: 16,
         marginBottom: 24,
     },
     sectionHeader: {
@@ -422,99 +721,142 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     sectionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    quickActions: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    actionBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 14,
-        borderRadius: 12,
-        gap: 8,
-    },
-    actionText: {
         color: '#FFF',
-        fontWeight: '600',
-        fontSize: 14,
-    },
-    menuGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    menuItem: {
-        width: '47%',
-        padding: 16,
-        borderRadius: 16,
-        alignItems: 'center',
-    },
-    menuIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 8,
-    },
-    menuText: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
     },
-    menuCount: {
-        fontSize: 12,
-        marginTop: 2,
+    seeAll: {
+        color: '#8B5CF6',
+        fontSize: 13,
     },
+    // Transactions
     transactionList: {
         gap: 8,
     },
     transactionItem: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: '#1A1A2E',
         padding: 14,
         borderRadius: 12,
     },
-    categoryIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+    txnIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
     },
-    transactionInfo: {
+    txnInfo: {
         flex: 1,
     },
-    transactionDesc: {
-        fontSize: 15,
+    txnDesc: {
+        color: '#FFF',
+        fontSize: 14,
         fontWeight: '500',
     },
-    transactionMeta: {
+    txnDate: {
+        color: '#6B7280',
         fontSize: 12,
         marginTop: 2,
     },
-    transactionAmount: {
-        fontSize: 15,
+    txnAmount: {
+        fontSize: 14,
         fontWeight: '600',
     },
+    // Empty State
     emptyState: {
         alignItems: 'center',
+        backgroundColor: '#1A1A2E',
         padding: 32,
         borderRadius: 16,
     },
     emptyText: {
+        color: '#9CA3AF',
         fontSize: 16,
         fontWeight: '500',
         marginTop: 12,
     },
     emptyHint: {
+        color: '#6B7280',
         fontSize: 13,
         marginTop: 4,
         textAlign: 'center',
+    },
+    // Modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: '#1A1A2E',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        paddingBottom: 40,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    modalTitle: {
+        color: '#FFF',
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
+    modalDesc: {
+        color: '#9CA3AF',
+        fontSize: 14,
+        marginBottom: 20,
+    },
+    balanceInput: {
+        backgroundColor: '#0F0F23',
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#FFF',
+        padding: 16,
+        borderRadius: 12,
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    quickAmounts: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 20,
+    },
+    quickAmountBtn: {
+        backgroundColor: '#0F0F23',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 20,
+    },
+    quickAmountText: {
+        color: '#A78BFA',
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    saveBalanceBtn: {
+        backgroundColor: '#8B5CF6',
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    saveBalanceBtnText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    skipBtn: {
+        alignItems: 'center',
+        marginTop: 16,
+    },
+    skipBtnText: {
+        color: '#6B7280',
+        fontSize: 14,
     },
 });

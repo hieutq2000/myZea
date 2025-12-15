@@ -12,7 +12,9 @@ const STORAGE_KEYS = {
     TRANSACTIONS: '@finance_transactions',
     GOALS: '@finance_goals',
     SETTINGS: '@finance_settings',
+    MONTHLY_SALARY: '@finance_monthly_salary',
 };
+
 
 // Giới hạn số ví free
 export const MAX_FREE_WALLETS = 3;
@@ -295,7 +297,30 @@ export const getMonthlyStats = async (year: number, month: number): Promise<{
     };
 };
 
+// ==================== MONTHLY SALARY FUNCTIONS ====================
+
+// Lấy lương tháng
+export const getMonthlySalary = async (): Promise<number> => {
+    try {
+        const data = await AsyncStorage.getItem(STORAGE_KEYS.MONTHLY_SALARY);
+        return data ? parseFloat(data) : 0;
+    } catch (error) {
+        console.error('Error getting monthly salary:', error);
+        return 0;
+    }
+};
+
+// Lưu lương tháng
+export const setMonthlySalary = async (salary: number): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(STORAGE_KEYS.MONTHLY_SALARY, salary.toString());
+    } catch (error) {
+        console.error('Error setting monthly salary:', error);
+    }
+};
+
 // ==================== EXPORT FUNCTIONS ====================
+
 
 // Xuất dữ liệu tài chính
 export const exportFinanceData = async (): Promise<FinanceData> => {
