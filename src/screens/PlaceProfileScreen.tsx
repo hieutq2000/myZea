@@ -21,9 +21,13 @@ import {
 import { Ionicons, Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { getUserPosts, followUser, unfollowUser, Post, uploadImage, updateProfile, getUserProfile, getImageUrl } from '../utils/api';
+import { getUserPosts, followUser, unfollowUser, Post, uploadImage, updateProfile, getUserProfile, getImageUrl, toggleLikePost } from '../utils/api';
 import FacebookImageViewer from '../components/FacebookImageViewer';
 import { formatTime } from '../utils/formatTime';
+import { isVideo, getUri } from '../utils/media';
+import VideoPlayer from '../components/VideoPlayer';
+import PostCard from '../components/PostCard';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 const COVER_HEIGHT = 200;
@@ -90,6 +94,9 @@ export default function PlaceProfileScreen({
     const [loadingPosts, setLoadingPosts] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [localReactions, setLocalReactions] = useState<{ [postId: string]: string }>({});
+    const [activeReactionPostId, setActiveReactionPostId] = useState<string | null>(null);
+    const navigation = useNavigation<any>();
 
     // Sync local state when user prop changes (e.g., after fetching fresh data)
     React.useEffect(() => {
@@ -463,74 +470,55 @@ export default function PlaceProfileScreen({
 
                 {/* Posts List or Empty State */}
                 {userPosts && userPosts.length > 0 ? (
-                    userPosts.map((post: any, index: number) => (
-                        <View key={index} style={styles.postCard}>
-                            <View style={styles.postHeader}>
-                                <View style={styles.postAvatarContainer}>
-                                    <Image
-                                        source={{ uri: avatarSource }}
-                                        style={styles.postUserAvatarOnly}
-                                    />
-                                </View>
-                                <View style={styles.postInfo}>
-                                    <Text style={styles.postGroupName}>{userName}</Text>
-                                    <View style={styles.postMeta}>
-                                        <Text style={styles.postTime}>{formatTime(post.createdAt) || 'Vừa xong'}</Text>
-                                        <Text style={styles.postDot}>•</Text>
-                                        <Ionicons name="globe-outline" size={12} color="#65676B" />
-                                    </View>
-                                </View>
-                                <TouchableOpacity style={styles.postMoreBtn}>
-                                    <Ionicons name="ellipsis-horizontal" size={20} color="#65676B" />
-                                </TouchableOpacity>
-                            </View>
+                    userPosts.map((post: Post, index: number) => (
+                        <PostCard
+                            key={post.id || index}
+                            post={post}
+                            currentUser={user}
+                            localReaction={localReactions[post.id]}
+                            onReaction={async (postId, reactionId) => {
+                                setActiveReactionPostId(null);
+                                const currentReaction = localReactions[postId];
+                                const isUnlike = currentReaction === reactionId;
 
-                            <Text style={styles.postContent}>{post.content}</Text>
+                                setLocalReactions(prev => {
+                                    const newState = { ...prev };
+                                    if (isUnlike) delete newState[postId];
+                                    else newState[postId] = reactionId;
+                                    return newState;
+                                });
 
-                            {/* Post Images */}
-                            {(() => {
-                                // Get images from post (handle both array and single image)
-                                const postImages = post.images && post.images.length > 0
-                                    ? post.images
-                                    : (post.image ? [post.image] : []);
+                                setUserPosts(prev => prev.map(p => {
+                                    if (p.id === postId) {
+                                        const wasLiked = !!currentReaction;
+                                        let newLikes = p.likes;
+                                        if (!wasLiked && !isUnlike) newLikes++;
+                                        if (wasLiked && isUnlike) newLikes--;
+                                        return { ...p, likes: newLikes, isLiked: !isUnlike };
+                                    }
+                                    return p;
+                                }));
 
-                                if (postImages.length === 0) return null;
-
-                                // Get URI from image (handle string or object format)
-                                const getImageUri = (img: any) => {
-                                    if (!img) return '';
-                                    if (typeof img === 'string') return img;
-                                    return img.uri || img.url || '';
-                                };
-
-                                const firstImageUri = getImageUri(postImages[0]);
-
-                                return firstImageUri ? (
-                                    <Image
-                                        source={{ uri: firstImageUri }}
-                                        style={styles.postImage}
-                                        resizeMode="cover"
-                                    />
-                                ) : null;
-                            })()}
-
-                            {/* Post Actions */}
-                            <View style={styles.postActionsDivider} />
-                            <View style={styles.postActions}>
-                                <TouchableOpacity style={styles.actionBtn}>
-                                    <Ionicons name="thumbs-up-outline" size={20} color="#65676B" />
-                                    <Text style={styles.actionText}>Thích</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.actionBtn}>
-                                    <Ionicons name="chatbubble-outline" size={20} color="#65676B" />
-                                    <Text style={styles.actionText}>Bình luận</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.actionBtn}>
-                                    <Ionicons name="share-outline" size={20} color="#65676B" />
-                                    <Text style={styles.actionText}>Chia sẻ</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+                                try {
+                                    await toggleLikePost(postId);
+                                } catch (error) {
+                                    console.error('Reaction error', error);
+                                }
+                            }}
+                            onLongPressReaction={(postId) => setActiveReactionPostId(postId)}
+                            activeReactionPostId={activeReactionPostId}
+                            onComment={(post) => navigation.navigate('PostDetail', { postId: post.id, post })}
+                            onShare={(post) => { }}
+                            onViewProfile={(targetUser) => { }}
+                            onImagePress={(post, index) => {
+                                const images = post.images && post.images.length > 0
+                                    ? post.images.map((img: any) => getUri(img))
+                                    : (post.image ? [getUri(post.image)] : []);
+                                setGalleryImages(images);
+                                setViewingImageIndex(index);
+                                setIsImageViewerVisible(true);
+                            }}
+                        />
                     ))
                 ) : (
                     <View style={styles.emptyStateContainer}>

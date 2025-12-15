@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -20,6 +20,7 @@ import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { User, LiveMode, TargetAudience, Topic, TOPIC_LABELS, TOPIC_ICONS } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { getAvatarUri } from '../utils/media';
+import { getUnreadNotificationCount } from '../utils/api';
 
 interface HomeScreenProps {
     user: User;
@@ -35,6 +36,23 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
     const [selectedMode, setSelectedMode] = useState<LiveMode | null>(null);
     const [targetAudience, setTargetAudience] = useState<TargetAudience>(TargetAudience.GENERAL);
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    // Fetch unread notification count
+    useEffect(() => {
+        const fetchNotificationCount = async () => {
+            try {
+                const { count } = await getUnreadNotificationCount();
+                setUnreadCount(count);
+            } catch (error) {
+                console.log('Error fetching notification count:', error);
+            }
+        };
+        fetchNotificationCount();
+        // Refresh every 30 seconds
+        const interval = setInterval(fetchNotificationCount, 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     const modes = [
         {
@@ -287,13 +305,17 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                         <TouchableOpacity
                             style={styles.headerIconBtn}
                             onPress={() => {
-                                Alert.alert('Thông báo', 'Bạn có 99+ thông báo mới');
+                                Alert.alert('Thông báo', `Bạn có ${unreadCount} thông báo mới`);
                             }}
                         >
                             <Ionicons name="notifications-outline" size={24} color="white" />
-                            <View style={styles.headerBadge}>
-                                <Text style={styles.headerBadgeText}>99+</Text>
-                            </View>
+                            {unreadCount > 0 && (
+                                <View style={styles.headerBadge}>
+                                    <Text style={styles.headerBadgeText}>
+                                        {unreadCount > 99 ? '99+' : unreadCount}
+                                    </Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.headerIconBtn} onPress={() => navigation.navigate('Settings')}>
                             <Ionicons name="settings-outline" size={24} color="white" />
@@ -374,38 +396,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                     </View>
                 </View>
 
-                {/* 3. News (Không thể bỏ lỡ) */}
-                <View style={styles.sectionContainer}>
-                    <View style={styles.sectionHeaderNew}>
-                        <Text style={styles.sectionTitleNew}>Không thể bỏ lỡ</Text>
-                        <TouchableOpacity>
-                            <Ionicons name="refresh" size={20} color="#64748B" />
-                        </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity style={styles.newsCard}>
-                        <View style={styles.newsImageContainer}>
-                            <LinearGradient
-                                colors={['#10B981', '#059669']}
-                                style={styles.newsImagePlaceholder}
-                            >
-                                <Text style={styles.newsPlaceholderText}>FPT Place</Text>
-                            </LinearGradient>
-                        </View>
-                        <View style={styles.newsContent}>
-                            <View style={styles.newsMeta}>
-                                <Text style={styles.newsSource}>chungta.vn</Text>
-                                <Text style={styles.newsDate}>• 09/12/2025</Text>
-                            </View>
-                            <Text style={styles.newsTitle} numberOfLines={2}>
-                                Ban hành 2 quy định mới, thiết lập chuẩn giao tiếp số cho toàn FPT
-                            </Text>
-                            <Text style={styles.newsDesc} numberOfLines={2}>
-                                Tập đoàn vừa chính thức ban hành bộ đổi quy định về sử dụng chatbot, email và FPT Place...
-                            </Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
+                {/* 3. News (Không thể bỏ lỡ) - Temporarily hidden */}
 
                 {/* --- Existing Functionality (Moved to bottom) --- */}
                 <View style={styles.divider} />

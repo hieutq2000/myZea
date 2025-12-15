@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getPosts, createPost, toggleLikePost, Post, uploadImage, trackPostView, searchUsers } from '../utils/api';
+import { getPosts, createPost, toggleLikePost, Post, uploadImage, trackPostView, searchUsers, getUnreadNotificationCount } from '../utils/api';
 import { launchImageLibrary } from '../utils/imagePicker';
 import { useNavigation } from '@react-navigation/native';
 import FacebookImageViewer from '../components/FacebookImageViewer';
@@ -106,9 +106,22 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
     useEffect(() => {
         loadPosts(1);
+        // Fetch notification count
+        const fetchNotifCount = async () => {
+            try {
+                const { count } = await getUnreadNotificationCount();
+                setUnreadNotifCount(count);
+            } catch (e) {
+                console.log('Error fetching notif count:', e);
+            }
+        };
+        fetchNotifCount();
+        const interval = setInterval(fetchNotifCount, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     const loadPosts = async (pageNum: number = 1) => {
@@ -124,10 +137,20 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 setHasMore(true);
             }
 
+            // Initialize localReactions from server data
+            const newReactions: LocalPostState = {};
+            data.forEach(post => {
+                if (post.isLiked) {
+                    newReactions[post.id] = 'like'; // Default to 'like' if liked
+                }
+            });
+
             if (pageNum === 1) {
                 setPosts(data);
+                setLocalReactions(newReactions);
             } else {
                 setPosts(prev => [...prev, ...data]);
+                setLocalReactions(prev => ({ ...prev, ...newReactions }));
             }
             setPage(pageNum);
         } catch (error) {
@@ -138,6 +161,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             setIsLoadingMore(false);
         }
     };
+
 
     const handleRefresh = () => {
         setIsRefreshing(true);
@@ -344,9 +368,19 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}
-                            onPress={() => setPlaceActiveTab('NOTIFICATIONS')}
+                            onPress={() => {
+                                setUnreadNotifCount(0); // Reset count when opening
+                                setPlaceActiveTab('NOTIFICATIONS');
+                            }}
                         >
-                            <MaterialIcons name="notifications-none" size={24} color="#FF5722" />
+                            <MaterialIcons name="notifications-none" size={24} color={unreadNotifCount > 0 ? '#FF5722' : '#333'} />
+                            {unreadNotifCount > 0 && (
+                                <View style={styles.notifBadge}>
+                                    <Text style={styles.notifBadgeText}>
+                                        {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                                    </Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -551,17 +585,28 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
             {/* Post Stats */}
             <View style={styles.postStats}>
-                {/* Left Side: Like Icon + Count */}
+                {/* Left Side: Reaction Icons + Count */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                     {item.likes > 0 && (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <View style={{ backgroundColor: '#1877F2', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginRight: 6 }}>
-                                <FontAwesome name="thumbs-up" size={10} color="white" />
+                            {/* Show reaction icons - Facebook style with stacked icons */}
+                            <View style={{ flexDirection: 'row', marginRight: 6 }}>
+                                {/* Like icon */}
+                                <View style={{ backgroundColor: '#1877F2', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'white' }}>
+                                    <FontAwesome name="thumbs-up" size={9} color="white" />
+                                </View>
+                                {/* Heart icon - show if post has love reactions (simulated if likes > 1) */}
+                                {item.likes > 1 && (
+                                    <View style={{ backgroundColor: '#F33E58', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginLeft: -6, borderWidth: 1.5, borderColor: 'white' }}>
+                                        <FontAwesome name="heart" size={9} color="white" />
+                                    </View>
+                                )}
                             </View>
                             <Text style={styles.reactionCount}>{item.likes}</Text>
                         </View>
                     )}
                 </View>
+
 
                 {/* Right Side: Comments + Views */}
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -1222,6 +1267,26 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    notifBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        borderWidth: 1.5,
+        borderColor: 'white',
+    },
+    notifBadgeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+
     // Removed unused icons styles
     /*
     iconButton: {

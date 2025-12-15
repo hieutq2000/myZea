@@ -18,6 +18,7 @@ import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { User, BADGES, LEVEL_THRESHOLDS } from '../types';
+import { getAvatarUri } from '../utils/media';
 
 interface ProfileScreenProps {
     user: User;
@@ -211,7 +212,7 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
                             onPress={() => setShowImageOptions(true)}
                         >
                             {avatar ? (
-                                <Image source={{ uri: avatar }} style={styles.avatar} />
+                                <Image source={{ uri: getAvatarUri(avatar, user.name) }} style={styles.avatar} />
                             ) : (
                                 <LinearGradient
                                     colors={['#E2E8F0', '#CBD5E1']}

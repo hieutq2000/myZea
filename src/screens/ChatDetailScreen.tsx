@@ -8,6 +8,7 @@ import { getSocket } from '../utils/socket';
 import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage } from '../utils/api';
 import { launchImageLibrary, launchCamera } from '../utils/imagePicker';
 import EmojiPicker from '../components/EmojiPicker';
+import { getAvatarUri } from '../utils/media';
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList, 'ChatDetail'>;
 
@@ -332,7 +333,7 @@ export default function ChatDetailScreen() {
                 </TouchableOpacity>
                 <View style={styles.headerAvatarContainer}>
                     {avatar ? (
-                        <Image source={{ uri: avatar }} style={styles.headerAvatar} />
+                        <Image source={{ uri: getAvatarUri(avatar, userName) }} style={styles.headerAvatar} />
                     ) : (
                         <View style={[styles.headerAvatar, { backgroundColor: '#A0AEC0', alignItems: 'center', justifyContent: 'center' }]}>
                             <Text style={{ color: 'white', fontSize: 14 }}>{userName?.[0]}</Text>
@@ -440,7 +441,7 @@ export default function ChatDetailScreen() {
                 {!isMe && (
                     <View style={styles.avatarContainer}>
                         {avatar ? (
-                            <Image source={{ uri: avatar }} style={styles.avatarSmall} />
+                            <Image source={{ uri: getAvatarUri(avatar, userName) }} style={styles.avatarSmall} />
                         ) : (
                             <View style={[styles.avatarSmall, { backgroundColor: '#A0AEC0', alignItems: 'center', justifyContent: 'center' }]}>
                                 <Text style={{ color: 'white', fontSize: 10 }}>{userName?.[0]?.toUpperCase()}</Text>

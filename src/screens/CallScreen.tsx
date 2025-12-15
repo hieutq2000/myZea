@@ -18,6 +18,7 @@ import { RootStackParamList } from '../navigation/types';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
 import { getCurrentUser } from '../utils/api';
+import { getAvatarUri } from '../utils/media';
 import createAgoraRtcEngine, {
     ChannelProfileType,
     ClientRoleType,
@@ -368,7 +369,7 @@ export default function CallScreen() {
                 </View>
             ) : (
                 <ImageBackground
-                    source={{ uri: avatar || 'https://images.unsplash.com/photo-1557683316-973673baf926?w=800&q=80' }}
+                    source={{ uri: getAvatarUri(avatar, userName) }}
                     style={styles.backgroundImage}
                     blurRadius={20}
                 >
@@ -381,7 +382,7 @@ export default function CallScreen() {
                                 <Animated.View style={[styles.avatarPulse, { transform: [{ scale: pulseAnim }] }]} />
                                 <View style={styles.avatarContainer}>
                                     {avatar ? (
-                                        <Image source={{ uri: avatar }} style={styles.avatarImage} />
+                                        <Image source={{ uri: getAvatarUri(avatar, userName) }} style={styles.avatarImage} />
                                     ) : (
                                         <Text style={styles.avatarText}>{userName?.[0]?.toUpperCase()}</Text>
                                     )}
