@@ -45,6 +45,7 @@ import CallScreen from './src/screens/CallScreen';
 import { initSocket, disconnectSocket, getSocket } from './src/utils/socket';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync, schedulePushNotification } from './src/utils/notifications';
+import FinanceHomeScreen from './src/screens/Finance/FinanceHomeScreen';
 
 // Configure Notifications to show alert when app is in foreground
 Notifications.setNotificationHandler({
@@ -563,6 +564,13 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
               };
             },
           }}
+        />
+
+        {/* Finance Screen */}
+        <Stack.Screen
+          name="FinanceHome"
+          component={FinanceHomeScreen}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
 

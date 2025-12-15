@@ -42,8 +42,8 @@ const APPS: AppItem[] = [
         color: '#10B981',
         bgColor: '#D1FAE5',
         category: 'Tài chính',
-        isAvailable: false,
-        isComing: true,
+        isAvailable: true,
+        isNew: true,
     },
     {
         id: 'todo',
@@ -197,12 +197,18 @@ export default function StoreScreen({ onNavigateToSettings, onNavigateToProfile 
             return;
         }
 
-        Alert.alert(
-            app.name,
-            `Đang mở ${app.name}...`,
-            [{ text: 'OK' }]
-        );
-        // TODO: Navigate to specific app screens
+        // Điều hướng đến các màn hình tương ứng
+        switch (app.id) {
+            case 'expense':
+                navigation.navigate('FinanceHome' as any);
+                break;
+            default:
+                Alert.alert(
+                    app.name,
+                    `Đang mở ${app.name}...`,
+                    [{ text: 'OK' }]
+                );
+        }
     };
 
     const renderIcon = (app: AppItem) => {

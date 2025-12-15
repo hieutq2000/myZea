@@ -4,6 +4,20 @@
 
 const CHANGELOG = [
     {
+        version: "1.0.5",
+        date: "16/12/2024",
+        title: "TÍNH NĂNG QUẢN LÝ CHI TIÊU & REACTIONS",
+        changes: [
+            "💰 Ra mắt tính năng Quản lý chi tiêu cá nhân",
+            "📊 Theo dõi thu chi với biểu đồ trực quan",
+            "👛 Hỗ trợ tối đa 3 ví tiền khác nhau",
+            "🎙️ Sắp có: Nhập thu chi bằng giọng nói AI",
+            "😍 Cải tiến Facebook Reactions với animation bay về nút",
+            "🔧 Sửa lỗi hiển thị icon reactions (dùng Lottie)",
+            "⚡ Tối ưu animation entrance nhanh hơn"
+        ]
+    },
+    {
         version: "1.0.4",
         date: "14/12/2024",
         title: "FIX LỖI HIỂN THỊ HỒ SƠ & UPLOAD",

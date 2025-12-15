@@ -31,6 +31,17 @@ export type RootStackParamList = {
         isVideo: boolean;
         isIncoming?: boolean;
         channelName?: string;
-        conversationId?: string; // Add conversationId
+        conversationId?: string;
     };
+
+    // Finance Screens
+    FinanceHome: undefined;
+    FinanceAddTransaction: {
+        walletId?: string;
+        type?: 'income' | 'expense';
+    };
+    FinanceWallets: undefined;
+    FinanceGoals: undefined;
+    FinanceCalendar: undefined;
+    FinanceStatistics: undefined;
 };
