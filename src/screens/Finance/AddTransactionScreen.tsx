@@ -48,6 +48,7 @@ export default function AddTransactionScreen() {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [showWalletModal, setShowWalletModal] = useState(false);
+    const [showNumpad, setShowNumpad] = useState(false);
 
     // Load wallets
     useEffect(() => {
@@ -223,56 +224,63 @@ export default function AddTransactionScreen() {
                         <View style={styles.divider} />
 
                         {/* Số tiền */}
-                        <View style={styles.inputRow}>
+                        <TouchableOpacity
+                            style={styles.inputRow}
+                            onPress={() => setShowNumpad(!showNumpad)}
+                        >
                             <Text style={styles.currencySymbol}>$</Text>
                             <Text style={styles.amountDisplay}>{formatAmount(amount)}</Text>
-                            <TouchableOpacity>
-                                <Ionicons name="keypad-outline" size={20} color="#6B7280" />
-                            </TouchableOpacity>
-                        </View>
+                            <Ionicons
+                                name={showNumpad ? 'chevron-up' : 'keypad-outline'}
+                                size={20}
+                                color="#6B7280"
+                            />
+                        </TouchableOpacity>
 
-                        {/* Numpad */}
-                        <View style={styles.numpad}>
-                            <View style={styles.numRow}>
-                                <NumButton value="7" />
-                                <NumButton value="8" />
-                                <NumButton value="9" />
-                                <NumButton value="+" color="#0EA5E9" textColor="#FFF" />
+                        {/* Numpad - Ẩn/hiện */}
+                        {showNumpad && (
+                            <View style={styles.numpad}>
+                                <View style={styles.numRow}>
+                                    <NumButton value="7" />
+                                    <NumButton value="8" />
+                                    <NumButton value="9" />
+                                    <NumButton value="+" color="#0EA5E9" textColor="#FFF" />
+                                </View>
+                                <View style={styles.numRow}>
+                                    <NumButton value="4" />
+                                    <NumButton value="5" />
+                                    <NumButton value="6" />
+                                    <NumButton value="×" color="#F97316" textColor="#FFF" />
+                                </View>
+                                <View style={styles.numRow}>
+                                    <NumButton value="1" />
+                                    <NumButton value="2" />
+                                    <NumButton value="3" />
+                                    <NumButton value="-" color="#10B981" textColor="#FFF" />
+                                </View>
+                                <View style={styles.numRow}>
+                                    <NumButton value="." />
+                                    <NumButton value="0" />
+                                    <NumButton value="000" />
+                                    <NumButton value="+" color="#6366F1" textColor="#FFF" />
+                                </View>
+                                <View style={styles.numRow}>
+                                    <NumButton value="⌫" flex={1} />
+                                    <TouchableOpacity
+                                        style={[styles.numBtn, { backgroundColor: '#EF4444', flex: 1 }]}
+                                        onPress={() => setAmount('0')}
+                                    >
+                                        <Text style={[styles.numBtnText, { color: '#FFF' }]}>Xóa</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.numBtn, { backgroundColor: '#10B981', flex: 1 }]}
+                                        onPress={() => { }}
+                                    >
+                                        <Text style={[styles.numBtnText, { color: '#FFF' }]}>=</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                            <View style={styles.numRow}>
-                                <NumButton value="4" />
-                                <NumButton value="5" />
-                                <NumButton value="6" />
-                                <NumButton value="×" color="#F97316" textColor="#FFF" />
-                            </View>
-                            <View style={styles.numRow}>
-                                <NumButton value="1" />
-                                <NumButton value="2" />
-                                <NumButton value="3" />
-                                <NumButton value="-" color="#10B981" textColor="#FFF" />
-                            </View>
-                            <View style={styles.numRow}>
-                                <NumButton value="." />
-                                <NumButton value="0" />
-                                <NumButton value="000" />
-                                <NumButton value="+" color="#6366F1" textColor="#FFF" />
-                            </View>
-                            <View style={styles.numRow}>
-                                <NumButton value="⌫" flex={1} />
-                                <TouchableOpacity
-                                    style={[styles.numBtn, { backgroundColor: '#EF4444', flex: 1 }]}
-                                    onPress={() => setAmount('0')}
-                                >
-                                    <Text style={[styles.numBtnText, { color: '#FFF' }]}>Xóa</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.numBtn, { backgroundColor: '#10B981', flex: 1 }]}
-                                    onPress={() => { }}
-                                >
-                                    <Text style={[styles.numBtnText, { color: '#FFF' }]}>=</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+                        )}
 
                         <View style={styles.divider} />
 

@@ -18,6 +18,7 @@ import {
     ScrollView,
     Modal,
     Dimensions,
+    ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -137,6 +138,8 @@ export default function VoiceInputScreen() {
     const [error, setError] = useState<string | null>(null);
     const [hasPermission, setHasPermission] = useState<boolean | null>(null);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+
 
     // Animation
     const micScale = useRef(new Animated.Value(1)).current;
@@ -241,11 +244,17 @@ export default function VoiceInputScreen() {
         }
     };
 
-    const processVoice = (text: string) => {
+    const processVoice = async (text: string) => {
         if (!text.trim()) {
             setError('Không nhận được nội dung');
             return;
         }
+
+        // Hiển thị loading
+        setIsProcessing(true);
+
+        // Simulate processing delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         const result = parseVoiceLocal(text);
         if (result) {
@@ -254,7 +263,10 @@ export default function VoiceInputScreen() {
         } else {
             setError('Không nhận dạng được số tiền');
         }
+
+        setIsProcessing(false);
     };
+
 
     const handleChangeCategory = (category: Category) => {
         if (parseResult) {
@@ -340,16 +352,27 @@ export default function VoiceInputScreen() {
                     {/* Waveform */}
                     <View style={styles.waveformContainer}>
                         {waveBars.map((_, index) => (
-                            <WaveformBar key={index} index={index} isListening={isListening} />
+                            <WaveformBar key={index} index={index} isListening={isListening || isProcessing} />
                         ))}
                     </View>
 
+                    {/* Processing Indicator */}
+                    {isProcessing && (
+                        <View style={styles.processingContainer}>
+                            <ActivityIndicator size="large" color="#8B5CF6" />
+                            <Text style={styles.processingText}>Đang xử lý...</Text>
+                        </View>
+                    )}
+
                     {/* Status Text */}
                     <View style={styles.statusContainer}>
-                        {isListening ? (
+                        {isProcessing ? null : transcript ? (
                             <Text style={styles.transcriptText}>
-                                {transcript || 'Đang nghe...'}
+                                {transcript}
                             </Text>
+                        ) : isListening ? (
+                            <Text style={styles.listeningText}>Đang nghe...</Text>
+
                         ) : (
                             <>
                                 <Text style={styles.instructionText}>
@@ -372,30 +395,61 @@ export default function VoiceInputScreen() {
                         )}
                     </View>
 
-                    {/* Mic Button Section */}
+                    {/* Button Section */}
                     <View style={styles.micSection}>
                         <Text style={styles.micLabel}>
-                            {isListening ? 'Nhấn để dừng' : 'Nhấn để ghi âm'}
+                            {transcript ? 'Chọn hành động' : isListening ? 'Nhấn để dừng' : 'Nhấn để ghi âm'}
                         </Text>
 
-                        <TouchableOpacity
-                            onPress={isListening ? stopListening : startListening}
-                            activeOpacity={0.8}
-                        >
-                            <Animated.View style={[
-                                styles.micButton,
-                                isListening && styles.micButtonActive,
-                                { transform: [{ scale: micScale }] }
-                            ]}>
-                                <Ionicons
-                                    name={isListening ? 'stop' : 'mic'}
-                                    size={32}
-                                    color="#FFF"
-                                />
-                            </Animated.View>
-                        </TouchableOpacity>
+                        {transcript && !isListening ? (
+                            // 3 nút sau khi có transcript
+                            <View style={styles.actionButtons}>
+                                {/* Nút Xóa (đỏ) */}
+                                <TouchableOpacity
+                                    style={styles.actionBtnRed}
+                                    onPress={handleRetry}
+                                >
+                                    <Ionicons name="close" size={24} color="#FFF" />
+                                </TouchableOpacity>
+
+                                {/* Nút Ghi âm lại (xám) */}
+                                <TouchableOpacity
+                                    style={styles.actionBtnGray}
+                                    onPress={startListening}
+                                >
+                                    <Ionicons name="mic" size={28} color="#FFF" />
+                                </TouchableOpacity>
+
+                                {/* Nút Tiếp tục (xanh) */}
+                                <TouchableOpacity
+                                    style={styles.actionBtnBlue}
+                                    onPress={() => processVoice(transcript)}
+                                >
+                                    <Ionicons name="arrow-forward" size={24} color="#FFF" />
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            // Nút mic bình thường
+                            <TouchableOpacity
+                                onPress={isListening ? stopListening : startListening}
+                                activeOpacity={0.8}
+                            >
+                                <Animated.View style={[
+                                    styles.micButton,
+                                    isListening && styles.micButtonActive,
+                                    { transform: [{ scale: micScale }] }
+                                ]}>
+                                    <Ionicons
+                                        name={isListening ? 'stop' : 'mic'}
+                                        size={32}
+                                        color="#FFF"
+                                    />
+                                </Animated.View>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
+
             ) : (
                 // Result View
                 <ScrollView style={styles.resultView} contentContainerStyle={styles.resultContent}>
@@ -448,6 +502,21 @@ export default function VoiceInputScreen() {
                                 <Ionicons name="chevron-down" size={18} color="#6B7280" />
                             </View>
                         </TouchableOpacity>
+
+                        {/* Ngày giờ */}
+                        <View style={styles.resultRow}>
+                            <Text style={styles.resultLabel}>Ngày giờ</Text>
+                            <Text style={styles.dateTimeText}>
+                                {new Date().toLocaleDateString('vi-VN', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric'
+                                })} - {new Date().toLocaleTimeString('vi-VN', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
+                            </Text>
+                        </View>
 
                         {/* Actions */}
                         <View style={styles.actionRow}>
@@ -758,4 +827,57 @@ const styles = StyleSheet.create({
     categoryNameActive: {
         color: '#FFF',
     },
+    // Listening text
+    listeningText: {
+        color: '#A78BFA',
+        fontSize: 18,
+        fontWeight: '500',
+    },
+    // Action Buttons (3 nút)
+    actionButtons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+    },
+    actionBtnRed: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#EF4444',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    actionBtnGray: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#4B5563',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    actionBtnBlue: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#3B82F6',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    // Processing
+    processingContainer: {
+        alignItems: 'center',
+        marginTop: 20,
+    },
+    processingText: {
+        color: '#A78BFA',
+        fontSize: 16,
+        marginTop: 12,
+    },
+    dateTimeText: {
+        color: '#FFF',
+        fontSize: 14,
+    },
+
 });
+
+

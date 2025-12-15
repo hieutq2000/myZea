@@ -317,24 +317,26 @@ export default function FinanceHomeScreen() {
                             <TouchableOpacity onPress={() => navigation.goBack()}>
                                 <Ionicons name="arrow-back" size={24} color="#FFF" />
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={toggleHideBalance}
-                                style={styles.headerEyeBtn}
+                            <View style={styles.headerBalanceRow}>
+                                <View>
+                                    <Text style={styles.totalBalanceSmall}>
+                                        {hideBalance ? '••••••••' : formatMoney(totalBalance)}
+                                    </Text>
+                                    <Text style={styles.totalBalanceLabel}>Tổng số dư</Text>
+                                </View>
+                                <TouchableOpacity
+                                    onPress={toggleHideBalance}
+                                    style={styles.headerEyeBtn}
+                                >
+                                    <Ionicons
+                                        name={hideBalance ? 'eye-off' : 'eye'}
+                                        size={18}
+                                        color="rgba(255,255,255,0.7)"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
 
-                            >
-                                <Ionicons
-                                    name={hideBalance ? 'eye-off' : 'eye'}
-                                    size={20}
-                                    color="rgba(255,255,255,0.7)"
-                                />
-                            </TouchableOpacity>
-                        </View>
-                        <View style={styles.headerCenter}>
-                            <Text style={styles.totalBalanceSmall}>
-                                {hideBalance ? '••••••••' : formatMoney(totalBalance)}
-                            </Text>
-                            <Text style={styles.totalBalanceLabel}>Tổng số dư</Text>
-                        </View>
 
                         <TouchableOpacity
                             style={styles.walletBtn}
@@ -817,15 +819,21 @@ const styles = StyleSheet.create({
     eyeButton: {
         padding: 4,
     },
-    // Header Left (back + eye)
+    // Header Left (back + balance)
     headerLeft: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
     },
+    headerBalanceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
     headerEyeBtn: {
         padding: 4,
     },
+
     // Action Buttons
 
 
