@@ -43,8 +43,16 @@ import {
     GestureDetector,
     GestureHandlerRootView,
 } from 'react-native-gesture-handler';
-import * as Haptics from 'expo-haptics';
 import { FontAwesome } from '@expo/vector-icons';
+
+// Try to import haptics, but make it optional for OTA compatibility
+let Haptics: any = null;
+try {
+    Haptics = require('expo-haptics');
+} catch (e) {
+    // expo-haptics not available in current build
+    console.log('Haptics not available');
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -93,20 +101,28 @@ const SPRING_CONFIG = {
 // ============================================================
 
 /**
- * Trigger haptic feedback (soft impact)
+ * Trigger haptic feedback (soft impact) - safe fallback if not available
  */
 const triggerHaptic = () => {
-    if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS !== 'web' && Haptics) {
+        try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } catch (e) {
+            // Haptics not available
+        }
     }
 };
 
 /**
- * Trigger stronger haptic for selection
+ * Trigger stronger haptic for selection - safe fallback if not available
  */
 const triggerSelectionHaptic = () => {
-    if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS !== 'web' && Haptics) {
+        try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } catch (e) {
+            // Haptics not available
+        }
     }
 };
 
@@ -583,7 +599,7 @@ const styles = StyleSheet.create({
 // ============================================================
 
 export default ReactionButton;
-export { REACTIONS, ReactionBar };
+export { ReactionBar };
 
 /**
  * Helper to get reaction by ID
