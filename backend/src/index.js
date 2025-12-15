@@ -745,7 +745,7 @@ app.post('/api/finance/parse-transaction', authenticateToken, async (req, res) =
         `;
 
         const prompt = `
-        Bạn là trợ lý tài chính thông minh. Phân tích văn bản giao dịch sau và trích xuất thông tin thành JSON.
+        Bạn là trợ lý tài chính thông minh. Phân tích văn bản giao dịch sau và trích xuất thông tin thành danh sách các giao dịch.
         
         Văn bản: "${text}"
         
@@ -753,13 +753,19 @@ app.post('/api/finance/parse-transaction', authenticateToken, async (req, res) =
         ${categories}
 
         Yêu cầu:
-        1. Xác định "type": là "expense" (chi tiền) hoặc "income" (thu tiền). Mặc định là expense nếu không rõ.
-        2. Xác định "amount": số tiền (VNĐ). Tự động sửa lỗi chính tả số (ví dụ: "nam muoi nghin" -> 50000). Luôn trả về số nguyên dương.
-        3. Xác định "categoryId": id của danh mục phù hợp nhất từ danh sách trên.
-        4. Xác định "description": mô tả ngắn gọn, viết hoa chữ cái đầu.
+        1. Tách văn bản giao dịch thành các mục riêng biệt (ví dụ: "30k bún, 50k xăng" -> 2 giao dịch).
+        2. Với mỗi giao dịch, xác định:
+           - "type": "expense" (chi) hoặc "income" (thu).
+           - "amount": Số tiền (VNĐ integer). Tự sửa lỗi chính tả.
+           - "categoryId": ID danh mục phù hợp nhất.
+           - "description": Mô tả ngắn gọn.
+        3. Nếu không rõ, đoán dựa trên ngữ cảnh chung.
 
-        Trả về JSON DUY NHẤT (không markdown):
-        {"type": "expense", "amount": 0, "categoryId": "food", "description": "..."}
+        Trả về JSON ARRAY DUY NHẤT (không markdown):
+        [
+            {"type": "expense", "amount": 30000, "categoryId": "food", "description": "Bún chả"},
+            {"type": "expense", "amount": 50000, "categoryId": "transport", "description": "Đổ xăng"}
+        ]
         `;
 
         const contents = [{
@@ -779,17 +785,30 @@ app.post('/api/finance/parse-transaction', authenticateToken, async (req, res) =
         const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
         // Parse JSON
-        const jsonMatch = aiText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
+        // Parse JSON
+        let parsedResult = null;
+
+        // 1. Thử tìm mảng JSON [...]
+        const arrayMatch = aiText.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
             try {
-                const parsed = JSON.parse(jsonMatch[0]);
-                // Validate structure
-                if (parsed.type && typeof parsed.amount === 'number') {
-                    return res.json(parsed);
-                }
-            } catch (e) {
-                console.error('JSON parse fail:', e);
+                parsedResult = JSON.parse(arrayMatch[0]);
+            } catch (e) { }
+        }
+
+        // 2. Nếu không có mảng, thử tìm object {...}
+        if (!parsedResult) {
+            const objectMatch = aiText.match(/\{[\s\S]*\}/);
+            if (objectMatch) {
+                try {
+                    const obj = JSON.parse(objectMatch[0]);
+                    if (obj.amount) parsedResult = [obj]; // Wrap vào mảng
+                } catch (e) { }
             }
+        }
+
+        if (parsedResult && Array.isArray(parsedResult) && parsedResult.length > 0) {
+            return res.json(parsedResult);
         }
 
         return res.status(422).json({ error: 'Could not parse transaction details' });

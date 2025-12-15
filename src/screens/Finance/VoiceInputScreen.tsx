@@ -135,10 +135,11 @@ export default function VoiceInputScreen() {
     // State
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState('');
-    const [parseResult, setParseResult] = useState<VoiceParseResult | null>(null);
+    const [parseResults, setParseResults] = useState<VoiceParseResult[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [hasPermission, setHasPermission] = useState<boolean | null>(null);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
 
 
@@ -222,7 +223,9 @@ export default function VoiceInputScreen() {
         }
 
         setTranscript('');
-        setParseResult(null);
+        setTranscript('');
+        setParseResults([]);
+        setError(null);
         setError(null);
 
         try {
@@ -250,89 +253,82 @@ export default function VoiceInputScreen() {
             setError('Không nhận được nội dung');
             return;
         }
-
-        // Hiển thị loading
         setIsProcessing(true);
-
         try {
-            // Thử dùng AI trước
-            const aiResult = await parseTransactionWithAI(text);
-
-            if (aiResult && aiResult.amount && aiResult.type && aiResult.categoryId) {
-                const mappedCategory = getCategoryById(aiResult.categoryId) || ALL_CATEGORIES[ALL_CATEGORIES.length - 1];
-
-                setParseResult({
-                    type: aiResult.type,
-                    amount: aiResult.amount,
-                    categoryId: mappedCategory.id,
-                    categoryName: mappedCategory.name, // Lấy tên từ danh sách gốc
-                    description: aiResult.description || text,
-                    date: new Date().toISOString(),
-                    confidence: 0.95
+            const aiResults = await parseTransactionWithAI(text);
+            if (aiResults && aiResults.length > 0) {
+                const results: VoiceParseResult[] = aiResults.map(item => {
+                    const mappedCategory = getCategoryById(item.categoryId || '') || ALL_CATEGORIES[ALL_CATEGORIES.length - 1];
+                    return {
+                        type: item.type || 'expense',
+                        amount: item.amount || 0,
+                        categoryId: mappedCategory.id,
+                        categoryName: mappedCategory.name,
+                        description: item.description || text,
+                        date: new Date().toISOString(),
+                        confidence: 0.95
+                    };
                 });
+                setParseResults(results);
                 setError(null);
             } else {
                 throw new Error('AI incomplete response');
             }
         } catch (e) {
             console.log('AI Parse failed, fallback to local:', e);
-
-            // Fallback về local parser nếu AI lỗi hoặc không parse được
             const result = parseVoiceLocal(text);
             if (result) {
-                setParseResult(result);
+                setParseResults([result]);
                 setError(null);
             } else {
-                setError('Không nhận dạng được số tiền');
+                setError('Không thể nhận dạng giao dịch');
             }
         }
-
         setIsProcessing(false);
     };
 
-
     const handleChangeCategory = (category: Category) => {
-        if (parseResult) {
-            setParseResult({
-                ...parseResult,
+        if (editingIndex !== null) {
+            const newResults = [...parseResults];
+            newResults[editingIndex] = {
+                ...newResults[editingIndex],
                 categoryId: category.id,
                 categoryName: category.name,
-            });
+            };
+            setParseResults(newResults);
         }
         setShowCategoryModal(false);
     };
 
-    const handleToggleType = () => {
-        if (parseResult) {
-            const newType: TransactionType = parseResult.type === 'expense' ? 'income' : 'expense';
-            const categories = getCategoriesByType(newType);
-            setParseResult({
-                ...parseResult,
-                type: newType,
-                categoryId: categories[0].id,
-                categoryName: categories[0].name,
-            });
-        }
+    // Xóa một giao dịch khỏi danh sách
+    const handleRemoveItem = (index: number) => {
+        const newResults = [...parseResults];
+        newResults.splice(index, 1);
+        setParseResults(newResults);
+        if (newResults.length === 0) handleRetry();
     };
 
     const handleSave = async () => {
-        if (!parseResult) return;
+        if (parseResults.length === 0) return;
 
         try {
             const wallets = await getWallets();
             const walletId = wallets[0]?.id || 'wallet_default';
 
-            await addTransaction({
-                walletId,
-                type: parseResult.type,
-                amount: parseResult.amount,
-                categoryId: parseResult.categoryId,
-                description: parseResult.description,
-                date: parseResult.date,
-                createdBy: 'voice',
-            });
+            // Lưu từng giao dịch
+            for (const item of parseResults) {
+                await addTransaction({
+                    walletId,
+                    type: item.type,
+                    amount: item.amount,
+                    categoryId: item.categoryId,
+                    description: item.description,
+                    date: item.date,
+                    createdBy: 'voice',
+                });
+            }
 
-            Alert.alert('✅ Thành công', 'Đã lưu giao dịch!', [
+            Alert.alert('✅ Thành công', `Đã lưu ${parseResults.length} giao dịch!`, [
                 { text: 'OK', onPress: () => navigation.goBack() }
             ]);
         } catch (err) {
@@ -342,12 +338,13 @@ export default function VoiceInputScreen() {
 
     const handleRetry = () => {
         setTranscript('');
-        setParseResult(null);
+        setParseResults([]);
         setError(null);
     };
 
-    const category = parseResult ? getCategoryById(parseResult.categoryId) : null;
-    const categories = parseResult ? getCategoriesByType(parseResult.type) : [];
+    const categories = editingIndex !== null ? getCategoriesByType(parseResults[editingIndex].type) : [];
+
+
 
     // Generate waveform bars
     const waveBars = Array.from({ length: 30 }, (_, i) => i);
@@ -369,104 +366,65 @@ export default function VoiceInputScreen() {
                 </View>
             </SafeAreaView>
 
-            {!parseResult ? (
-                // Recording View
+            {parseResults.length === 0 ? (
+                // Recording View (Giữ nguyên)
                 <View style={styles.recordingView}>
-                    {/* Waveform */}
+                    {/* Reuse existing Waveform and Logic */}
                     <View style={styles.waveformContainer}>
                         {waveBars.map((_, index) => (
                             <WaveformBar key={index} index={index} isListening={isListening || isProcessing} />
                         ))}
                     </View>
 
-                    {/* Processing Indicator */}
                     {isProcessing && (
                         <View style={styles.processingContainer}>
                             <ActivityIndicator size="large" color="#8B5CF6" />
-                            <Text style={styles.processingText}>Đang xử lý...</Text>
+                            <Text style={styles.processingText}>Đang phân tích...</Text>
                         </View>
                     )}
 
-                    {/* Status Text */}
                     <View style={styles.statusContainer}>
                         {isProcessing ? null : transcript ? (
-                            <Text style={styles.transcriptText}>
-                                {transcript}
-                            </Text>
+                            <Text style={styles.transcriptText}>{transcript}</Text>
                         ) : isListening ? (
                             <Text style={styles.listeningText}>Đang nghe...</Text>
-
                         ) : (
                             <>
-                                <Text style={styles.instructionText}>
-                                    Ghi âm được chuyển đổi sang văn bản ngay trên thiết bị này.
-                                </Text>
-                                <Text style={styles.instructionText}>
-                                    Bằng cách nhấn ghi âm, bạn đồng ý chia sẻ văn bản để chuyển đổi
-                                </Text>
-                                <Text style={styles.instructionText}>
-                                    với Google Gemini.
+                                <Text style={styles.instructionText}>Nói các khoản chi tiêu của bạn, ví dụ:</Text>
+                                <Text style={[styles.instructionText, { color: '#FFF', fontStyle: 'italic', marginVertical: 8 }]}>
+                                    "Ăn sáng 30k và đổ xăng 50k"
                                 </Text>
                                 <View style={styles.infoIcon}>
-                                    <Ionicons name="information-circle-outline" size={20} color="#6B7280" />
+                                    <Ionicons name="sparkles" size={20} color="#8B5CF6" />
+                                    <Text style={{ color: '#8B5CF6', marginLeft: 6, fontSize: 12 }}>Powered by Gemini AI</Text>
                                 </View>
                             </>
                         )}
-
-                        {error && (
-                            <Text style={styles.errorText}>{error}</Text>
-                        )}
+                        {error && <Text style={styles.errorText}>{error}</Text>}
                     </View>
 
-                    {/* Button Section */}
+                    {/* Button Section - Reuse logic */}
                     <View style={styles.micSection}>
                         <Text style={styles.micLabel}>
                             {transcript ? 'Chọn hành động' : isListening ? 'Nhấn để dừng' : 'Nhấn để ghi âm'}
                         </Text>
 
                         {transcript && !isListening ? (
-                            // 3 nút sau khi có transcript
                             <View style={styles.actionButtons}>
-                                {/* Nút Xóa (đỏ) */}
-                                <TouchableOpacity
-                                    style={styles.actionBtnRed}
-                                    onPress={handleRetry}
-                                >
+                                <TouchableOpacity style={styles.actionBtnRed} onPress={handleRetry}>
                                     <Ionicons name="close" size={24} color="#FFF" />
                                 </TouchableOpacity>
-
-                                {/* Nút Ghi âm lại (xám) */}
-                                <TouchableOpacity
-                                    style={styles.actionBtnGray}
-                                    onPress={startListening}
-                                >
+                                <TouchableOpacity style={styles.actionBtnGray} onPress={startListening}>
                                     <Ionicons name="mic" size={28} color="#FFF" />
                                 </TouchableOpacity>
-
-                                {/* Nút Tiếp tục (xanh) */}
-                                <TouchableOpacity
-                                    style={styles.actionBtnBlue}
-                                    onPress={() => processVoice(transcript)}
-                                >
+                                <TouchableOpacity style={styles.actionBtnBlue} onPress={() => processVoice(transcript)}>
                                     <Ionicons name="arrow-forward" size={24} color="#FFF" />
                                 </TouchableOpacity>
                             </View>
                         ) : (
-                            // Nút mic bình thường
-                            <TouchableOpacity
-                                onPress={isListening ? stopListening : startListening}
-                                activeOpacity={0.8}
-                            >
-                                <Animated.View style={[
-                                    styles.micButton,
-                                    isListening && styles.micButtonActive,
-                                    { transform: [{ scale: micScale }] }
-                                ]}>
-                                    <Ionicons
-                                        name={isListening ? 'stop' : 'mic'}
-                                        size={32}
-                                        color="#FFF"
-                                    />
+                            <TouchableOpacity onPress={isListening ? stopListening : startListening}>
+                                <Animated.View style={[styles.micButton, isListening && styles.micButtonActive, { transform: [{ scale: micScale }] }]}>
+                                    <Ionicons name={isListening ? 'stop' : 'mic'} size={32} color="#FFF" />
                                 </Animated.View>
                             </TouchableOpacity>
                         )}
@@ -474,86 +432,77 @@ export default function VoiceInputScreen() {
                 </View>
 
             ) : (
-                // Result View
-                <ScrollView style={styles.resultView} contentContainerStyle={styles.resultContent}>
-                    <View style={styles.resultCard}>
-                        <Text style={styles.resultTitle}>✨ Kết quả nhận dạng</Text>
+                // MULTI-RESULT LIST VIEW
+                <View style={styles.resultView}>
+                    <View style={styles.resultHeader}>
+                        <Text style={styles.resultTitle}>✨ Tìm thấy {parseResults.length} giao dịch</Text>
+                        <Text style={styles.dateTimeText}>
+                            {new Date().toLocaleDateString('vi-VN')} - {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                    </View>
 
-                        <View style={styles.transcriptBox}>
-                            <Text style={styles.resultTranscript}>"{parseResult.description}"</Text>
-                        </View>
+                    <ScrollView contentContainerStyle={styles.resultList}>
+                        {parseResults.map((item, index) => {
+                            const cat = getCategoryById(item.categoryId);
+                            return (
+                                <View key={index} style={styles.transactionCard}>
+                                    {/* Header Card */}
+                                    <View style={styles.cardHeader}>
+                                        <TouchableOpacity
+                                            style={[styles.cardIcon, { backgroundColor: cat?.color + '20' }]}
+                                            onPress={() => {
+                                                setEditingIndex(index);
+                                                setShowCategoryModal(true);
+                                            }}
+                                        >
+                                            <Ionicons name={cat?.icon as any} size={20} color={cat?.color} />
+                                        </TouchableOpacity>
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <Text style={[styles.cardCategory, { color: cat?.color }]}>{item.categoryName}</Text>
+                                        </View>
+                                        <TouchableOpacity onPress={() => handleRemoveItem(index)}>
+                                            <Ionicons name="close-circle" size={22} color="#4B5563" />
+                                        </TouchableOpacity>
+                                    </View>
 
-                        {/* Type */}
-                        <TouchableOpacity style={styles.resultRow} onPress={handleToggleType}>
-                            <Text style={styles.resultLabel}>Loại</Text>
-                            <View style={[
-                                styles.typeBadge,
-                                { backgroundColor: parseResult.type === 'expense' ? '#FEE2E2' : '#D1FAE5' }
-                            ]}>
-                                <Text style={{
-                                    color: parseResult.type === 'expense' ? '#EF4444' : '#10B981',
-                                    fontWeight: '600',
-                                }}>
-                                    {parseResult.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'}
-                                </Text>
-                                <Ionicons
-                                    name="swap-horizontal"
-                                    size={16}
-                                    color={parseResult.type === 'expense' ? '#EF4444' : '#10B981'}
-                                />
-                            </View>
-                        </TouchableOpacity>
+                                    {/* Description Input */}
+                                    <Text style={styles.cardDesc}>"{item.description}"</Text>
 
-                        {/* Amount */}
-                        <View style={styles.resultRow}>
-                            <Text style={styles.resultLabel}>Số tiền</Text>
-                            <Text style={[styles.resultAmount, {
-                                color: parseResult.type === 'expense' ? '#EF4444' : '#10B981'
-                            }]}>
-                                {parseResult.type === 'expense' ? '-' : '+'}{formatMoney(parseResult.amount)}
+                                    {/* Footer */}
+                                    <View style={styles.cardFooter}>
+                                        <View style={[styles.miniBadge, { backgroundColor: item.type === 'expense' ? '#FEE2E2' : '#D1FAE5' }]}>
+                                            <Text style={{ fontSize: 10, color: item.type === 'expense' ? '#EF4444' : '#10B981', fontWeight: 'bold' }}>
+                                                {item.type === 'expense' ? 'CHI TIÊU' : 'THU NHẬP'}
+                                            </Text>
+                                        </View>
+                                        <Text style={[styles.cardAmount, { color: item.type === 'expense' ? '#EF4444' : '#10B981' }]}>
+                                            {formatMoney(item.amount)}
+                                        </Text>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </ScrollView>
+
+                    {/* Total & Save Action */}
+                    <View style={styles.footerAction}>
+                        <View style={styles.totalRow}>
+                            <Text style={styles.totalLabel}>Tổng cộng:</Text>
+                            <Text style={styles.totalValue}>
+                                {formatMoney(parseResults.reduce((sum, item) => sum + (item.type === 'expense' ? item.amount : 0), 0))}
                             </Text>
                         </View>
 
-                        {/* Category */}
-                        <TouchableOpacity style={styles.resultRow} onPress={() => setShowCategoryModal(true)}>
-                            <Text style={styles.resultLabel}>Danh mục</Text>
-                            <View style={styles.categorySelector}>
-                                {category && (
-                                    <View style={[styles.categoryDot, { backgroundColor: category.color }]} />
-                                )}
-                                <Text style={styles.categoryText}>{category?.name}</Text>
-                                <Ionicons name="chevron-down" size={18} color="#6B7280" />
-                            </View>
-                        </TouchableOpacity>
-
-                        {/* Ngày giờ */}
-                        <View style={styles.resultRow}>
-                            <Text style={styles.resultLabel}>Ngày giờ</Text>
-                            <Text style={styles.dateTimeText}>
-                                {new Date().toLocaleDateString('vi-VN', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric'
-                                })} - {new Date().toLocaleTimeString('vi-VN', {
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                })}
-                            </Text>
-                        </View>
-
-                        {/* Actions */}
                         <View style={styles.actionRow}>
                             <TouchableOpacity style={styles.retryBtn} onPress={handleRetry}>
                                 <Ionicons name="refresh" size={20} color="#9CA3AF" />
-                                <Text style={styles.retryText}>Thử lại</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                                <Text style={styles.saveText}>Lưu giao dịch</Text>
+                                <Text style={styles.saveText}>Lưu tất cả ({parseResults.length})</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                </ScrollView>
+                </View>
             )}
 
             {/* Category Modal */}
@@ -585,17 +534,17 @@ export default function VoiceInputScreen() {
                                     <View style={[
                                         styles.categoryIcon,
                                         { backgroundColor: cat.color + '20' },
-                                        parseResult?.categoryId === cat.id && { backgroundColor: cat.color },
+                                        parseResults[editingIndex || 0]?.categoryId === cat.id && { backgroundColor: cat.color },
                                     ]}>
                                         <Ionicons
                                             name={cat.icon as any}
                                             size={22}
-                                            color={parseResult?.categoryId === cat.id ? '#FFF' : cat.color}
+                                            color={parseResults[editingIndex || 0]?.categoryId === cat.id ? '#FFF' : cat.color}
                                         />
                                     </View>
                                     <Text style={[
                                         styles.categoryName,
-                                        parseResult?.categoryId === cat.id && styles.categoryNameActive,
+                                        parseResults[editingIndex || 0]?.categoryId === cat.id && styles.categoryNameActive,
                                     ]}>
                                         {cat.name}
                                     </Text>
@@ -897,10 +846,100 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     dateTimeText: {
+        color: '#9CA3AF',
+        fontSize: 13,
+    },
+    // Multi Result Styles
+    resultHeader: {
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    resultList: {
+        paddingHorizontal: 20,
+        paddingBottom: 120, // Để tránh bị che bởi footer
+    },
+    transactionCard: {
+        backgroundColor: '#1A1A2E',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#2D2D44',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    cardIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cardCategory: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    cardDesc: {
         color: '#FFF',
+        fontSize: 15,
+        marginBottom: 12,
+        fontStyle: 'italic',
+    },
+    cardFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: '#2D2D44',
+        paddingTop: 12,
+    },
+    miniBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    cardAmount: {
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    // Footer Action
+    footerAction: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#151525',
+        padding: 20,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    totalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    totalLabel: {
+        color: '#9CA3AF',
         fontSize: 14,
     },
-
+    totalValue: {
+        color: '#FFF',
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
 });
 
 

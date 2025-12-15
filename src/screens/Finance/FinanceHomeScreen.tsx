@@ -65,6 +65,21 @@ const formatDate = (dateStr: string): string => {
     return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 };
 
+// Format input tiền tệ (1000000 -> 1.000.000)
+const formatCurrencyInput = (value: string) => {
+    // Xóa tất cả ký tự không phải số
+    const numberString = value.replace(/[^0-9]/g, '');
+    if (!numberString) return '';
+
+    // Format thành dạng tiền tệ
+    return numberString.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+// Parse input tiền tệ (1.000.000 -> 1000000)
+const parseCurrencyInput = (value: string) => {
+    return parseInt(value.replace(/\./g, ''), 10) || 0;
+};
+
 export default function FinanceHomeScreen() {
     const navigation = useNavigation<StackNavigationProp<any>>();
     const { colors, isDark } = useTheme();
@@ -90,6 +105,11 @@ export default function FinanceHomeScreen() {
 
     // Settings Modal
     const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+    // Wallet Options Modal
+    const [showWalletOptionsModal, setShowWalletOptionsModal] = useState(false);
+    const [showRenameModal, setShowRenameModal] = useState(false);
+    const [newWalletName, setNewWalletName] = useState('');
 
     // Ẩn/hiện số dư
     const [hideBalance, setHideBalance] = useState(false);
@@ -154,7 +174,7 @@ export default function FinanceHomeScreen() {
 
     // Lưu số dư ban đầu
     const handleSaveInitialBalance = async () => {
-        const amount = parseFloat(balanceInput.replace(/[^0-9]/g, ''));
+        const amount = parseCurrencyInput(balanceInput);
         if (isNaN(amount)) {
             Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
             return;
@@ -170,7 +190,7 @@ export default function FinanceHomeScreen() {
 
     // Lưu lương tháng
     const handleSaveSalary = async () => {
-        const amount = parseFloat(salaryInput.replace(/[^0-9]/g, ''));
+        const amount = parseCurrencyInput(salaryInput);
         if (isNaN(amount) || amount <= 0) {
             Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
             return;
@@ -183,7 +203,7 @@ export default function FinanceHomeScreen() {
 
     // Mở modal nhập lương
     const handleOpenSalaryModal = () => {
-        setSalaryInput(monthlySalary > 0 ? monthlySalary.toString() : '');
+        setSalaryInput(monthlySalary > 0 ? formatCurrencyInput(monthlySalary.toString()) : '');
         setShowSalaryModal(true);
     };
 
@@ -234,7 +254,7 @@ export default function FinanceHomeScreen() {
     };
 
     const handleEditBalance = () => {
-        setBalanceInput(wallets[0]?.balance?.toString() || '0');
+        setBalanceInput(wallets[0]?.balance ? formatCurrencyInput(wallets[0].balance.toString()) : '0');
         setShowBalanceModal(true);
     };
 
@@ -243,6 +263,26 @@ export default function FinanceHomeScreen() {
         const newValue = !hideBalance;
         setHideBalance(newValue);
         await AsyncStorage.setItem('finance_hide_balance', newValue.toString());
+    };
+
+    // Đổi tên ví
+    const handleRenameWallet = async () => {
+        if (!newWalletName.trim()) {
+            Alert.alert('Lỗi', 'Tên ví không được để trống');
+            return;
+        }
+
+        if (wallets.length > 0) {
+            await updateWallet(wallets[0].id, { name: newWalletName });
+            setShowRenameModal(false);
+            loadData();
+        }
+    };
+
+    const openRenameModal = () => {
+        setNewWalletName(wallets[0]?.name || 'Ví chính');
+        setShowWalletOptionsModal(false);
+        setTimeout(() => setShowRenameModal(true), 300); // Delay để modal cũ đóng hẳn
     };
 
     // Xóa tất cả dữ liệu
@@ -374,22 +414,7 @@ export default function FinanceHomeScreen() {
                             </View>
                             <Text style={styles.userName}>{wallets[0]?.name || 'Ví chính'}</Text>
                         </View>
-                        <TouchableOpacity onPress={() => {
-                            Alert.alert(
-                                '⚙️ Cài đặt ví',
-                                'Chọn một tùy chọn:',
-                                [
-                                    { text: '💰 Sửa số dư', onPress: handleEditBalance },
-                                    { text: '📝 Đổi tên ví', onPress: () => { } },
-                                    {
-                                        text: '🗑️ Xóa tất cả dữ liệu',
-                                        style: 'destructive',
-                                        onPress: handleClearAllData
-                                    },
-                                    { text: 'Đóng', style: 'cancel' },
-                                ]
-                            );
-                        }}>
+                        <TouchableOpacity onPress={() => setShowWalletOptionsModal(true)}>
                             <Ionicons name="settings-outline" size={22} color="rgba(255,255,255,0.8)" />
                         </TouchableOpacity>
                     </View>
@@ -598,11 +623,11 @@ export default function FinanceHomeScreen() {
 
                         <TextInput
                             style={styles.balanceInput}
-                            placeholder="Ví dụ: 5000000"
+                            placeholder="Ví dụ: 5.000.000"
                             placeholderTextColor="#6B7280"
                             keyboardType="numeric"
                             value={balanceInput}
-                            onChangeText={setBalanceInput}
+                            onChangeText={(text) => setBalanceInput(formatCurrencyInput(text))}
                             autoFocus
                         />
 
@@ -611,7 +636,7 @@ export default function FinanceHomeScreen() {
                                 <TouchableOpacity
                                     key={amount}
                                     style={styles.quickAmountBtn}
-                                    onPress={() => setBalanceInput(amount.toString())}
+                                    onPress={() => setBalanceInput(formatCurrencyInput(amount.toString()))}
                                 >
                                     <Text style={styles.quickAmountText}>
                                         {formatMoney(amount).replace('đ', '')}
@@ -667,11 +692,11 @@ export default function FinanceHomeScreen() {
 
                         <TextInput
                             style={styles.balanceInput}
-                            placeholder="Ví dụ: 15000000"
+                            placeholder="Ví dụ: 15.000.000"
                             placeholderTextColor="#6B7280"
                             keyboardType="numeric"
                             value={salaryInput}
-                            onChangeText={setSalaryInput}
+                            onChangeText={(text) => setSalaryInput(formatCurrencyInput(text))}
                             autoFocus
                         />
 
@@ -680,7 +705,7 @@ export default function FinanceHomeScreen() {
                                 <TouchableOpacity
                                     key={amount}
                                     style={styles.quickAmountBtn}
-                                    onPress={() => setSalaryInput(amount.toString())}
+                                    onPress={() => setSalaryInput(formatCurrencyInput(amount.toString()))}
                                 >
                                     <Text style={styles.quickAmountText}>
                                         {(amount / 1000000)}tr
@@ -774,6 +799,105 @@ export default function FinanceHomeScreen() {
                         </View>
                     </View>
                 </TouchableOpacity>
+            </Modal>
+
+            {/* Wallet Options Modal (Menu ví) */}
+            <Modal
+                visible={showWalletOptionsModal}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setShowWalletOptionsModal(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowWalletOptionsModal(false)}
+                >
+                    <View style={styles.settingsModalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>⚙️ Tùy chọn ví</Text>
+                            <TouchableOpacity onPress={() => setShowWalletOptionsModal(false)}>
+                                <Ionicons name="close" size={24} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.settingsList}>
+                            {/* Mục Đổi tên ví */}
+                            <TouchableOpacity
+                                style={styles.settingsItem}
+                                onPress={openRenameModal}
+                            >
+                                <View style={[styles.settingsIconBox, { backgroundColor: 'rgba(255, 159, 28, 0.2)' }]}>
+                                    <Ionicons name="pencil-outline" size={22} color="#FF9F1C" />
+                                </View>
+                                <View style={styles.settingsInfo}>
+                                    <Text style={styles.settingsLabel}>Đổi tên ví</Text>
+                                    <Text style={styles.settingsDesc}>Thay đổi tên hiển thị của ví này</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color="#4B5563" />
+                            </TouchableOpacity>
+
+                            <View style={styles.divider} />
+
+                            {/* Mục Xóa dữ liệu */}
+                            <TouchableOpacity
+                                style={styles.settingsItem}
+                                onPress={() => {
+                                    setShowWalletOptionsModal(false);
+                                    handleClearAllData();
+                                }}
+                            >
+                                <View style={[styles.settingsIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.2)' }]}>
+                                    <Ionicons name="trash-outline" size={22} color="#EF4444" />
+                                </View>
+                                <View style={styles.settingsInfo}>
+                                    <Text style={[styles.settingsLabel, { color: '#EF4444' }]}>Xóa tất cả dữ liệu</Text>
+                                    <Text style={styles.settingsDesc}>Reset ví về mặc định</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* Modal Đổi tên ví */}
+            <Modal
+                visible={showRenameModal}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setShowRenameModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>✏️ Đổi tên ví</Text>
+                            <TouchableOpacity onPress={() => setShowRenameModal(false)}>
+                                <Ionicons name="close" size={24} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.modalDesc}>Nhập tên mới cho ví của bạn:</Text>
+
+                        <TextInput
+                            style={styles.balanceInput}
+                            placeholder="Ví dụ: Ví tiêu vặt"
+                            placeholderTextColor="#6B7280"
+                            value={newWalletName}
+                            onChangeText={setNewWalletName}
+                            autoFocus
+                        />
+
+                        <TouchableOpacity
+                            style={[styles.saveBalanceBtn, { backgroundColor: '#3B82F6', marginTop: 24 }]}
+                            onPress={handleRenameWallet}
+                        >
+                            <Text style={styles.saveBalanceBtnText}>Lưu thay đổi</Text>
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
             </Modal>
         </View>
     );

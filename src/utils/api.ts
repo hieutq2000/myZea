@@ -223,11 +223,15 @@ export async function generateAIContent(
 }
 
 // Finance AI Parse
-export async function parseTransactionWithAI(text: string): Promise<Partial<VoiceParseResult>> {
-    return apiRequest<Partial<VoiceParseResult>>('/api/finance/parse-transaction', {
+export async function parseTransactionWithAI(text: string): Promise<Partial<VoiceParseResult>[]> {
+    const res = await apiRequest<any>('/api/finance/parse-transaction', {
         method: 'POST',
         body: JSON.stringify({ text }),
     });
+    // Ensure it's always an array
+    if (Array.isArray(res)) return res;
+    if (res && typeof res === 'object') return [res];
+    return [];
 }
 
 export interface FaceVerifyResponse {
