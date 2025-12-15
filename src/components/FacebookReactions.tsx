@@ -15,17 +15,16 @@
  * - react-native-reanimated v3
  * - react-native-gesture-handler
  * - expo-haptics (for haptic feedback)
+ * - lottie-react-native
  */
 
 import React, { useCallback, useMemo } from 'react';
 import {
-
     View,
     Text,
     StyleSheet,
     Dimensions,
     Platform,
-    Image,
 } from 'react-native';
 import Animated, {
     useSharedValue,
@@ -43,9 +42,8 @@ import Animated, {
 import {
     Gesture,
     GestureDetector,
-    GestureHandlerRootView,
 } from 'react-native-gesture-handler';
-import { FontAwesome } from '@expo/vector-icons';
+import LottieView from 'lottie-react-native';
 
 // Try to import haptics, but make it optional for OTA compatibility
 let Haptics: any = null;
@@ -55,8 +53,6 @@ try {
     // expo-haptics not available in current build
     console.log('Haptics not available');
 }
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================================
 // CONSTANTS & TYPES
@@ -84,11 +80,12 @@ export interface Reaction {
     emoji: string;
     label: string;
     color: string;
-    icon: string; // URL for animated GIF
+    icon: any; // Lottie source
 }
 
 /**
- * Available reactions - matches Facebook's reaction set with GIFs
+ * Available reactions - using local Lottie files
+ * Note: Require paths must be static strings for Metro bundler
  */
 export const REACTIONS: Reaction[] = [
     {
@@ -96,49 +93,49 @@ export const REACTIONS: Reaction[] = [
         emoji: '👍',
         label: 'Thích',
         color: '#1877F2',
-        icon: 'https://raw.githubusercontent.com/duongdam/react-native-facebook-reactions/master/images/like.gif'
+        icon: require('../assets/lottie/like.json')
     },
     {
         id: 'love',
         emoji: '❤️',
         label: 'Yêu thích',
         color: '#F33E58',
-        icon: 'https://raw.githubusercontent.com/duongdam/react-native-facebook-reactions/master/images/love.gif'
+        icon: require('../assets/lottie/love.json')
     },
     {
         id: 'care',
         emoji: '🥰',
         label: 'Thương thương',
         color: '#F7B928',
-        icon: 'https://raw.githubusercontent.com/vorillaz/react-facebook-reactions/master/src/icons/care.gif'
+        icon: require('../assets/lottie/care.json')
     },
     {
         id: 'haha',
         emoji: '😂',
         label: 'Haha',
         color: '#F7B928',
-        icon: 'https://raw.githubusercontent.com/duongdam/react-native-facebook-reactions/master/images/haha.gif'
+        icon: require('../assets/lottie/haha.json')
     },
     {
         id: 'wow',
         emoji: '😮',
         label: 'Wow',
         color: '#F7B928',
-        icon: 'https://raw.githubusercontent.com/duongdam/react-native-facebook-reactions/master/images/wow.gif'
+        icon: require('../assets/lottie/wow.json')
     },
     {
         id: 'sad',
         emoji: '😢',
         label: 'Buồn',
         color: '#F7B928',
-        icon: 'https://raw.githubusercontent.com/duongdam/react-native-facebook-reactions/master/images/sad.gif'
+        icon: require('../assets/lottie/sad.json')
     },
     {
         id: 'angry',
         emoji: '😡',
         label: 'Phẫn nộ',
         color: '#E9710F',
-        icon: 'https://raw.githubusercontent.com/duongdam/react-native-facebook-reactions/master/images/angry.gif'
+        icon: require('../assets/lottie/angry.json')
     },
 ];
 
@@ -243,12 +240,17 @@ const EmojiItem = React.memo(({
         ],
     }));
 
+    // Pause lottie when not visible or hovered to save resources, but keep it ready
+    // Actually, autoPlay={true} is fine, Lottie is optimized.
+    // Specifying width/height in style is important for Lottie.
+
     return (
         <Animated.View style={[styles.emojiContainer, animatedStyle]}>
-            <Image
-                source={{ uri: reaction.icon }}
+            <LottieView
+                source={reaction.icon}
                 style={styles.emojiImage}
-                resizeMode="contain"
+                autoPlay={isVisible}
+                loop
             />
             {/* Show label on hover */}
             {isHovered && (
@@ -503,26 +505,6 @@ export function ReactionButton({
         transform: [{ scale: buttonScale.value }],
     }));
 
-    // Render selected reaction or default
-    const renderButtonContent = () => {
-        if (selectedReaction) {
-            return (
-                <>
-                    <Text style={styles.selectedEmoji}>{selectedReaction.emoji}</Text>
-                    <Text style={[styles.buttonText, { color: selectedReaction.color }, textStyle]}>
-                        {selectedReaction.label}
-                    </Text>
-                </>
-            );
-        }
-        return (
-            <>
-                <Text style={{ fontSize: 18 }}>😊</Text>
-                <Text style={[styles.buttonText, textStyle]}>Thích</Text>
-            </>
-        );
-    };
-
     return (
         <View style={styles.container}>
             {/* Reaction bar (positioned above button) */}
@@ -543,7 +525,30 @@ export function ReactionButton({
             {/* Main button */}
             <GestureDetector gesture={combinedGesture}>
                 <Animated.View style={[styles.button, buttonAnimatedStyle, buttonStyle]}>
-                    {renderButtonContent()}
+                    {selectedReaction ? (
+                        <>
+                            <Text style={styles.selectedEmoji}>{selectedReaction.emoji}</Text>
+                            <Text style={[styles.buttonText, { color: selectedReaction.color }, textStyle]}>
+                                {selectedReaction.label}
+                            </Text>
+                        </>
+                    ) : (
+                        <>
+                            {/* Default Like Icon - can use Lottie stationary or an icon */}
+                            {/* Since we have Lottie for 'like', we can use it, but keeping it static or just the emoji is cleaner for default state */}
+                            {/* We'll use the Lottie, paused, as an icon */}
+                            <View style={{ width: 24, height: 24, overflow: 'hidden' }}>
+                                <LottieView
+                                    source={require('../assets/lottie/like.json')}
+                                    style={{ width: 40, height: 40, marginTop: -8, marginLeft: -8 }} // Adjust to center the animation which is 40x40
+                                    autoPlay={false}
+                                    loop={false}
+                                    progress={0} // First frame
+                                />
+                            </View>
+                            <Text style={[styles.buttonText, textStyle]}>Thích</Text>
+                        </>
+                    )}
                 </Animated.View>
             </GestureDetector>
         </View>
@@ -640,7 +645,6 @@ const styles = StyleSheet.create({
     },
 });
 
-// ... (keep default export using the modified components)
 export default ReactionButton;
 export { ReactionBar };
 
