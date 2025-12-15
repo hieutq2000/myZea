@@ -19,16 +19,62 @@
 
 import React, { useCallback, useMemo } from 'react';
 import {
-import {
-        View,
-        Text,
-        StyleSheet,
-        Dimensions,
-        Platform,
-        Image,
-    } from 'react-native';
 
-// ... (keep existing imports)
+    View,
+    Text,
+    StyleSheet,
+    Dimensions,
+    Platform,
+    Image,
+} from 'react-native';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withSpring,
+    withTiming,
+    withDelay,
+    withSequence,
+    interpolate,
+    Extrapolation,
+    runOnJS,
+    FadeIn,
+    FadeOut,
+} from 'react-native-reanimated';
+import {
+    Gesture,
+    GestureDetector,
+    GestureHandlerRootView,
+} from 'react-native-gesture-handler';
+import { FontAwesome } from '@expo/vector-icons';
+
+// Try to import haptics, but make it optional for OTA compatibility
+let Haptics: any = null;
+try {
+    Haptics = require('expo-haptics');
+} catch (e) {
+    // expo-haptics not available in current build
+    console.log('Haptics not available');
+}
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ============================================================
+// CONSTANTS & TYPES
+// ============================================================
+
+// Animation timing constants
+const LONG_PRESS_DURATION = 500; // ms to trigger long press
+const EMOJI_SIZE = 40; // Size of each emoji
+const EMOJI_SPACING = 8; // Spacing between emojis
+const BAR_PADDING = 12; // Padding inside reaction bar
+const HOVER_SCALE = 1.4; // Scale when hovering
+const DEFAULT_SCALE = 1.0; // Default emoji scale
+const SHRINK_SCALE = 0.85; // Scale for non-hovered emojis
+const SPRING_CONFIG = {
+    damping: 12,
+    stiffness: 180,
+    mass: 0.8,
+};
 
 /**
  * Reaction data structure
