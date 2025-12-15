@@ -745,27 +745,30 @@ app.post('/api/finance/parse-transaction', authenticateToken, async (req, res) =
         `;
 
         const prompt = `
-        Bạn là trợ lý tài chính thông minh (JSON mode). Nhiệm vụ:
-        Phân tích văn bản thành **DANH SÁCH** các giao dịch chi tiết.
-        
-        Văn bản input: "${text}"
-        
-        Danh mục ID khả dụng:
+        Vai trò: Hệ thống xử lý ngôn ngữ tự nhiên cho ứng dụng tài chính (Strict JSON Mode).
+        Nhiệm vụ: Phân tích đoạn văn bản đầu vào và trích xuất TOÀN BỘ các giao dịch tài chính có trong đó.
+
+        Input Text: "${text}"
+
+        Danh sách Category ID (Tham khảo để map):
         ${categories}
 
-        Quy tắc bắt buộc:
-        1. Nếu có nhiều khoản tiền/hành động, PHẢI TÁCH RIÊNG thành từng object.
-        2. Tự sửa lỗi chính tả số tiền (ví dụ: "50k", "50 nghìn", "năm chục" -> 50000).
-        3. "type" là "expense" (chi) hoặc "income" (thu).
-        4. "categoryId" phải map chính xác nhất có thể.
+        LOGIC PHÂN TÍCH (THỰC TẾ):
+        1. **Phát hiện giao dịch đa luồng:**
+           - Văn bản tiếng Việt thường nói liền nhau, ít từ nối.
+           - Hãy tìm các cụm cấu trúc: [Hành động/Mặt hàng] + [Số tiền].
+           - Ví dụ: "Ăn 30k xăng 50k" -> Cụm 1: "Ăn 30k", Cụm 2: "xăng 50k".
+           - Nếu thấy 2 khoản tiền khác nhau xuất hiện trong câu => Khả năng cao là 2 giao dịch riêng biệt => HÃY TÁCH RA.
 
-        ⚠️ FORMAT OUTPUT: Chỉ trả về chuỗi JSON thuần (Array), không markdown, không giải thích.
-        
-        Ví dụ output:
-        [
-          {"type": "expense", "amount": 40000, "categoryId": "food", "description": "Ăn phở"},
-          {"type": "expense", "amount": 50000, "categoryId": "transport", "description": "Đổ xăng"}
-        ]
+        2. **Xử lý số tiền thông minh:**
+           - Nhận diện linh hoạt: "30k", "30 nghìn", "3 chục", "500", "1 triệu", "năm trăm".
+           - Chuyển đổi về số nguyên (Integer).
+
+        3. **Phân loại (Classification):**
+           - Dựa vào từ khóa (ăn, uống, xăng, điện, lương, thưởng...) để xác định "type" (expense/income) và "categoryId".
+
+        OUTPUT FORMAT:
+        Trả về duy nhất một mảng JSON (JSON Array), không kèm bất kỳ lời dẫn nào.
         `;
 
         const contents = [{
