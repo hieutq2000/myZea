@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, ExamResult } from '../types';
+import { VoiceParseResult } from '../types/finance';
 
 // Change this to your server URL
 // For local development with mobile: use your WiFi IP
@@ -218,6 +219,14 @@ export async function generateAIContent(
     return apiRequest<AIGenerateResponse>('/api/ai/generate', {
         method: 'POST',
         body: JSON.stringify({ prompt, images }),
+    });
+}
+
+// Finance AI Parse
+export async function parseTransactionWithAI(text: string): Promise<Partial<VoiceParseResult>> {
+    return apiRequest<Partial<VoiceParseResult>>('/api/finance/parse-transaction', {
+        method: 'POST',
+        body: JSON.stringify({ text }),
     });
 }
 

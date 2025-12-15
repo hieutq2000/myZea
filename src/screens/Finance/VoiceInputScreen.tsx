@@ -23,8 +23,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { addTransaction, getWallets } from '../../utils/finance/storage';
-import { findCategoryFromText, getCategoryById, getCategoriesByType } from '../../utils/finance/categories';
+import { findCategoryFromText, getCategoryById, getCategoriesByType, ALL_CATEGORIES } from '../../utils/finance/categories';
 import { VoiceParseResult, TransactionType, Category } from '../../types/finance';
+import { parseTransactionWithAI } from '../../utils/api';
 
 import {
     ExpoSpeechRecognitionModule,
@@ -253,15 +254,37 @@ export default function VoiceInputScreen() {
         // Hiển thị loading
         setIsProcessing(true);
 
-        // Simulate processing delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        try {
+            // Thử dùng AI trước
+            const aiResult = await parseTransactionWithAI(text);
 
-        const result = parseVoiceLocal(text);
-        if (result) {
-            setParseResult(result);
-            setError(null);
-        } else {
-            setError('Không nhận dạng được số tiền');
+            if (aiResult && aiResult.amount && aiResult.type && aiResult.categoryId) {
+                const mappedCategory = getCategoryById(aiResult.categoryId) || ALL_CATEGORIES[ALL_CATEGORIES.length - 1];
+
+                setParseResult({
+                    type: aiResult.type,
+                    amount: aiResult.amount,
+                    categoryId: mappedCategory.id,
+                    categoryName: mappedCategory.name, // Lấy tên từ danh sách gốc
+                    description: aiResult.description || text,
+                    date: new Date().toISOString(),
+                    confidence: 0.95
+                });
+                setError(null);
+            } else {
+                throw new Error('AI incomplete response');
+            }
+        } catch (e) {
+            console.log('AI Parse failed, fallback to local:', e);
+
+            // Fallback về local parser nếu AI lỗi hoặc không parse được
+            const result = parseVoiceLocal(text);
+            if (result) {
+                setParseResult(result);
+                setError(null);
+            } else {
+                setError('Không nhận dạng được số tiền');
+            }
         }
 
         setIsProcessing(false);

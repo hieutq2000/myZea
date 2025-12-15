@@ -707,6 +707,99 @@ Lưu ý: confidence >= 60 là match thành công. Nếu ảnh mờ hoặc khó n
     }
 });
 
+// Parse Transaction using Gemini AI
+app.post('/api/finance/parse-transaction', authenticateToken, async (req, res) => {
+    try {
+        const { text } = req.body;
+        const apiKey = process.env.GEMINI_API_KEY;
+
+        if (!apiKey) {
+            return res.status(500).json({ error: 'AI service not configured' });
+        }
+
+        if (!text) {
+            return res.status(400).json({ error: 'Missing text content' });
+        }
+
+        // Expanded category list for better AI context
+        const categories = `
+        Expense:
+        - food: Thức ăn (ăn uống, cafe, đi chợ)
+        - transport: Di chuyển (xăng, xe, taxi, gửi xe)
+        - shopping: Mua sắm (quần áo, giày dép, mỹ phẩm)
+        - entertainment: Giải trí (xem phim, game, du lịch)
+        - bills: Hóa đơn (điện, nước, net, thuê nhà)
+        - health: Sức khỏe (thuốc, khám bệnh, gym)
+        - education: Giáo dục (học phí, sách, khóa học)
+        - family: Gia đình (biếu bố mẹ, con cái)
+        - other_expense: Khác
+
+        Income:
+        - salary: Lương
+        - bonus: Thưởng
+        - investment: Đầu tư (lãi, chứng khoán)
+        - freelance: Làm thêm (job ngoài)
+        - gift_income: Được tặng (lì xì)
+        - sell: Bán đồ
+        - other_income: Khác
+        `;
+
+        const prompt = `
+        Bạn là trợ lý tài chính thông minh. Phân tích văn bản giao dịch sau và trích xuất thông tin thành JSON.
+        
+        Văn bản: "${text}"
+        
+        Danh sách danh mục khả dụng:
+        ${categories}
+
+        Yêu cầu:
+        1. Xác định "type": là "expense" (chi tiền) hoặc "income" (thu tiền). Mặc định là expense nếu không rõ.
+        2. Xác định "amount": số tiền (VNĐ). Tự động sửa lỗi chính tả số (ví dụ: "nam muoi nghin" -> 50000). Luôn trả về số nguyên dương.
+        3. Xác định "categoryId": id của danh mục phù hợp nhất từ danh sách trên.
+        4. Xác định "description": mô tả ngắn gọn, viết hoa chữ cái đầu.
+
+        Trả về JSON DUY NHẤT (không markdown):
+        {"type": "expense", "amount": 0, "categoryId": "food", "description": "..."}
+        `;
+
+        const contents = [{
+            parts: [{ text: prompt }]
+        }];
+
+        const response = await safeCallApi(() => fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents })
+            }
+        ));
+
+        const data = await response.json();
+        const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        // Parse JSON
+        const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            try {
+                const parsed = JSON.parse(jsonMatch[0]);
+                // Validate structure
+                if (parsed.type && typeof parsed.amount === 'number') {
+                    return res.json(parsed);
+                }
+            } catch (e) {
+                console.error('JSON parse fail:', e);
+            }
+        }
+
+        return res.status(422).json({ error: 'Could not parse transaction details' });
+
+    } catch (error) {
+        console.error('Parse transaction error:', error);
+        res.status(500).json({ error: 'AI processing failed' });
+    }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

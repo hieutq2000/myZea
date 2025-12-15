@@ -88,6 +88,9 @@ export default function FinanceHomeScreen() {
     const [salaryInput, setSalaryInput] = useState('');
     const [monthlySalary, setMonthlySalaryState] = useState(0);
 
+    // Settings Modal
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+
     // Ẩn/hiện số dư
     const [hideBalance, setHideBalance] = useState(false);
 
@@ -340,22 +343,7 @@ export default function FinanceHomeScreen() {
 
                         <TouchableOpacity
                             style={styles.walletBtn}
-                            onPress={() => {
-                                Alert.alert(
-                                    '⚙️ Cài đặt',
-                                    'Chọn một tùy chọn:',
-                                    [
-                                        { text: 'Sửa số dư', onPress: handleEditBalance },
-                                        { text: 'Nhập lương', onPress: handleOpenSalaryModal },
-                                        {
-                                            text: '🗑️ Xóa tất cả dữ liệu',
-                                            style: 'destructive',
-                                            onPress: handleClearAllData
-                                        },
-                                        { text: 'Đóng', style: 'cancel' },
-                                    ]
-                                );
-                            }}
+                            onPress={() => setShowSettingsModal(true)}
                         >
                             <Ionicons name="settings-outline" size={20} color="#A78BFA" />
                         </TouchableOpacity>
@@ -709,6 +697,83 @@ export default function FinanceHomeScreen() {
                         </TouchableOpacity>
                     </View>
                 </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Settings Modal */}
+            <Modal
+                visible={showSettingsModal}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setShowSettingsModal(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowSettingsModal(false)}
+                >
+                    <View style={styles.settingsModalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>✨ Cài đặt</Text>
+                            <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
+                                <Ionicons name="close" size={24} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.settingsList}>
+                            <TouchableOpacity
+                                style={styles.settingsItem}
+                                onPress={() => {
+                                    setShowSettingsModal(false);
+                                    handleEditBalance();
+                                }}
+                            >
+                                <View style={[styles.settingsIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.2)' }]}>
+                                    <Ionicons name="wallet-outline" size={22} color="#3B82F6" />
+                                </View>
+                                <View style={styles.settingsInfo}>
+                                    <Text style={styles.settingsLabel}>Điều chỉnh số dư</Text>
+                                    <Text style={styles.settingsDesc}>Cập nhật số dư hiện tại của ví</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color="#4B5563" />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.settingsItem}
+                                onPress={() => {
+                                    setShowSettingsModal(false);
+                                    handleOpenSalaryModal();
+                                }}
+                            >
+                                <View style={[styles.settingsIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
+                                    <Ionicons name="cash-outline" size={22} color="#10B981" />
+                                </View>
+                                <View style={styles.settingsInfo}>
+                                    <Text style={styles.settingsLabel}>Lương tháng</Text>
+                                    <Text style={styles.settingsDesc}>Cài đặt mức lương cơ bản</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color="#4B5563" />
+                            </TouchableOpacity>
+
+                            <View style={styles.divider} />
+
+                            <TouchableOpacity
+                                style={styles.settingsItem}
+                                onPress={() => {
+                                    setShowSettingsModal(false);
+                                    handleClearAllData();
+                                }}
+                            >
+                                <View style={[styles.settingsIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.2)' }]}>
+                                    <Ionicons name="trash-outline" size={22} color="#EF4444" />
+                                </View>
+                                <View style={styles.settingsInfo}>
+                                    <Text style={[styles.settingsLabel, { color: '#EF4444' }]}>Reset dữ liệu</Text>
+                                    <Text style={styles.settingsDesc}>Xóa toàn bộ giao dịch và ví</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </TouchableOpacity>
             </Modal>
         </View>
     );
@@ -1086,5 +1151,50 @@ const styles = StyleSheet.create({
         color: '#6B7280',
         fontSize: 12,
         marginTop: 2,
+    },
+    // Settings Modal Styles
+    settingsModalContent: {
+        backgroundColor: '#1E1E2E',
+        width: '100%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingBottom: 40,
+        paddingTop: 8,
+        position: 'absolute',
+        bottom: 0,
+    },
+    settingsList: {
+        paddingHorizontal: 20,
+    },
+    settingsItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+    },
+    settingsIconBox: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 16,
+    },
+    settingsInfo: {
+        flex: 1,
+    },
+    settingsLabel: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    settingsDesc: {
+        color: '#9CA3AF',
+        fontSize: 13,
+        marginTop: 2,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: '#2D2D44',
+        marginVertical: 4,
     },
 });

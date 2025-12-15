@@ -30,6 +30,7 @@ interface AppItem {
     isAvailable: boolean;
     isNew?: boolean;
     isComing?: boolean;
+    isInstalled?: boolean; // Trạng thái đã cài đặt hay chưa
 }
 
 const APPS: AppItem[] = [
@@ -44,6 +45,7 @@ const APPS: AppItem[] = [
         category: 'Tài chính',
         isAvailable: true,
         isNew: true,
+        isInstalled: true,
     },
     {
         id: 'todo',
@@ -55,6 +57,7 @@ const APPS: AppItem[] = [
         bgColor: '#E0E7FF',
         category: 'Công việc',
         isAvailable: true,
+        isInstalled: true,
     },
     {
         id: 'qrcode',
@@ -66,6 +69,7 @@ const APPS: AppItem[] = [
         bgColor: '#EDE9FE',
         category: 'Tiện ích',
         isAvailable: true,
+        isInstalled: true,
     },
     {
         id: 'learning',
@@ -77,6 +81,7 @@ const APPS: AppItem[] = [
         bgColor: '#FEF3C7',
         category: 'Học tập',
         isAvailable: true,
+        isInstalled: true,
     },
     {
         id: 'payslip',
@@ -88,6 +93,7 @@ const APPS: AppItem[] = [
         bgColor: '#FEE2E2',
         category: 'Tài chính',
         isAvailable: true,
+        isInstalled: true,
     },
     {
         id: 'reward',
@@ -99,6 +105,7 @@ const APPS: AppItem[] = [
         bgColor: '#FCE7F3',
         category: 'Ưu đãi',
         isAvailable: true,
+        isInstalled: false, // Demo app chưa cài
     },
     {
         id: 'my-gold',
@@ -110,6 +117,7 @@ const APPS: AppItem[] = [
         bgColor: '#FEF3C7',
         category: 'Ưu đãi',
         isAvailable: true,
+        isInstalled: false,
     },
     {
         id: 'zyea-care',
@@ -121,6 +129,7 @@ const APPS: AppItem[] = [
         bgColor: '#FEE2E2',
         category: 'Sức khỏe',
         isAvailable: true,
+        isInstalled: true,
     },
     {
         id: 'survey',
@@ -132,6 +141,7 @@ const APPS: AppItem[] = [
         bgColor: '#CCFBF1',
         category: 'Công việc',
         isAvailable: true,
+        isInstalled: true,
     },
     {
         id: 'budget',
@@ -144,6 +154,7 @@ const APPS: AppItem[] = [
         category: 'Tài chính',
         isAvailable: false,
         isComing: true,
+        isInstalled: false,
     },
     {
         id: 'investment',
@@ -156,6 +167,7 @@ const APPS: AppItem[] = [
         category: 'Tài chính',
         isAvailable: false,
         isComing: true,
+        isInstalled: false,
     },
     {
         id: 'health',
@@ -168,10 +180,13 @@ const APPS: AppItem[] = [
         category: 'Sức khỏe',
         isAvailable: false,
         isComing: true,
+        isInstalled: false,
     },
 ];
 
 const CATEGORIES = ['Tất cả', 'Tài chính', 'Công việc', 'Tiện ích', 'Học tập', 'Ưu đãi', 'Sức khỏe'];
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface StoreScreenProps {
     onNavigateToSettings?: () => void;
@@ -182,6 +197,39 @@ export default function StoreScreen({ onNavigateToSettings, onNavigateToProfile 
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
     const { colors, isDark } = useTheme();
     const [selectedCategory, setSelectedCategory] = useState('Tất cả');
+
+    // State quản lý việc cài đặt apps
+    const [installedApps, setInstalledApps] = useState<{ [key: string]: boolean }>(
+        APPS.reduce((acc, app) => ({ ...acc, [app.id]: app.isInstalled || false }), {})
+    );
+    const [installingApps, setInstallingApps] = useState<{ [key: string]: boolean }>({});
+    const [downloadProgress, setDownloadProgress] = useState<{ [key: string]: number }>({});
+
+    // Load trạng thái đã cài đặt từ Storage khi mở màn hình
+    React.useEffect(() => {
+        const loadInstalledApps = async () => {
+            try {
+                const saved = await AsyncStorage.getItem('INSTALLED_APPS');
+                if (saved) {
+                    const savedApps = JSON.parse(saved);
+                    setInstalledApps(prev => ({ ...prev, ...savedApps }));
+                }
+            } catch (e) {
+                console.error('Failed to load installed apps', e);
+            }
+        };
+        loadInstalledApps();
+    }, []);
+
+    // Lưu trạng thái cài đặt vào Storage mỗi khi có thay đổi
+    const saveInstalledApp = async (appId: string) => {
+        try {
+            const newInstalledState = { ...installedApps, [appId]: true };
+            await AsyncStorage.setItem('INSTALLED_APPS', JSON.stringify(newInstalledState));
+        } catch (e) {
+            console.error('Failed to save installed app', e);
+        }
+    };
 
     const filteredApps = selectedCategory === 'Tất cả'
         ? APPS
@@ -194,6 +242,14 @@ export default function StoreScreen({ onNavigateToSettings, onNavigateToProfile 
                 `${app.name} sẽ được cập nhật trong thời gian tới. Hãy đón chờ nhé!`,
                 [{ text: 'OK' }]
             );
+            return;
+        }
+
+        // Logic cài đặt app
+        const isInstalled = installedApps[app.id];
+
+        if (!isInstalled) {
+            startDownload(app);
             return;
         }
 
@@ -211,19 +267,109 @@ export default function StoreScreen({ onNavigateToSettings, onNavigateToProfile 
         }
     };
 
+    // Hàm giả lập download
+    const startDownload = (app: AppItem) => {
+        if (installingApps[app.id]) return; // Đang tải thì bỏ qua
+
+        setInstallingApps(prev => ({ ...prev, [app.id]: true }));
+        setDownloadProgress(prev => ({ ...prev, [app.id]: 0 }));
+
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += 5; // Tăng 5% mỗi lần
+            setDownloadProgress(prev => ({ ...prev, [app.id]: progress }));
+
+            if (progress >= 100) {
+                clearInterval(interval);
+                setTimeout(() => {
+                    setInstallingApps(prev => ({ ...prev, [app.id]: false }));
+                    setInstalledApps(prev => ({ ...prev, [app.id]: true }));
+                    setDownloadProgress(prev => ({ ...prev, [app.id]: 0 }));
+
+                    // Lưu trạng thái đã cài
+                    saveInstalledApp(app.id);
+
+                    // Thông báo cài xong hoặc tự mở
+                    Alert.alert('✅ Thành công', `Đã cài đặt ${app.name}`, [
+                        { text: 'Mở ngay', onPress: () => handleAppPress(app) },
+                        { text: 'Đóng' }
+                    ]);
+                }, 500);
+            }
+        }, 100); // Tốc độ tải (nhanh hay chậm chỉnh ở đây)
+    };
+
     const renderIcon = (app: AppItem) => {
-        switch (app.iconSet) {
-            case 'Ionicons':
-                return <Ionicons name={app.icon as any} size={28} color={app.color} />;
-            case 'MaterialCommunityIcons':
-                return <MaterialCommunityIcons name={app.icon as any} size={28} color={app.color} />;
-            case 'MaterialIcons':
-                return <MaterialIcons name={app.icon as any} size={28} color={app.color} />;
-            case 'FontAwesome5':
-                return <FontAwesome5 name={app.icon as any} size={24} color={app.color} />;
-            default:
-                return <Ionicons name={app.icon as any} size={28} color={app.color} />;
-        }
+        const isInstalled = installedApps[app.id];
+        const isInstalling = installingApps[app.id];
+        const progress = downloadProgress[app.id] || 0;
+
+        const IconComponent = () => {
+            switch (app.iconSet) {
+                case 'Ionicons':
+                    return <Ionicons name={app.icon as any} size={28} color={isInstalled ? app.color : '#9CA3AF'} />;
+                case 'MaterialCommunityIcons':
+                    return <MaterialCommunityIcons name={app.icon as any} size={28} color={isInstalled ? app.color : '#9CA3AF'} />;
+                case 'MaterialIcons':
+                    return <MaterialIcons name={app.icon as any} size={28} color={isInstalled ? app.color : '#9CA3AF'} />;
+                case 'FontAwesome5':
+                    return <FontAwesome5 name={app.icon as any} size={24} color={isInstalled ? app.color : '#9CA3AF'} />;
+                default:
+                    return <Ionicons name={app.icon as any} size={28} color={isInstalled ? app.color : '#9CA3AF'} />;
+            }
+        };
+
+        return (
+            <View style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                <IconComponent />
+
+                {/* Overlay khi đang tải */}
+                {isInstalling && (
+                    <View style={[StyleSheet.absoluteFill, {
+                        backgroundColor: 'rgba(0,0,0,0.4)',
+                        borderRadius: 16,
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }]}>
+                        {/* 
+                           Vẽ vòng tròn progress đơn giản bằng border 
+                           Nếu có SVG thì sẽ đẹp hơn, nhưng dùng native view thì dùng border technique
+                        */}
+                        <View style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            borderWidth: 3,
+                            borderColor: 'rgba(255,255,255,0.3)',
+                            borderTopColor: '#FFF',
+                            transform: [{ rotate: `${(progress / 100) * 360}deg` }] // Xoay theo progress
+                        }} />
+                        <Text style={{ position: 'absolute', fontSize: 8, color: '#FFF', fontWeight: 'bold' }}>
+                            {progress}%
+                        </Text>
+                    </View>
+                )}
+
+                {/* Icon download nếu chưa cài */}
+                {!isInstalled && !isInstalling && (
+                    <View style={{
+                        position: 'absolute',
+                        bottom: 2,
+                        right: 2,
+                        backgroundColor: colors.primary,
+                        borderRadius: 10,
+                        width: 16,
+                        height: 16,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: '#FFF'
+                    }}>
+                        <Ionicons name="cloud-download" size={10} color="#FFF" />
+                    </View>
+                )}
+            </View>
+        );
     };
 
     return (
@@ -311,11 +457,15 @@ export default function StoreScreen({ onNavigateToSettings, onNavigateToProfile 
                                 onPress={() => handleAppPress(app)}
                                 activeOpacity={0.7}
                             >
-                                <View style={[styles.appIconBg, { backgroundColor: app.bgColor }]}>
+                                <View style={[styles.appIconBg, {
+                                    backgroundColor: installedApps[app.id] ? app.bgColor : (isDark ? '#333' : '#E5E7EB')
+                                }]}>
                                     {renderIcon(app)}
                                 </View>
                                 <Text style={[styles.appName, { color: colors.text }]} numberOfLines={1}>{app.name}</Text>
-                                <Text style={[styles.appDesc, { color: colors.textSecondary }]} numberOfLines={1}>{app.description}</Text>
+                                <Text style={[styles.appDesc, { color: colors.textSecondary }]} numberOfLines={1}>
+                                    {installingApps[app.id] ? 'Đang tải xuống...' : app.description}
+                                </Text>
                                 {app.isNew && (
                                     <View style={styles.newBadge}>
                                         <Text style={styles.newBadgeText}>Mới</Text>
