@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -10,19 +10,14 @@ import {
     Alert,
     StatusBar,
     Modal,
-    Switch,
     Platform
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Updates from 'expo-updates';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { User, BADGES, LEVEL_THRESHOLDS } from '../types';
-import { getLatestChangelog } from '../utils/changelog';
-import UpdateModal from '../components/UpdateModal';
 
 interface ProfileScreenProps {
     user: User;
@@ -35,36 +30,10 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
     const [avatar, setAvatar] = useState<string | undefined>(user.avatar);
     const [showCamera, setShowCamera] = useState(false);
     const [showImageOptions, setShowImageOptions] = useState(false);
-    const [faceIdEnabled, setFaceIdEnabled] = useState(false);
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const cameraRef = useRef<CameraView>(null);
-    const [showUpdateModal, setShowUpdateModal] = useState(false);
-    const [isDownloading, setIsDownloading] = useState(false);
 
     const isOnboarding = !user.avatar;
-
-    // Load Face ID setting
-    useEffect(() => {
-        loadFaceIdSetting();
-    }, []);
-
-    const loadFaceIdSetting = async () => {
-        try {
-            const saved = await AsyncStorage.getItem('faceIdEnabled');
-            setFaceIdEnabled(saved === 'true');
-        } catch (e) {
-            console.log('Error loading Face ID setting');
-        }
-    };
-
-    const toggleFaceId = async (value: boolean) => {
-        setFaceIdEnabled(value);
-        try {
-            await AsyncStorage.setItem('faceIdEnabled', value.toString());
-        } catch (e) {
-            console.log('Error saving Face ID setting');
-        }
-    };
 
     const handleLogout = () => {
         Alert.alert(
@@ -77,34 +46,6 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
         );
     };
 
-    const handleCheckUpdate = async () => {
-        try {
-            Alert.alert('Đang kiểm tra...', 'Đang kết nối tới máy chủ cập nhật...');
-            const update = await Updates.checkForUpdateAsync();
-            if (update.isAvailable) {
-                setShowUpdateModal(true);
-            } else {
-                Alert.alert('Đã cập nhật', 'Bạn đang sử dụng phiên bản mới nhất.');
-            }
-        } catch (error: any) {
-            Alert.alert('Lỗi', `Không thể kiểm tra cập nhật: ${error.message}`);
-        }
-    };
-
-    const handleDownloadUpdate = async () => {
-        try {
-            setIsDownloading(true);
-            await Updates.fetchUpdateAsync();
-            Alert.alert('Hoàn tất!', 'Ứng dụng sẽ khởi động lại ngay.', [
-                { text: 'OK', onPress: () => Updates.reloadAsync() }
-            ]);
-        } catch (error: any) {
-            Alert.alert('Lỗi', `Không thể tải bản cập nhật: ${error.message}`);
-        } finally {
-            setIsDownloading(false);
-            setShowUpdateModal(false);
-        }
-    };
 
     const handleTakePhoto = async () => {
         setShowImageOptions(false);
@@ -408,45 +349,7 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
                     </View>
                 </View>
 
-                {/* Settings */}
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Ionicons name="settings-outline" size={20} color={COLORS.primary} />
-                        <Text style={styles.cardTitle}>Cài đặt</Text>
-                    </View>
 
-                    <View style={styles.settingRow}>
-                        <View style={styles.settingInfo}>
-                            <View style={styles.settingIconContainer}>
-                                <Ionicons name="finger-print" size={22} color={COLORS.primary} />
-                            </View>
-                            <View>
-                                <Text style={styles.settingLabel}>Đăng nhập Face ID</Text>
-                                <Text style={styles.settingDesc}>Xác thực khuôn mặt khi đăng nhập</Text>
-                            </View>
-                        </View>
-                        <Switch
-                            value={faceIdEnabled}
-                            onValueChange={toggleFaceId}
-                            trackColor={{ false: COLORS.border, true: COLORS.primary + '60' }}
-                            thumbColor={faceIdEnabled ? COLORS.primary : '#f4f3f4'}
-                        />
-                    </View>
-
-                    {/* App Update Row */}
-                    <TouchableOpacity style={styles.settingRow} onPress={handleCheckUpdate}>
-                        <View style={styles.settingInfo}>
-                            <View style={[styles.settingIconContainer, { backgroundColor: '#DCFCE7' }]}>
-                                <Ionicons name="cloud-download-outline" size={22} color="#16A34A" />
-                            </View>
-                            <View>
-                                <Text style={styles.settingLabel}>Cập nhật ứng dụng</Text>
-                                <Text style={styles.settingDesc}>Phiên bản hiện tại: v{getLatestChangelog()?.version || '?'}</Text>
-                            </View>
-                        </View>
-                        <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
-                    </TouchableOpacity>
-                </View>
 
                 {/* Submit Button */}
                 <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
@@ -474,13 +377,7 @@ export default function ProfileScreen({ user, onUpdate, onCancel, onLogout }: Pr
                 <View style={{ height: 100 }} />
             </ScrollView>
 
-            {/* Update Modal */}
-            <UpdateModal
-                visible={showUpdateModal}
-                onUpdate={handleDownloadUpdate}
-                onClose={() => setShowUpdateModal(false)}
-                isDownloading={isDownloading}
-            />
+
         </View>
     );
 }

@@ -12,6 +12,7 @@ import UpdateModal from './src/components/UpdateModal';
 import PlaceScreen from './src/screens/PlaceScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import StoreScreen from './src/screens/StoreScreen';
 import IncomingCallModal from './src/components/IncomingCallModal';
 import BottomTabBar, { TabType } from './src/components/BottomTabBar';
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -26,7 +27,7 @@ import { useAppUpdates } from './src/hooks/useAppUpdates';
 import MaintenanceScreen from './src/screens/MaintenanceScreen';
 import { getSystemSettings } from './src/utils/api';
 
-type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'PROFILE' | 'SESSION' | 'PLACE' | 'ONBOARDING';
+type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'PROFILE' | 'SESSION' | 'PLACE' | 'ONBOARDING' | 'STORE';
 
 interface SessionConfig {
   mode: LiveMode;
@@ -430,6 +431,18 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       case 'HISTORY':
         return <HistoryScreen user={user} />;
 
+      case 'STORE':
+        return (
+          <StoreScreen
+            onNavigateToProfile={() => setView('PROFILE')}
+            onNavigateToSettings={() => {
+              if (navigationRef.isReady()) {
+                navigationRef.navigate('Settings');
+              }
+            }}
+          />
+        );
+
       case 'PLACE':
         return <PlaceScreen user={user} onGoHome={() => setView('HOME')} />;
 
@@ -451,7 +464,8 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   const getActiveTab = (): TabType => {
     if (view === 'HOME') return 'HOME';
     if (view === 'HISTORY') return 'HISTORY';
-    if (view === 'PROFILE') return 'PROFILE';
+    if (view === 'PROFILE') return 'PROFILE'; // Profile still can be accessed from Store
+    if (view === 'STORE') return 'PROFILE'; // Store uses PROFILE tab
     if (view === 'PLACE') return 'PLACE';
     return 'HOME';
   };
@@ -470,8 +484,8 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       return;
     }
 
-    if (tab === 'PROFILE') { // Map Store -> Profile for now
-      setView('PROFILE');
+    if (tab === 'PROFILE') { // Store tab opens StoreScreen
+      setView('STORE');
       return;
     }
 

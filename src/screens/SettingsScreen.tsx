@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -8,15 +8,20 @@ import {
     SafeAreaView,
     StatusBar,
     Alert,
-    Platform
+    Platform,
+    Switch
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Updates from 'expo-updates';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
+import { getLatestChangelog } from '../utils/changelog';
+import UpdateModal from '../components/UpdateModal';
 
 interface SettingsScreenProps {
     onLogout: () => void;
@@ -25,6 +30,61 @@ interface SettingsScreenProps {
 export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
     const { theme, setTheme, colors, isDark } = useTheme();
+    const [faceIdEnabled, setFaceIdEnabled] = useState(false);
+    const [showUpdateModal, setShowUpdateModal] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
+
+    // Load Face ID setting on mount
+    useEffect(() => {
+        loadFaceIdSetting();
+    }, []);
+
+    const loadFaceIdSetting = async () => {
+        try {
+            const saved = await AsyncStorage.getItem('faceIdEnabled');
+            setFaceIdEnabled(saved === 'true');
+        } catch (e) {
+            console.log('Error loading Face ID setting');
+        }
+    };
+
+    const toggleFaceId = async (value: boolean) => {
+        setFaceIdEnabled(value);
+        try {
+            await AsyncStorage.setItem('faceIdEnabled', value.toString());
+        } catch (e) {
+            console.log('Error saving Face ID setting');
+        }
+    };
+
+    const handleCheckUpdate = async () => {
+        try {
+            Alert.alert('Đang kiểm tra...', 'Đang kết nối tới máy chủ cập nhật...');
+            const update = await Updates.checkForUpdateAsync();
+            if (update.isAvailable) {
+                setShowUpdateModal(true);
+            } else {
+                Alert.alert('Đã cập nhật', 'Bạn đang sử dụng phiên bản mới nhất.');
+            }
+        } catch (error: any) {
+            Alert.alert('Lỗi', `Không thể kiểm tra cập nhật: ${error.message}`);
+        }
+    };
+
+    const handleDownloadUpdate = async () => {
+        try {
+            setIsDownloading(true);
+            await Updates.fetchUpdateAsync();
+            Alert.alert('Hoàn tất!', 'Ứng dụng sẽ khởi động lại ngay.', [
+                { text: 'OK', onPress: () => Updates.reloadAsync() }
+            ]);
+        } catch (error: any) {
+            Alert.alert('Lỗi', `Không thể tải bản cập nhật: ${error.message}`);
+        } finally {
+            setIsDownloading(false);
+            setShowUpdateModal(false);
+        }
+    };
 
     const handleLogout = () => {
         Alert.alert(
@@ -100,8 +160,41 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
                     </TouchableOpacity>
                 </View>
 
+                {/* Face ID Setting */}
+                <View style={[styles.card, { marginTop: 20, backgroundColor: colors.card }]}>
+                    <View style={styles.cardRow}>
+                        <View style={styles.iconLabel}>
+                            <Ionicons name="finger-print" size={22} color={colors.primary} style={styles.cardIcon} />
+                            <View>
+                                <Text style={[styles.cardTitle, { color: colors.text }]}>Đăng nhập Face ID</Text>
+                                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>Xác thực khuôn mặt khi đăng nhập</Text>
+                            </View>
+                        </View>
+                        <Switch
+                            value={faceIdEnabled}
+                            onValueChange={toggleFaceId}
+                            trackColor={{ false: colors.border, true: colors.primary + '60' }}
+                            thumbColor={faceIdEnabled ? colors.primary : '#f4f3f4'}
+                        />
+                    </View>
+                </View>
+
+                {/* App Update */}
+                <TouchableOpacity style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]} onPress={handleCheckUpdate}>
+                    <View style={styles.cardRow}>
+                        <View style={styles.iconLabel}>
+                            <Ionicons name="cloud-download-outline" size={22} color="#16A34A" style={styles.cardIcon} />
+                            <View>
+                                <Text style={[styles.cardTitle, { color: colors.text }]}>Cập nhật ứng dụng</Text>
+                                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>Phiên bản hiện tại: v{getLatestChangelog()?.version || '?'}</Text>
+                            </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                    </View>
+                </TouchableOpacity>
+
                 {/* Language Setting */}
-                <TouchableOpacity style={[styles.card, { marginTop: 20, backgroundColor: colors.card }]}>
+                <TouchableOpacity style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]}>
                     <View style={styles.cardRow}>
                         <View style={styles.iconLabel}>
                             <Ionicons name="text-outline" size={22} color={colors.text} style={styles.cardIcon} />
@@ -153,9 +246,18 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
                 </TouchableOpacity>
 
             </ScrollView>
+
+            {/* Update Modal */}
+            <UpdateModal
+                visible={showUpdateModal}
+                onUpdate={handleDownloadUpdate}
+                onClose={() => setShowUpdateModal(false)}
+                isDownloading={isDownloading}
+            />
         </View>
     );
 }
+
 
 const styles = StyleSheet.create({
     container: {
@@ -212,6 +314,11 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '500',
         color: '#333',
+    },
+    cardSubtitle: {
+        fontSize: 12,
+        color: '#999',
+        marginTop: 2,
     },
     rightContent: {
         flexDirection: 'row',
