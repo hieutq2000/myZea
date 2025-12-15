@@ -745,26 +745,26 @@ app.post('/api/finance/parse-transaction', authenticateToken, async (req, res) =
         `;
 
         const prompt = `
-        Bạn là trợ lý tài chính thông minh. Phân tích văn bản giao dịch sau và trích xuất thông tin thành danh sách các giao dịch.
+        Bạn là trợ lý tài chính thông minh (JSON mode). Nhiệm vụ:
+        Phân tích văn bản thành **DANH SÁCH** các giao dịch chi tiết.
         
-        Văn bản: "${text}"
+        Văn bản input: "${text}"
         
-        Danh sách danh mục khả dụng:
+        Danh mục ID khả dụng:
         ${categories}
 
-        Yêu cầu:
-        1. Tách văn bản giao dịch thành các mục riêng biệt (ví dụ: "30k bún, 50k xăng" -> 2 giao dịch).
-        2. Với mỗi giao dịch, xác định:
-           - "type": "expense" (chi) hoặc "income" (thu).
-           - "amount": Số tiền (VNĐ integer). Tự sửa lỗi chính tả.
-           - "categoryId": ID danh mục phù hợp nhất.
-           - "description": Mô tả ngắn gọn.
-        3. Nếu không rõ, đoán dựa trên ngữ cảnh chung.
+        Quy tắc bắt buộc:
+        1. Nếu có nhiều khoản tiền/hành động, PHẢI TÁCH RIÊNG thành từng object.
+        2. Tự sửa lỗi chính tả số tiền (ví dụ: "50k", "50 nghìn", "năm chục" -> 50000).
+        3. "type" là "expense" (chi) hoặc "income" (thu).
+        4. "categoryId" phải map chính xác nhất có thể.
 
-        Trả về JSON ARRAY DUY NHẤT (không markdown):
+        ⚠️ FORMAT OUTPUT: Chỉ trả về chuỗi JSON thuần (Array), không markdown, không giải thích.
+        
+        Ví dụ output:
         [
-            {"type": "expense", "amount": 30000, "categoryId": "food", "description": "Bún chả"},
-            {"type": "expense", "amount": 50000, "categoryId": "transport", "description": "Đổ xăng"}
+          {"type": "expense", "amount": 40000, "categoryId": "food", "description": "Ăn phở"},
+          {"type": "expense", "amount": 50000, "categoryId": "transport", "description": "Đổ xăng"}
         ]
         `;
 
@@ -783,35 +783,39 @@ app.post('/api/finance/parse-transaction', authenticateToken, async (req, res) =
 
         const data = await response.json();
         const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        console.log('AI Logic Response:', aiText);
 
-        // Parse JSON
-        // Parse JSON
-        let parsedResult = null;
+        // Parse JSON Logic
+        let parsedResult = [];
 
-        // 1. Thử tìm mảng JSON [...]
-        const arrayMatch = aiText.match(/\[[\s\S]*\]/);
-        if (arrayMatch) {
-            try {
-                parsedResult = JSON.parse(arrayMatch[0]);
-            } catch (e) { }
-        }
+        try {
+            // Lọc lấy phần JSON Array trong text
+            const jsonStartIndex = aiText.indexOf('[');
+            const jsonEndIndex = aiText.lastIndexOf(']');
 
-        // 2. Nếu không có mảng, thử tìm object {...}
-        if (!parsedResult) {
-            const objectMatch = aiText.match(/\{[\s\S]*\}/);
-            if (objectMatch) {
-                try {
-                    const obj = JSON.parse(objectMatch[0]);
-                    if (obj.amount) parsedResult = [obj]; // Wrap vào mảng
-                } catch (e) { }
+            if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+                const cleanJson = aiText.substring(jsonStartIndex, jsonEndIndex + 1);
+                parsedResult = JSON.parse(cleanJson);
+            } else {
+                // Fallback: Nếu trả về object đơn lẻ {...}
+                const objStartIndex = aiText.indexOf('{');
+                const objEndIndex = aiText.lastIndexOf('}');
+
+                if (objStartIndex !== -1 && objEndIndex !== -1) {
+                    const cleanObj = aiText.substring(objStartIndex, objEndIndex + 1);
+                    const obj = JSON.parse(cleanObj);
+                    if (obj.amount) parsedResult = [obj];
+                }
             }
+        } catch (e) {
+            console.error('JSON Parse Error:', e);
         }
 
-        if (parsedResult && Array.isArray(parsedResult) && parsedResult.length > 0) {
+        if (Array.isArray(parsedResult) && parsedResult.length > 0) {
             return res.json(parsedResult);
         }
 
-        return res.status(422).json({ error: 'Could not parse transaction details' });
+        return res.status(422).json({ error: 'Không thể phân tích giao dịch' });
 
     } catch (error) {
         console.error('Parse transaction error:', error);
