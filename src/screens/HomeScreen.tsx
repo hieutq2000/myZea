@@ -19,6 +19,7 @@ import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { User, LiveMode, TargetAudience, Topic, TOPIC_LABELS, TOPIC_ICONS } from '../types';
 import { RootStackParamList } from '../navigation/types';
+import { getAvatarUri } from '../utils/media';
 
 interface HomeScreenProps {
     user: User;
@@ -265,8 +266,8 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
 
                 <View style={styles.headerContent}>
                     <View style={styles.headerLeft}>
-                        {user.avatar ? (
-                            <Image source={{ uri: user.avatar }} style={styles.headerAvatar} />
+                        {user.avatar && !user.avatar.includes('ui-avatars.com') ? (
+                            <Image source={{ uri: getAvatarUri(user.avatar, user.name || 'User') }} style={styles.headerAvatar} />
                         ) : (
                             <View style={styles.headerAvatarPlaceholder}>
                                 <Text style={styles.headerAvatarText}>{user.name?.charAt(0) || 'H'}</Text>
