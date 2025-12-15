@@ -14,7 +14,7 @@ import { isVideo, getUri, getAvatarUri } from '../utils/media';
 import VideoPlayer from './VideoPlayer';
 import PhotoGrid from './PhotoGrid';
 import TextWithSeeMore from './TextWithSeeMore';
-import { ReactionDock, getReactionDisplay } from './AnimatedReactions';
+import { ReactionButton, getReactionById, REACTIONS, Reaction } from './FacebookReactions';
 
 const { width } = Dimensions.get('window');
 
@@ -22,9 +22,7 @@ interface PostCardProps {
     post: Post;
     currentUser: any;
     localReaction?: string; // Current user's reaction to this post
-    onReaction: (postId: string, reactionId: string) => void;
-    onLongPressReaction: (postId: string) => void;
-    activeReactionPostId: string | null;
+    onReaction: (postId: string, reactionId: string | null) => void;
     onComment: (post: Post) => void;
     onShare: (post: Post) => void;
     onViewProfile?: (user: any) => void;
@@ -38,8 +36,6 @@ export default function PostCard({
     currentUser,
     localReaction,
     onReaction,
-    onLongPressReaction,
-    activeReactionPostId,
     onComment,
     onShare,
     onViewProfile,
@@ -47,7 +43,8 @@ export default function PostCard({
     onImagePress,
     onLinkPress,
 }: PostCardProps) {
-    const isActiveReaction = activeReactionPostId === post.id;
+    // Get current reaction object from ID
+    const selectedReaction = localReaction ? getReactionById(localReaction) || null : null;
 
     // Get images array
     const postImages = post.images && post.images.length > 0
@@ -59,7 +56,7 @@ export default function PostCard({
         && isVideo(getUri(postImages[0] || post.image || ''));
 
     return (
-        <View style={[styles.postCard, isActiveReaction && { zIndex: 1000, elevation: 10 }]}>
+        <View style={styles.postCard}>
             {/* Post Header */}
             <View style={styles.postHeader}>
                 {post.group ? (
@@ -216,33 +213,13 @@ export default function PostCard({
 
             {/* Post Actions */}
             <View style={styles.actionContainer}>
-                <ReactionDock
-                    visible={isActiveReaction}
-                    onSelect={(reaction) => onReaction(post.id, reaction.id)}
+                <ReactionButton
+                    selectedReaction={selectedReaction}
+                    onReactionSelect={(reaction) => {
+                        onReaction(post.id, reaction?.id || null);
+                    }}
+                    buttonStyle={styles.actionButton}
                 />
-
-                <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => onReaction(post.id, 'like')}
-                    onLongPress={() => onLongPressReaction(post.id)}
-                    delayLongPress={300}
-                >
-                    {localReaction ? (
-                        <>
-                            <Text style={{ fontSize: 20, marginRight: 6 }}>
-                                {getReactionDisplay(localReaction)?.emoji}
-                            </Text>
-                            <Text style={[styles.actionText, { color: getReactionDisplay(localReaction)?.color || '#1877F2', fontWeight: 'bold' }]}>
-                                {getReactionDisplay(localReaction)?.label}
-                            </Text>
-                        </>
-                    ) : (
-                        <>
-                            <FontAwesome name="thumbs-o-up" size={18} color="#666" />
-                            <Text style={styles.actionText}>Thích</Text>
-                        </>
-                    )}
-                </TouchableOpacity>
 
                 <TouchableOpacity style={styles.actionButton} onPress={() => onComment(post)}>
                     <FontAwesome name="comment-o" size={18} color="#666" />

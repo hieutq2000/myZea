@@ -95,7 +95,6 @@ export default function PlaceProfileScreen({
     const [isUploading, setIsUploading] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [localReactions, setLocalReactions] = useState<{ [postId: string]: string }>({});
-    const [activeReactionPostId, setActiveReactionPostId] = useState<string | null>(null);
     const navigation = useNavigation<any>();
 
     // Sync local state when user prop changes (e.g., after fetching fresh data)
@@ -477,13 +476,12 @@ export default function PlaceProfileScreen({
                             currentUser={user}
                             localReaction={localReactions[post.id]}
                             onReaction={async (postId, reactionId) => {
-                                setActiveReactionPostId(null);
                                 const currentReaction = localReactions[postId];
-                                const isUnlike = currentReaction === reactionId;
+                                const isUnlike = currentReaction === reactionId || reactionId === null;
 
                                 setLocalReactions(prev => {
                                     const newState = { ...prev };
-                                    if (isUnlike) delete newState[postId];
+                                    if (isUnlike || !reactionId) delete newState[postId];
                                     else newState[postId] = reactionId;
                                     return newState;
                                 });
@@ -492,9 +490,9 @@ export default function PlaceProfileScreen({
                                     if (p.id === postId) {
                                         const wasLiked = !!currentReaction;
                                         let newLikes = p.likes;
-                                        if (!wasLiked && !isUnlike) newLikes++;
+                                        if (!wasLiked && !isUnlike && reactionId) newLikes++;
                                         if (wasLiked && isUnlike) newLikes--;
-                                        return { ...p, likes: newLikes, isLiked: !isUnlike };
+                                        return { ...p, likes: newLikes, isLiked: !isUnlike && !!reactionId };
                                     }
                                     return p;
                                 }));
@@ -505,8 +503,6 @@ export default function PlaceProfileScreen({
                                     console.error('Reaction error', error);
                                 }
                             }}
-                            onLongPressReaction={(postId) => setActiveReactionPostId(postId)}
-                            activeReactionPostId={activeReactionPostId}
                             onComment={(post) => navigation.navigate('PostDetail', { postId: post.id, post })}
                             onShare={(post) => { }}
                             onViewProfile={(targetUser) => { }}

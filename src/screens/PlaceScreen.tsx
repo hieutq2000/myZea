@@ -39,7 +39,7 @@ import VideoPlayer from '../components/VideoPlayer';
 import CreateGroupModal from '../components/CreateGroupModal';
 import { formatTime } from '../utils/formatTime';
 import { isVideo, getUri, getAvatarUri } from '../utils/media';
-import { ReactionDock, REACTIONS, Reaction, getReactionDisplay } from '../components/AnimatedReactions';
+import { ReactionButton, getReactionById, Reaction } from '../components/FacebookReactions';
 
 const { width } = Dimensions.get('window');
 
@@ -73,7 +73,6 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     const [newPostContent, setNewPostContent] = useState('');
     const [newPostImages, setNewPostImages] = useState<string[]>([]);
     const [isPosting, setIsPosting] = useState(false);
-    const [activeReactionPostId, setActiveReactionPostId] = useState<string | null>(null);
     const [localReactions, setLocalReactions] = useState<LocalPostState>({});
     // Share State
     const [isShareModalVisible, setShareModalVisible] = useState(false);
@@ -258,11 +257,9 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     };
 
     const handleReaction = async (postId: string, reactionId: string = 'like') => {
-        setActiveReactionPostId(null);
-
         // Optimistic Update
         const currentReaction = localReactions[postId];
-        const isUnlike = currentReaction === reactionId; // If clicking same, toggle off
+        const isUnlike = currentReaction === reactionId || !reactionId; // If clicking same, toggle off
 
         setLocalReactions(prev => {
             const newState = { ...prev };
@@ -409,7 +406,7 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
     const renderPost = ({ item }: { item: Post }) => (
         <View
-            style={[styles.postCard, activeReactionPostId === item.id && { zIndex: 1000, elevation: 10 }]}
+            style={styles.postCard}
             onLayout={() => {
                 // Track view when post becomes visible
                 trackPostView(item.id);
@@ -622,36 +619,12 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
             {/* Post Actions */}
             <View style={styles.actionContainer}>
-                {/* Animated Reaction Dock - Facebook style */}
-                <ReactionDock
-                    visible={activeReactionPostId === item.id}
-                    onSelect={(reaction) => handleReaction(item.id, reaction.id)}
+                {/* Facebook-style Reaction Button */}
+                <ReactionButton
+                    selectedReaction={localReactions[item.id] ? getReactionById(localReactions[item.id]) || null : null}
+                    onReactionSelect={(reaction) => handleReaction(item.id, reaction?.id || 'like')}
+                    buttonStyle={styles.actionButton}
                 />
-
-                <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => handleReaction(item.id, 'like')}
-                    onLongPress={() => setActiveReactionPostId(item.id)}
-                    delayLongPress={300}
-                >
-                    {localReactions[item.id] ? (
-                        // Show selected reaction with emoji
-                        <>
-                            <Text style={{ fontSize: 20, marginRight: 6 }}>
-                                {getReactionDisplay(localReactions[item.id])?.emoji}
-                            </Text>
-                            <Text style={[styles.actionText, { color: getReactionDisplay(localReactions[item.id])?.color || '#1877F2', fontWeight: 'bold' }]}>
-                                {getReactionDisplay(localReactions[item.id])?.label}
-                            </Text>
-                        </>
-                    ) : (
-                        // Default Gray Like
-                        <>
-                            <FontAwesome name="thumbs-o-up" size={18} color="#666" />
-                            <Text style={styles.actionText}>Thích</Text>
-                        </>
-                    )}
-                </TouchableOpacity>
                 <TouchableOpacity
                     style={styles.actionButton}
                     onPress={() => navigation.navigate('PostDetail', { postId: item.id, post: item })}
@@ -676,10 +649,9 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             <FlatList
                 ref={flatListRef}
                 onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
-                onScrollBeginDrag={() => setActiveReactionPostId(null)} // Close popup when scrolling
                 scrollEventThrottle={16}
                 data={posts}
-                extraData={activeReactionPostId}
+                extraData={localReactions}
 
                 keyExtractor={item => item.id}
                 renderItem={renderPost}
@@ -710,22 +682,6 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     </View>
                 )}
             />
-
-            {/* Backdrop overlay to close reaction popup when clicking outside */}
-            {activeReactionPostId && (
-                <TouchableOpacity
-                    style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'transparent',
-                    }}
-                    activeOpacity={1}
-                    onPress={() => setActiveReactionPostId(null)}
-                />
-            )}
 
             {/* Create Post Modal */}
             <Modal

@@ -21,6 +21,7 @@ import {
     markAllNotificationsAsRead,
     PlaceNotification
 } from '../utils/api';
+import { getAvatarUri } from '../utils/media';
 
 // Mock notification data (later replace with API)
 interface Notification {
@@ -190,7 +191,7 @@ export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNo
 
     const renderNotification = ({ item }: { item: Notification }) => {
         const style = getNotificationStyle(item.type);
-        const avatarUri = item.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.user.name)}&background=random`;
+        const avatarUri = getAvatarUri(item.user.avatar, item.user.name);
 
         return (
             <TouchableOpacity

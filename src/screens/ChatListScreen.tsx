@@ -12,6 +12,7 @@ import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
 import { getConversations, Conversation, getCurrentUser, pinConversation, muteConversation, deleteConversation } from '../utils/api';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getAvatarUri } from '../utils/media';
 
 // Light Theme Colors
 const DARK_BG = '#FFFFFF';
@@ -368,14 +369,14 @@ export default function ChatListScreen() {
                         conversationId: item.id,
                         partnerId: item.partnerId,
                         userName: item.name,
-                        avatar: item.avatar
+                        avatar: getAvatarUri(item.avatar, item.name)
                     })}
                     activeOpacity={0.7}
                 >
                     {/* Avatar */}
                     <View style={styles.avatarContainer}>
                         {item.avatar ? (
-                            <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                            <Image source={{ uri: getAvatarUri(item.avatar, item.name) }} style={styles.avatar} />
                         ) : (
                             <LinearGradient
                                 colors={['#667eea', '#764ba2']}
@@ -475,7 +476,7 @@ export default function ChatListScreen() {
                         {/* Avatar in header */}
                         <View style={{ marginRight: 10 }}>
                             <Image
-                                source={{ uri: currentUser?.avatar || 'https://i.pravatar.cc/150?img=3' }} // Placeholder or current user avatar
+                                source={{ uri: getAvatarUri(currentUser?.avatar, currentUser?.name || 'User') }}
                                 style={{ width: 32, height: 32, borderRadius: 16 }}
                             />
                             <View style={[styles.onlineDot, { right: 0, bottom: 0 }]} />

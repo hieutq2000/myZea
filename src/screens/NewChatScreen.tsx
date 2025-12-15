@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { searchUsers, ChatUser } from '../utils/api';
 import { COLORS } from '../utils/theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getAvatarUri } from '../utils/media';
 
 // Use same dark theme as ChatListScreen
 const DARK_BG = '#1A1A1A';
@@ -73,7 +74,7 @@ export default function NewChatScreen() {
             conversationId: 'new', // Flag to indicate new chat or lookup needed
             partnerId: user.id,
             userName: user.name,
-            avatar: user.avatar
+            avatar: getAvatarUri(user.avatar, user.name)
         });
     };
 
@@ -84,7 +85,7 @@ export default function NewChatScreen() {
         >
             <View style={styles.avatarContainer}>
                 {item.avatar ? (
-                    <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                    <Image source={{ uri: getAvatarUri(item.avatar, item.name) }} style={styles.avatar} />
                 ) : (
                     <LinearGradient
                         colors={['#667eea', '#764ba2']}

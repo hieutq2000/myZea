@@ -20,14 +20,16 @@ import {
     Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { apiRequest, createGroupPost, uploadImage, getCurrentUser, Post } from '../utils/api';
+import { apiRequest, createGroupPost, uploadImage, getCurrentUser, Post, getImageUrl, toggleLikePost } from '../utils/api';
 import { launchImageLibrary } from '../utils/imagePicker';
 import InAppBrowser from '../components/InAppBrowser';
 import TextWithSeeMore from '../components/TextWithSeeMore';
 import VideoPlayer from '../components/VideoPlayer';
 import PhotoGrid from '../components/PhotoGrid';
+import PostCard from '../components/PostCard';
 import { formatTime } from '../utils/formatTime';
 import { isVideo, getUri, getAvatarUri } from '../utils/media';
+import { useNavigation } from '@react-navigation/native';
 
 interface GroupDetail {
     id: string;
@@ -79,6 +81,10 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
     const [newPostImages, setNewPostImages] = useState<string[]>([]);
     const [isPosting, setIsPosting] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
+
+    // Reaction State for PostCard
+    const [localReactions, setLocalReactions] = useState<{ [postId: string]: string }>({});
+    const navigation = useNavigation<any>();
 
     // Animated Header State
     const scrollY = useRef(new Animated.Value(0)).current;
@@ -159,6 +165,15 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
             ]);
             setGroup(groupData);
             setPosts(postsData);
+
+            // Initialize localReactions from server data
+            const newReactions: { [postId: string]: string } = {};
+            postsData.forEach(post => {
+                if (post.isLiked) {
+                    newReactions[post.id] = 'like';
+                }
+            });
+            setLocalReactions(newReactions);
         } catch (error) {
             console.error('Load group error:', error);
             Alert.alert('Lỗi', 'Không thể tải thông tin nhóm');
@@ -189,70 +204,46 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
         }
     };
 
-    const renderPost = ({ item }: { item: Post }) => {
-        const avatarUri = getAvatarUri(item.author.avatar, item.author.name);
+    const renderPost = ({ item }: { item: Post }) => (
+        <PostCard
+            post={item}
+            currentUser={currentUser}
+            localReaction={localReactions[item.id]}
+            onReaction={async (postId, reactionId) => {
+                const currentReaction = localReactions[postId];
+                const isUnlike = currentReaction === reactionId || reactionId === null;
 
-        return (
-            <View style={styles.postCard}>
-                <View style={styles.postHeader}>
-                    <Image source={{ uri: avatarUri }} style={styles.postAvatar} />
-                    <View style={styles.postInfo}>
-                        <Text style={styles.postAuthor}>{item.author.name}</Text>
-                        <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
-                    </View>
-                    <TouchableOpacity>
-                        <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
-                    </TouchableOpacity>
-                </View>
+                setLocalReactions(prev => {
+                    const newState = { ...prev };
+                    if (isUnlike || !reactionId) delete newState[postId];
+                    else newState[postId] = reactionId;
+                    return newState;
+                });
 
+                setPosts(prev => prev.map(p => {
+                    if (p.id === postId) {
+                        const wasLiked = !!currentReaction;
+                        let newLikes = p.likes;
+                        if (!wasLiked && !isUnlike && reactionId) newLikes++;
+                        if (wasLiked && isUnlike) newLikes--;
+                        return { ...p, likes: newLikes, isLiked: !isUnlike && !!reactionId };
+                    }
+                    return p;
+                }));
 
-
-                <View style={{ paddingHorizontal: 16 }}>
-                    <TextWithSeeMore text={item.content} onLinkPress={openLink} />
-                </View>
-
-                {/* Post Images/Videos - Sử dụng PhotoGrid giống PlaceScreen */}
-                {item.images && item.images.length > 0 && (
-                    <View style={{ marginTop: 8 }}>
-                        {/* Check if single video */}
-                        {item.images.length === 1 && isVideo(item.images[0]) ? (
-                            <VideoPlayer
-                                source={getUri(item.images[0])}
-                                style={{ width: '100%', maxHeight: 450 }}
-                            />
-                        ) : (
-                            <PhotoGrid
-                                images={item.images}
-                                onPressImage={(_index: number) => {
-                                    // Có thể thêm image viewer ở đây sau
-                                }}
-                            />
-                        )}
-                    </View>
-                )}
-
-                <View style={styles.postStats}>
-                    <Text style={styles.statsText}>{item.likes} lượt thích</Text>
-                    <Text style={styles.statsText}>{item.comments} bình luận</Text>
-                </View>
-
-                <View style={styles.postActions}>
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Ionicons name={item.isLiked ? 'heart' : 'heart-outline'} size={20} color={item.isLiked ? '#E91E63' : '#666'} />
-                        <Text style={styles.actionText}>Thích</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Ionicons name="chatbubble-outline" size={20} color="#666" />
-                        <Text style={styles.actionText}>Bình luận</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Ionicons name="share-outline" size={20} color="#666" />
-                        <Text style={styles.actionText}>Chia sẻ</Text>
-                    </TouchableOpacity>
-                </View>
-            </View >
-        );
-    };
+                try {
+                    await toggleLikePost(postId);
+                } catch (error) {
+                    console.error('Reaction error', error);
+                }
+            }}
+            onComment={(post) => navigation.navigate('PostDetail', { postId: post.id, post })}
+            onShare={(post) => { /* TODO: Implement share modal */ }}
+            onViewProfile={(targetUser) => { /* TODO: Implement profile view */ }}
+            onImagePress={(post, index) => { /* TODO: Implement image viewer */ }}
+            onLinkPress={openLink}
+        />
+    );
 
     if (isLoading) {
         return (
@@ -270,7 +261,7 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
         );
     }
 
-    const coverUri = group.coverImage || 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&q=80';
+    const coverUri = group.coverImage ? getImageUrl(group.coverImage) : 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&q=80';
     const avatarUri = getAvatarUri(group.avatar, group.name);
 
     return (
@@ -348,6 +339,7 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
 
             <Animated.FlatList
                 data={posts}
+                extraData={localReactions}
                 keyExtractor={item => item.id}
                 renderItem={renderPost}
                 refreshControl={

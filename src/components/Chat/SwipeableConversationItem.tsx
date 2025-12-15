@@ -3,6 +3,7 @@ import { View, StyleSheet, Image, Animated, Text } from 'react-native';
 import { Swipeable, TouchableOpacity } from 'react-native-gesture-handler';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getAvatarUri } from '../../utils/media';
 
 // Zalo Colors
 const ZALO_BLUE = '#0068FF';
@@ -194,7 +195,7 @@ const SwipeableConversationItem = forwardRef<any, SwipeableConversationItemProps
                 {/* Avatar with Online Status */}
                 <View style={styles.avatarContainer}>
                     {conversation.avatar ? (
-                        <Image source={{ uri: conversation.avatar }} style={styles.avatar} />
+                        <Image source={{ uri: getAvatarUri(conversation.avatar, conversation.name) }} style={styles.avatar} />
                     ) : (
                         <LinearGradient
                             colors={['#A0AEC0', '#718096']}

@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchUsers } from '../utils/api';
+import { getAvatarUri } from '../utils/media';
 
 const HISTORY_KEY = 'place_search_history';
 
@@ -103,7 +104,7 @@ export default function PlaceSearchScreen({ onBack, onSelectResult }: PlaceSearc
                 {/* Icon/Avatar */}
                 <View style={styles.iconContainer}>
                     {item.type === 'USER' ? (
-                        <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                        <Image source={{ uri: getAvatarUri(item.avatar, item.name) }} style={styles.avatar} />
                     ) : (
                         // History keyword icon (clean without background circle as per image, just icon)
                         // Actually image shows simple clock icon

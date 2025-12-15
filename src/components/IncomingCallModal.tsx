@@ -15,6 +15,7 @@ import {
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getAvatarUri } from '../utils/media';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -162,7 +163,7 @@ export default function IncomingCallModal({
         >
             <View style={{ flex: 1, backgroundColor: 'black' }}>
                 <ImageBackground
-                    source={{ uri: callerAvatar || 'https://images.unsplash.com/photo-1557683316-973673baf926?w=800&q=80' }}
+                    source={{ uri: getAvatarUri(callerAvatar, callerName) }}
                     style={styles.container}
                     blurRadius={30}
                     resizeMode="cover"
@@ -188,7 +189,7 @@ export default function IncomingCallModal({
                                     <Animated.View style={[styles.avatarPulse, { transform: [{ scale: pulseAnim }] }]} />
                                     <View style={styles.avatarContainer}>
                                         {callerAvatar ? (
-                                            <Image source={{ uri: callerAvatar }} style={styles.avatar} />
+                                            <Image source={{ uri: getAvatarUri(callerAvatar, callerName) }} style={styles.avatar} />
                                         ) : (
                                             <Text style={styles.avatarText}>{callerName[0]?.toUpperCase()}</Text>
                                         )}
