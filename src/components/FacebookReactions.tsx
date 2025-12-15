@@ -6,9 +6,9 @@
  * Features:
  * - Long press to reveal reaction bar with spring animations
  * - Each emoji floats and bounces when appearing (staggered)
- * - Finger tracking: hovered emoji scales up (1.4x), others scale down (0.9x)
+ * - Finger tracking: hovered emoji scales up, others scale down
  * - Haptic feedback on selection
- * - Selected reaction animates to button position
+ * - SELECTED EMOJI FLIES TO BUTTON POSITION (like real Facebook!)
  * - Fully reusable and well-commented
  * 
  * Dependencies:
@@ -18,13 +18,13 @@
  * - lottie-react-native
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    Dimensions,
     Platform,
+    LayoutChangeEvent,
 } from 'react-native';
 import Animated, {
     useSharedValue,
@@ -38,6 +38,7 @@ import Animated, {
     runOnJS,
     FadeIn,
     FadeOut,
+    Easing,
 } from 'react-native-reanimated';
 import {
     Gesture,
@@ -59,17 +60,33 @@ try {
 // ============================================================
 
 // Animation timing constants
-const LONG_PRESS_DURATION = 500; // ms to trigger long press
+const LONG_PRESS_DURATION = 300; // Nhanh hơn để phản hồi tốt
 const EMOJI_SIZE = 40; // Size of each emoji
-const EMOJI_SPACING = 8; // Spacing between emojis
-const BAR_PADDING = 12; // Padding inside reaction bar
-const HOVER_SCALE = 1.4; // Scale when hovering
+const EMOJI_SPACING = 4; // Khoảng cách nhỏ hơn giống Facebook
+const BAR_PADDING = 6; // Padding nhỏ hơn
+const HOVER_SCALE = 1.5; // Scale when hovering
 const DEFAULT_SCALE = 1.0; // Default emoji scale
 const SHRINK_SCALE = 0.85; // Scale for non-hovered emojis
+
+// Spring config nhanh và bouncy giống Facebook
 const SPRING_CONFIG = {
     damping: 12,
-    stiffness: 180,
-    mass: 0.8,
+    stiffness: 400,
+    mass: 0.5,
+};
+
+// Spring config cho entrance animation - rất nhanh
+const ENTRANCE_SPRING = {
+    damping: 10,
+    stiffness: 500,
+    mass: 0.4,
+};
+
+// Spring config cho fly animation
+const FLY_SPRING = {
+    damping: 15,
+    stiffness: 300,
+    mass: 0.6,
 };
 
 /**
@@ -85,7 +102,6 @@ export interface Reaction {
 
 /**
  * Available reactions - using local Lottie files
- * Note: Require paths must be static strings for Metro bundler
  */
 export const REACTIONS: Reaction[] = [
     {
@@ -143,34 +159,24 @@ export const REACTIONS: Reaction[] = [
 // HELPER FUNCTIONS
 // ============================================================
 
-/**
- * Trigger haptic feedback (soft impact) - safe fallback if not available
- */
 const triggerHaptic = () => {
     if (Platform.OS !== 'web' && Haptics) {
         try {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        } catch (e) {
-            // Haptics not available
-        }
+        } catch (e) { }
     }
 };
 
-/**
- * Trigger stronger haptic for selection - safe fallback if not available
- */
 const triggerSelectionHaptic = () => {
     if (Platform.OS !== 'web' && Haptics) {
         try {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        } catch (e) {
-            // Haptics not available
-        }
+        } catch (e) { }
     }
 };
 
 // ============================================================
-// EMOJI ITEM COMPONENT
+// EMOJI ITEM COMPONENT - Có animation bay về nút
 // ============================================================
 
 interface EmojiItemProps {
@@ -179,70 +185,104 @@ interface EmojiItemProps {
     isHovered: boolean;
     isVisible: boolean;
     anyHovered: boolean;
+    isSelected: boolean; // New: emoji được chọn
+    isOtherSelected: boolean; // New: emoji khác được chọn (để fade out)
 }
 
-/**
- * Individual emoji item with hover animations
- */
 const EmojiItem = React.memo(({
     reaction,
     index,
     isHovered,
     isVisible,
     anyHovered,
+    isSelected,
+    isOtherSelected,
 }: EmojiItemProps) => {
-    // Shared values for animations
+    // Animation values
     const scale = useSharedValue(0);
     const translateY = useSharedValue(20);
+    const translateX = useSharedValue(0);
+    const opacity = useSharedValue(1);
 
-    // Animate in when visible
+    // Entrance animation
     React.useEffect(() => {
-        if (isVisible) {
-            // Staggered entrance animation
-            const delay = index * 50;
+        if (isVisible && !isSelected && !isOtherSelected) {
+            const delay = index * 15;
+
+            // Reset position
+            translateX.value = 0;
+            opacity.value = 1;
+
             scale.value = withDelay(
                 delay,
-                withSpring(1, { ...SPRING_CONFIG, stiffness: 200 })
+                withSequence(
+                    withSpring(1.15, ENTRANCE_SPRING),
+                    withSpring(1, { damping: 15, stiffness: 300 })
+                )
             );
             translateY.value = withDelay(
                 delay,
                 withSequence(
-                    withSpring(-8, { damping: 8, stiffness: 300 }), // Bounce up
-                    withSpring(0, SPRING_CONFIG) // Settle
+                    withSpring(-15, ENTRANCE_SPRING),
+                    withSpring(0, { damping: 12, stiffness: 250 })
                 )
             );
-        } else {
-            scale.value = withTiming(0, { duration: 150 });
-            translateY.value = withTiming(20, { duration: 150 });
+        } else if (!isVisible && !isSelected) {
+            scale.value = withTiming(0, { duration: 100 });
+            translateY.value = withTiming(10, { duration: 100 });
         }
-    }, [isVisible, index]);
+    }, [isVisible, index, isSelected, isOtherSelected]);
 
     // Hover effect
     React.useEffect(() => {
+        if (isSelected || isOtherSelected) return; // Skip hover if selecting
+
         if (isHovered) {
             scale.value = withSpring(HOVER_SCALE, SPRING_CONFIG);
-            translateY.value = withSpring(-15, SPRING_CONFIG);
+            translateY.value = withSpring(-20, SPRING_CONFIG);
         } else if (anyHovered) {
-            // Shrink when another emoji is hovered
             scale.value = withSpring(SHRINK_SCALE, SPRING_CONFIG);
             translateY.value = withSpring(0, SPRING_CONFIG);
         } else if (isVisible) {
-            // Return to normal
             scale.value = withSpring(DEFAULT_SCALE, SPRING_CONFIG);
             translateY.value = withSpring(0, SPRING_CONFIG);
         }
-    }, [isHovered, anyHovered, isVisible]);
+    }, [isHovered, anyHovered, isVisible, isSelected, isOtherSelected]);
+
+    // FLY TO BUTTON animation khi được chọn!
+    React.useEffect(() => {
+        if (isSelected) {
+            // Bay về vị trí nút (xuống dưới và về giữa)
+            const targetX = -index * (EMOJI_SIZE + EMOJI_SPACING); // Bay về giữa (index 0)
+            const targetY = 60; // Bay xuống nút
+
+            translateX.value = withSpring(targetX, FLY_SPRING);
+            translateY.value = withSpring(targetY, FLY_SPRING);
+            scale.value = withSequence(
+                withSpring(1.8, { damping: 8, stiffness: 400 }), // Phóng to
+                withSpring(0, { damping: 15, stiffness: 200 }) // Thu nhỏ biến mất
+            );
+            opacity.value = withDelay(200, withTiming(0, { duration: 150 }));
+        }
+    }, [isSelected, index]);
+
+    // Fade out animation cho các emoji khác khi có emoji được chọn
+    React.useEffect(() => {
+        if (isOtherSelected) {
+            scale.value = withTiming(0.5, { duration: 150 });
+            opacity.value = withTiming(0, { duration: 150 });
+        }
+    }, [isOtherSelected]);
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [
             { scale: scale.value },
             { translateY: translateY.value },
+            { translateX: translateX.value },
         ],
+        opacity: opacity.value,
+        zIndex: isHovered || isSelected ? 100 : 1,
     }));
-
-    // Pause lottie when not visible or hovered to save resources, but keep it ready
-    // Actually, autoPlay={true} is fine, Lottie is optimized.
-    // Specifying width/height in style is important for Lottie.
 
     return (
         <Animated.View style={[styles.emojiContainer, animatedStyle]}>
@@ -252,8 +292,7 @@ const EmojiItem = React.memo(({
                 autoPlay={isVisible}
                 loop
             />
-            {/* Show label on hover */}
-            {isHovered && (
+            {isHovered && !isSelected && (
                 <Animated.View
                     entering={FadeIn.duration(150)}
                     exiting={FadeOut.duration(100)}
@@ -273,31 +312,27 @@ const EmojiItem = React.memo(({
 interface ReactionBarProps {
     isVisible: boolean;
     hoveredIndex: number;
-    onSelect: (reaction: Reaction) => void;
+    selectedIndex: number; // New: index của emoji được chọn
 }
 
-/**
- * The floating reaction bar containing all emoji options
- */
 const ReactionBar = React.memo(({
     isVisible,
     hoveredIndex,
-    onSelect,
+    selectedIndex,
 }: ReactionBarProps) => {
-    // Bar container animation
     const containerScale = useSharedValue(0);
     const containerOpacity = useSharedValue(0);
 
     React.useEffect(() => {
         if (isVisible) {
             containerScale.value = withSpring(1, {
-                damping: 15,
-                stiffness: 200,
+                damping: 12,
+                stiffness: 300,
             });
-            containerOpacity.value = withTiming(1, { duration: 200 });
+            containerOpacity.value = withTiming(1, { duration: 100 });
         } else {
-            containerScale.value = withTiming(0.5, { duration: 150 });
-            containerOpacity.value = withTiming(0, { duration: 150 });
+            containerScale.value = withTiming(0.8, { duration: 100 });
+            containerOpacity.value = withTiming(0, { duration: 100 });
         }
     }, [isVisible]);
 
@@ -309,14 +344,14 @@ const ReactionBar = React.memo(({
                 translateY: interpolate(
                     containerScale.value,
                     [0, 1],
-                    [20, 0],
+                    [15, 0],
                     Extrapolation.CLAMP
                 ),
             },
         ],
     }));
 
-    if (!isVisible) return null;
+    if (!isVisible && selectedIndex < 0) return null;
 
     return (
         <Animated.View style={[styles.reactionBar, containerStyle]}>
@@ -327,13 +362,13 @@ const ReactionBar = React.memo(({
                         reaction={reaction}
                         index={index}
                         isHovered={hoveredIndex === index}
-                        isVisible={isVisible}
+                        isVisible={isVisible || selectedIndex >= 0}
                         anyHovered={hoveredIndex >= 0}
+                        isSelected={selectedIndex === index}
+                        isOtherSelected={selectedIndex >= 0 && selectedIndex !== index}
                     />
                 ))}
             </View>
-            {/* Arrow pointing down */}
-            <View style={styles.arrow} />
         </Animated.View>
     );
 });
@@ -343,98 +378,105 @@ const ReactionBar = React.memo(({
 // ============================================================
 
 interface ReactionButtonProps {
-    /** Currently selected reaction (null if none) */
     selectedReaction: Reaction | null;
-    /** Callback when a reaction is selected */
     onReactionSelect: (reaction: Reaction | null) => void;
-    /** Optional: Custom button style */
     buttonStyle?: object;
-    /** Optional: Custom text style */
     textStyle?: object;
 }
 
-/**
- * Main reaction button with long press to show reaction bar
- */
 export function ReactionButton({
     selectedReaction,
     onReactionSelect,
     buttonStyle,
     textStyle,
 }: ReactionButtonProps) {
-    // State
     const [isBarVisible, setIsBarVisible] = React.useState(false);
     const [hoveredIndex, setHoveredIndex] = React.useState(-1);
+    const [selectedIndex, setSelectedIndex] = React.useState(-1); // New: tracking selected emoji for fly animation
 
-    // Shared values for gesture tracking
     const fingerX = useSharedValue(0);
     const fingerY = useSharedValue(0);
     const isLongPressing = useSharedValue(false);
+    const buttonWidth = useSharedValue(0);
 
-    // Calculate which emoji is being hovered based on finger position
-    const calcHoveredIndex = useCallback((x: number, y: number) => {
+    const onLayout = useCallback((event: LayoutChangeEvent) => {
+        buttonWidth.value = event.nativeEvent.layout.width;
+    }, []);
+
+    const calcHoveredIndex = useCallback((x: number, y: number, btnWidth: number) => {
         'worklet';
-        // Reaction bar dimensions
-        const barWidth = REACTIONS.length * (EMOJI_SIZE + EMOJI_SPACING) + BAR_PADDING * 2;
-        const startX = -barWidth / 2 + BAR_PADDING + EMOJI_SIZE / 2;
+        const totalBarWidth = REACTIONS.length * (EMOJI_SIZE + EMOJI_SPACING) + BAR_PADDING * 2 - EMOJI_SPACING;
+        const centerX = btnWidth / 2;
+        const relativeX = x - centerX;
+        const barLeftEdge = -totalBarWidth / 2;
 
-        // Check if finger is in the reaction bar area (above button)
-        if (y > -40 || y < -120) {
+        if (y > 20 || y < -200) {
             return -1;
         }
 
-        // Calculate which emoji based on X position
+        const xInBar = relativeX - barLeftEdge;
+        const contentStart = BAR_PADDING;
+
         for (let i = 0; i < REACTIONS.length; i++) {
-            const emojiCenterX = startX + i * (EMOJI_SIZE + EMOJI_SPACING);
-            const halfWidth = (EMOJI_SIZE + EMOJI_SPACING) / 2;
-            if (x >= emojiCenterX - halfWidth && x <= emojiCenterX + halfWidth) {
+            const emojiCenter = contentStart + i * (EMOJI_SIZE + EMOJI_SPACING) + EMOJI_SIZE / 2;
+            const hitBox = EMOJI_SIZE + EMOJI_SPACING;
+
+            if (xInBar >= emojiCenter - hitBox / 2 && xInBar <= emojiCenter + hitBox / 2) {
                 return i;
             }
         }
+
         return -1;
     }, []);
 
-    // Handle reaction selection
+    // Handle reaction selection với fly animation
     const handleSelect = useCallback((index: number) => {
         if (index >= 0 && index < REACTIONS.length) {
             const reaction = REACTIONS[index];
-            // Toggle off if same reaction
-            if (selectedReaction?.id === reaction.id) {
-                onReactionSelect(null);
-            } else {
-                onReactionSelect(reaction);
-            }
+
+            // Trigger fly animation
+            setSelectedIndex(index);
             triggerSelectionHaptic();
+
+            // Delay để animation fly hoàn thành rồi mới update state
+            setTimeout(() => {
+                if (selectedReaction?.id === reaction.id) {
+                    onReactionSelect(null);
+                } else {
+                    onReactionSelect(reaction);
+                }
+                setIsBarVisible(false);
+                setHoveredIndex(-1);
+                setSelectedIndex(-1);
+            }, 350); // Đợi animation fly xong
+        } else {
+            setIsBarVisible(false);
+            setHoveredIndex(-1);
         }
-        setIsBarVisible(false);
-        setHoveredIndex(-1);
     }, [selectedReaction, onReactionSelect]);
 
-    // Handle simple tap (quick like/unlike)
     const handleTap = useCallback(() => {
         if (selectedReaction) {
-            // Unlike
             onReactionSelect(null);
         } else {
-            // Like
-            onReactionSelect(REACTIONS[0]); // Default to 👍
+            onReactionSelect(REACTIONS[0]);
         }
         triggerHaptic();
     }, [selectedReaction, onReactionSelect]);
 
-    // Show reaction bar
     const showBar = useCallback(() => {
         setIsBarVisible(true);
+        setSelectedIndex(-1); // Reset
         triggerHaptic();
     }, []);
 
-    // Hide reaction bar
     const hideBar = useCallback(() => {
-        setIsBarVisible(false);
-        setHoveredIndex(-1);
-    }, []);
+        if (selectedIndex < 0) { // Chỉ ẩn nếu không có fly animation
+            setIsBarVisible(false);
+            setHoveredIndex(-1);
+        }
+    }, [selectedIndex]);
 
-    // Update hovered index
     const updateHovered = useCallback((index: number) => {
         setHoveredIndex(prev => {
             if (prev !== index && index >= 0) {
@@ -444,7 +486,6 @@ export function ReactionButton({
         });
     }, []);
 
-    // Combined gesture for tap and long press with drag
     const gesture = useMemo(() =>
         Gesture.Pan()
             .activateAfterLongPress(LONG_PRESS_DURATION)
@@ -459,13 +500,15 @@ export function ReactionButton({
                 'worklet';
                 fingerX.value = e.x;
                 fingerY.value = e.y;
-                const idx = calcHoveredIndex(e.x, e.y);
+                const w = buttonWidth.value || 80;
+                const idx = calcHoveredIndex(e.x, e.y, w);
                 runOnJS(updateHovered)(idx);
             })
             .onEnd((e) => {
                 'worklet';
                 isLongPressing.value = false;
-                const idx = calcHoveredIndex(e.x, e.y);
+                const w = buttonWidth.value || 80;
+                const idx = calcHoveredIndex(e.x, e.y, w);
                 runOnJS(handleSelect)(idx);
             })
             .onFinalize(() => {
@@ -474,13 +517,12 @@ export function ReactionButton({
                     runOnJS(hideBar)();
                 }
             }),
-        [calcHoveredIndex, showBar, hideBar, handleSelect, updateHovered]
+        [calcHoveredIndex, showBar, hideBar, handleSelect, updateHovered, buttonWidth]
     );
 
-    // Tap gesture for quick like/unlike
     const tapGesture = useMemo(() =>
         Gesture.Tap()
-            .maxDuration(LONG_PRESS_DURATION - 100)
+            .maxDuration(LONG_PRESS_DURATION - 50)
             .onEnd(() => {
                 'worklet';
                 runOnJS(handleTap)();
@@ -488,10 +530,8 @@ export function ReactionButton({
         [handleTap]
     );
 
-    // Combine gestures
     const combinedGesture = Gesture.Race(gesture, tapGesture);
 
-    // Button animation when selected
     const buttonScale = useSharedValue(1);
 
     React.useEffect(() => {
@@ -507,24 +547,17 @@ export function ReactionButton({
 
     return (
         <View style={styles.container}>
-            {/* Reaction bar (positioned above button) */}
             <ReactionBar
                 isVisible={isBarVisible}
                 hoveredIndex={hoveredIndex}
-                onSelect={(reaction) => {
-                    if (selectedReaction?.id === reaction.id) {
-                        onReactionSelect(null);
-                    } else {
-                        onReactionSelect(reaction);
-                    }
-                    triggerSelectionHaptic();
-                    setIsBarVisible(false);
-                }}
+                selectedIndex={selectedIndex}
             />
 
-            {/* Main button */}
             <GestureDetector gesture={combinedGesture}>
-                <Animated.View style={[styles.button, buttonAnimatedStyle, buttonStyle]}>
+                <Animated.View
+                    style={[styles.button, buttonAnimatedStyle, buttonStyle]}
+                    onLayout={onLayout}
+                >
                     {selectedReaction ? (
                         <>
                             <Text style={styles.selectedEmoji}>{selectedReaction.emoji}</Text>
@@ -534,16 +567,13 @@ export function ReactionButton({
                         </>
                     ) : (
                         <>
-                            {/* Default Like Icon - can use Lottie stationary or an icon */}
-                            {/* Since we have Lottie for 'like', we can use it, but keeping it static or just the emoji is cleaner for default state */}
-                            {/* We'll use the Lottie, paused, as an icon */}
                             <View style={{ width: 24, height: 24, overflow: 'hidden' }}>
                                 <LottieView
                                     source={require('../assets/lottie/like.json')}
-                                    style={{ width: 40, height: 40, marginTop: -8, marginLeft: -8 }} // Adjust to center the animation which is 40x40
+                                    style={{ width: 40, height: 40, marginTop: -8, marginLeft: -8 }}
                                     autoPlay={false}
                                     loop={false}
-                                    progress={0} // First frame
+                                    progress={0}
                                 />
                             </View>
                             <Text style={[styles.buttonText, textStyle]}>Thích</Text>
@@ -563,8 +593,8 @@ const styles = StyleSheet.create({
     container: {
         position: 'relative',
         alignItems: 'center',
+        zIndex: 10,
     },
-
     button: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -585,7 +615,7 @@ const styles = StyleSheet.create({
     },
     reactionBar: {
         position: 'absolute',
-        bottom: 50,
+        bottom: 60,
         alignItems: 'center',
         zIndex: 1000,
     },
@@ -597,26 +627,11 @@ const styles = StyleSheet.create({
         paddingVertical: BAR_PADDING,
         paddingHorizontal: BAR_PADDING,
         gap: EMOJI_SPACING,
-        // Shift bar right so arrow points to first emoji (Like)
-        // This fixes "too far left" issue for Like button
-        marginLeft: 110,
-        // Shadow
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
+        shadowOpacity: 0.15,
         shadowRadius: 12,
-        elevation: 10,
-    },
-    arrow: {
-        width: 0,
-        height: 0,
-        borderLeftWidth: 10,
-        borderRightWidth: 10,
-        borderTopWidth: 10,
-        borderLeftColor: 'transparent',
-        borderRightColor: 'transparent',
-        borderTopColor: '#FFFFFF',
-        marginTop: -1,
+        elevation: 8,
     },
     emojiContainer: {
         width: EMOJI_SIZE,
@@ -625,14 +640,14 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     emojiImage: {
-        width: 40,
-        height: 40,
+        width: 50,
+        height: 50,
     },
     labelContainer: {
         position: 'absolute',
-        top: -30,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        paddingHorizontal: 10,
+        top: -35,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
         minWidth: 60,
@@ -648,9 +663,6 @@ const styles = StyleSheet.create({
 export default ReactionButton;
 export { ReactionBar };
 
-/**
- * Helper to get reaction by ID
- */
 export const getReactionById = (id: string): Reaction | undefined => {
     return REACTIONS.find(r => r.id === id);
 };
