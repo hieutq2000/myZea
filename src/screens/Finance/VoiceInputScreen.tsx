@@ -1,7 +1,7 @@
 /**
- * VoiceInputScreen - Màn hình nhập giao dịch bằng giọng nói THẬT
+ * VoiceInputScreen - Màn hình ghi âm giọng nói
  * 
- * Sử dụng expo-speech-recognition để nhận dạng giọng nói
+ * UI giống ảnh mẫu với hiệu ứng waveform
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -14,23 +14,23 @@ import {
     StatusBar,
     Platform,
     Alert,
-    ActivityIndicator,
     Animated,
-    TextInput,
-    KeyboardAvoidingView,
     ScrollView,
+    Modal,
+    Dimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useTheme } from '../../context/ThemeContext';
 import { addTransaction, getWallets } from '../../utils/finance/storage';
-import { findCategoryFromText, getCategoryById } from '../../utils/finance/categories';
-import { VoiceParseResult, TransactionType } from '../../types/finance';
+import { findCategoryFromText, getCategoryById, getCategoriesByType } from '../../utils/finance/categories';
+import { VoiceParseResult, TransactionType, Category } from '../../types/finance';
+
 import {
     ExpoSpeechRecognitionModule,
     useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
+
+const { width } = Dimensions.get('window');
 
 // Format số tiền
 const formatMoney = (amount: number): string => {
@@ -41,25 +41,15 @@ const formatMoney = (amount: number): string => {
 const parseAmount = (text: string): number => {
     const lowerText = text.toLowerCase();
 
-    // Tìm số với đơn vị nghìn
     const nghinMatch = lowerText.match(/(\d+(?:[.,]\d+)?)\s*(?:nghìn|ngàn|ngh)/);
-    if (nghinMatch) {
-        return parseFloat(nghinMatch[1].replace(',', '.')) * 1000;
-    }
+    if (nghinMatch) return parseFloat(nghinMatch[1].replace(',', '.')) * 1000;
 
-    // Tìm số với đơn vị k/K
     const kMatch = lowerText.match(/(\d+(?:[.,]\d+)?)\s*k/);
-    if (kMatch) {
-        return parseFloat(kMatch[1].replace(',', '.')) * 1000;
-    }
+    if (kMatch) return parseFloat(kMatch[1].replace(',', '.')) * 1000;
 
-    // Tìm số với đơn vị triệu
     const trieuMatch = lowerText.match(/(\d+(?:[.,]\d+)?)\s*tri[ệe]u/);
-    if (trieuMatch) {
-        return parseFloat(trieuMatch[1].replace(',', '.')) * 1000000;
-    }
+    if (trieuMatch) return parseFloat(trieuMatch[1].replace(',', '.')) * 1000000;
 
-    // Tìm số thuần túy
     const numMatch = lowerText.match(/(\d{1,3}(?:[.,]?\d{3})*)/g);
     if (numMatch) {
         const numbers = numMatch.map(n => parseFloat(n.replace(/[.,]/g, '')));
@@ -69,11 +59,11 @@ const parseAmount = (text: string): number => {
     return 0;
 };
 
-// Parse local
+// Parse voice to result
 const parseVoiceLocal = (text: string): VoiceParseResult | null => {
     const lowerText = text.toLowerCase();
 
-    const incomeKeywords = ['lương', 'thu', 'nhận', 'bán', 'thưởng', 'được cho', 'lì xì', 'tiền mừng', 'trả lại'];
+    const incomeKeywords = ['lương', 'thu', 'nhận', 'bán', 'thưởng', 'được cho', 'lì xì', 'tiền mừng'];
     const isIncome = incomeKeywords.some(kw => lowerText.includes(kw));
     const type: TransactionType = isIncome ? 'income' : 'expense';
 
@@ -93,30 +83,63 @@ const parseVoiceLocal = (text: string): VoiceParseResult | null => {
     };
 };
 
-// Example texts for manual input
-const EXAMPLE_TEXTS = [
-    'Mua bánh mì 30k',
-    'Đổ xăng 100 nghìn',
-    'Ăn trưa 150k',
-    'Nhận lương 15 triệu',
-];
+// Waveform Bar Component
+const WaveformBar = ({ index, isListening }: { index: number; isListening: boolean }) => {
+    const heightAnim = useRef(new Animated.Value(20)).current;
+
+    useEffect(() => {
+        if (isListening) {
+            const animate = () => {
+                Animated.sequence([
+                    Animated.timing(heightAnim, {
+                        toValue: 15 + Math.random() * 50,
+                        duration: 100 + Math.random() * 100,
+                        useNativeDriver: false,
+                    }),
+                    Animated.timing(heightAnim, {
+                        toValue: 15 + Math.random() * 30,
+                        duration: 100 + Math.random() * 100,
+                        useNativeDriver: false,
+                    }),
+                ]).start(() => {
+                    if (isListening) animate();
+                });
+            };
+
+            // Delay each bar slightly for wave effect
+            setTimeout(() => animate(), index * 50);
+        } else {
+            Animated.timing(heightAnim, {
+                toValue: 20,
+                duration: 300,
+                useNativeDriver: false,
+            }).start();
+        }
+    }, [isListening]);
+
+    return (
+        <Animated.View
+            style={[
+                styles.waveBar,
+                { height: heightAnim }
+            ]}
+        />
+    );
+};
 
 export default function VoiceInputScreen() {
     const navigation = useNavigation();
-    const { colors } = useTheme();
 
     // State
-    const [mode, setMode] = useState<'voice' | 'text'>('voice');
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState('');
-    const [manualText, setManualText] = useState('');
     const [parseResult, setParseResult] = useState<VoiceParseResult | null>(null);
-    const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+    const [showCategoryModal, setShowCategoryModal] = useState(false);
 
     // Animation
-    const pulseAnim = useRef(new Animated.Value(1)).current;
+    const micScale = useRef(new Animated.Value(1)).current;
 
     // Check permission on mount
     useEffect(() => {
@@ -153,49 +176,43 @@ export default function VoiceInputScreen() {
     });
 
     useSpeechRecognitionEvent('error', (event) => {
-        console.log('Speech error:', event.error);
         setIsListening(false);
         if (event.error === 'no-speech') {
-            setError('Không nghe thấy giọng nói. Vui lòng thử lại.');
+            setError('Không nghe thấy giọng nói');
         } else if (event.error === 'not-allowed') {
-            setError('Chưa cấp quyền microphone. Vui lòng cấp quyền trong Cài đặt.');
+            setError('Chưa cấp quyền microphone');
         } else {
-            setError('Có lỗi xảy ra. Vui lòng thử lại.');
+            setError('Có lỗi xảy ra');
         }
     });
 
-    // Pulse animation
+    // Mic button animation
     useEffect(() => {
         if (isListening) {
             Animated.loop(
                 Animated.sequence([
-                    Animated.timing(pulseAnim, {
-                        toValue: 1.3,
-                        duration: 600,
+                    Animated.timing(micScale, {
+                        toValue: 1.1,
+                        duration: 400,
                         useNativeDriver: true,
                     }),
-                    Animated.timing(pulseAnim, {
+                    Animated.timing(micScale, {
                         toValue: 1,
-                        duration: 600,
+                        duration: 400,
                         useNativeDriver: true,
                     }),
                 ])
             ).start();
         } else {
-            pulseAnim.setValue(1);
+            micScale.setValue(1);
         }
     }, [isListening]);
 
-    // Start listening
     const startListening = async () => {
         if (!hasPermission) {
             const granted = await requestPermission();
             if (!granted) {
-                Alert.alert(
-                    'Cần quyền microphone',
-                    'Vui lòng cấp quyền microphone để sử dụng tính năng nhập giọng nói.',
-                    [{ text: 'OK' }]
-                );
+                Alert.alert('Cần cấp quyền microphone');
                 return;
             }
         }
@@ -212,8 +229,7 @@ export default function VoiceInputScreen() {
                 continuous: false,
             });
         } catch (err) {
-            console.error('Start error:', err);
-            setError('Không thể khởi động nhận dạng giọng nói.');
+            setError('Không thể bắt đầu ghi âm');
         }
     };
 
@@ -225,35 +241,42 @@ export default function VoiceInputScreen() {
         }
     };
 
-    const processVoice = async (text: string) => {
+    const processVoice = (text: string) => {
         if (!text.trim()) {
-            setError('Vui lòng nói nội dung giao dịch.');
+            setError('Không nhận được nội dung');
             return;
         }
 
-        setIsProcessing(true);
-
-        try {
-            const result = parseVoiceLocal(text);
-
-            if (result) {
-                setParseResult(result);
-                setError(null);
-            } else {
-                setError('Không thể nhận dạng số tiền. Vui lòng nói rõ ràng hơn, ví dụ: "Mua cafe 35 nghìn"');
-            }
-        } catch (err) {
-            console.error('Parse error:', err);
-            setError('Có lỗi xảy ra. Vui lòng thử lại.');
-        } finally {
-            setIsProcessing(false);
+        const result = parseVoiceLocal(text);
+        if (result) {
+            setParseResult(result);
+            setError(null);
+        } else {
+            setError('Không nhận dạng được số tiền');
         }
     };
 
-    const handleManualSubmit = () => {
-        if (manualText.trim()) {
-            setTranscript(manualText);
-            processVoice(manualText);
+    const handleChangeCategory = (category: Category) => {
+        if (parseResult) {
+            setParseResult({
+                ...parseResult,
+                categoryId: category.id,
+                categoryName: category.name,
+            });
+        }
+        setShowCategoryModal(false);
+    };
+
+    const handleToggleType = () => {
+        if (parseResult) {
+            const newType: TransactionType = parseResult.type === 'expense' ? 'income' : 'expense';
+            const categories = getCategoriesByType(newType);
+            setParseResult({
+                ...parseResult,
+                type: newType,
+                categoryId: categories[0].id,
+                categoryName: categories[0].name,
+            });
         }
     };
 
@@ -271,272 +294,225 @@ export default function VoiceInputScreen() {
                 categoryId: parseResult.categoryId,
                 description: parseResult.description,
                 date: parseResult.date,
-                createdBy: mode === 'voice' ? 'voice' : 'manual',
+                createdBy: 'voice',
             });
 
             Alert.alert('✅ Thành công', 'Đã lưu giao dịch!', [
                 { text: 'OK', onPress: () => navigation.goBack() }
             ]);
         } catch (err) {
-            console.error('Save error:', err);
-            Alert.alert('Lỗi', 'Không thể lưu giao dịch.');
+            Alert.alert('Lỗi', 'Không thể lưu giao dịch');
         }
     };
 
     const handleRetry = () => {
         setTranscript('');
-        setManualText('');
         setParseResult(null);
         setError(null);
     };
 
     const category = parseResult ? getCategoryById(parseResult.categoryId) : null;
+    const categories = parseResult ? getCategoriesByType(parseResult.type) : [];
+
+    // Generate waveform bars
+    const waveBars = Array.from({ length: 30 }, (_, i) => i);
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
 
             {/* Header */}
-            <LinearGradient
-                colors={['#8B5CF6', '#7C3AED']}
-                style={styles.header}
-            >
-                <SafeAreaView>
-                    <View style={styles.headerContent}>
-                        <TouchableOpacity onPress={() => navigation.goBack()}>
-                            <Ionicons name="close" size={28} color="#FFF" />
-                        </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Nhập nhanh</Text>
-                        <View style={{ width: 28 }} />
+            <SafeAreaView>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => navigation.goBack()}>
+                        <Ionicons name="arrow-back" size={24} color="#FFF" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Ghi âm giọng nói</Text>
+                    <TouchableOpacity onPress={() => navigation.goBack()}>
+                        <Ionicons name="close" size={24} color="#FFF" />
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+
+            {!parseResult ? (
+                // Recording View
+                <View style={styles.recordingView}>
+                    {/* Waveform */}
+                    <View style={styles.waveformContainer}>
+                        {waveBars.map((_, index) => (
+                            <WaveformBar key={index} index={index} isListening={isListening} />
+                        ))}
                     </View>
 
-                    {/* Mode Switcher */}
-                    <View style={styles.modeSwitcher}>
-                        <TouchableOpacity
-                            style={[styles.modeBtn, mode === 'voice' && styles.modeBtnActive]}
-                            onPress={() => setMode('voice')}
-                        >
-                            <Ionicons name="mic" size={18} color={mode === 'voice' ? '#8B5CF6' : '#FFF'} />
-                            <Text style={[styles.modeBtnText, mode === 'voice' && styles.modeBtnTextActive]}>
-                                Giọng nói
+                    {/* Status Text */}
+                    <View style={styles.statusContainer}>
+                        {isListening ? (
+                            <Text style={styles.transcriptText}>
+                                {transcript || 'Đang nghe...'}
                             </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.modeBtn, mode === 'text' && styles.modeBtnActive]}
-                            onPress={() => setMode('text')}
-                        >
-                            <Ionicons name="create" size={18} color={mode === 'text' ? '#8B5CF6' : '#FFF'} />
-                            <Text style={[styles.modeBtnText, mode === 'text' && styles.modeBtnTextActive]}>
-                                Nhập text
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </SafeAreaView>
-            </LinearGradient>
-
-            <KeyboardAvoidingView
-                style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            >
-                <ScrollView
-                    style={styles.content}
-                    contentContainerStyle={styles.scrollContent}
-                    keyboardShouldPersistTaps="handled"
-                >
-                    {/* Voice Mode Instructions */}
-                    {mode === 'voice' && !transcript && !isListening && (
-                        <View style={styles.instructions}>
-                            <View style={styles.micIconLarge}>
-                                <Ionicons name="mic" size={48} color="#8B5CF6" />
-                            </View>
-                            <Text style={styles.instructionTitle}>
-                                Bấm nút mic và nói
-                            </Text>
-                            <Text style={styles.instructionText}>
-                                Ví dụ: "Mua cafe 35 nghìn"
-                            </Text>
-                            <Text style={styles.instructionText}>
-                                Hoặc: "Nhận lương 15 triệu"
-                            </Text>
-                        </View>
-                    )}
-
-                    {/* Text Mode Input */}
-                    {mode === 'text' && !parseResult && (
-                        <View style={styles.textInputSection}>
-                            <Text style={styles.inputLabel}>
-                                Nhập mô tả giao dịch:
-                            </Text>
-                            <TextInput
-                                style={styles.textInput}
-                                placeholder='Ví dụ: "Mua cafe 35k" hoặc "Nhận lương 15 triệu"'
-                                placeholderTextColor="#6B7280"
-                                value={manualText}
-                                onChangeText={setManualText}
-                                multiline
-                                autoFocus
-                            />
-
-                            <View style={styles.quickExamples}>
-                                <Text style={styles.quickExamplesLabel}>Gợi ý:</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                    {EXAMPLE_TEXTS.map((text, index) => (
-                                        <TouchableOpacity
-                                            key={index}
-                                            style={styles.exampleChip}
-                                            onPress={() => setManualText(text)}
-                                        >
-                                            <Text style={styles.exampleChipText}>{text}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-                            </View>
-
-                            <TouchableOpacity
-                                style={[styles.submitBtn, !manualText.trim() && styles.submitBtnDisabled]}
-                                onPress={handleManualSubmit}
-                                disabled={!manualText.trim()}
-                            >
-                                <Ionicons name="checkmark-circle" size={22} color="#FFF" />
-                                <Text style={styles.submitBtnText}>Phân tích</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    {/* Listening Animation */}
-                    {isListening && (
-                        <View style={styles.listeningContainer}>
-                            <Animated.View style={[
-                                styles.listeningCircle,
-                                { transform: [{ scale: pulseAnim }] }
-                            ]}>
-                                <Ionicons name="mic" size={48} color="#FFF" />
-                            </Animated.View>
-                            <Text style={styles.listeningText}>Đang nghe...</Text>
-                            {transcript ? (
-                                <Text style={styles.realtimeTranscript}>"{transcript}"</Text>
-                            ) : (
-                                <Text style={styles.listeningHint}>Hãy nói vào microphone</Text>
-                            )}
-                        </View>
-                    )}
-
-                    {/* Transcript */}
-                    {transcript && !isListening && !parseResult && !isProcessing && (
-                        <View style={styles.transcriptCard}>
-                            <Text style={styles.transcriptLabel}>Nội dung:</Text>
-                            <Text style={styles.transcriptText}>"{transcript}"</Text>
-                        </View>
-                    )}
-
-                    {/* Processing */}
-                    {isProcessing && (
-                        <View style={styles.processingContainer}>
-                            <ActivityIndicator size="large" color="#8B5CF6" />
-                            <Text style={styles.processingText}>Đang phân tích...</Text>
-                        </View>
-                    )}
-
-                    {/* Parse Result */}
-                    {parseResult && !isProcessing && (
-                        <View style={styles.resultCard}>
-                            <Text style={styles.resultTitle}>✨ Thông tin giao dịch</Text>
-
-                            <View style={styles.resultRow}>
-                                <Text style={styles.resultLabel}>Loại:</Text>
-                                <View style={[
-                                    styles.typeBadge,
-                                    { backgroundColor: parseResult.type === 'expense' ? '#FEE2E2' : '#D1FAE5' }
-                                ]}>
-                                    <Text style={{
-                                        color: parseResult.type === 'expense' ? '#EF4444' : '#10B981',
-                                        fontWeight: '600',
-                                    }}>
-                                        {parseResult.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.resultRow}>
-                                <Text style={styles.resultLabel}>Số tiền:</Text>
-                                <Text style={[styles.resultAmount, {
-                                    color: parseResult.type === 'expense' ? '#EF4444' : '#10B981'
-                                }]}>
-                                    {parseResult.type === 'expense' ? '-' : '+'}{formatMoney(parseResult.amount)}
+                        ) : (
+                            <>
+                                <Text style={styles.instructionText}>
+                                    Ghi âm được chuyển đổi sang văn bản ngay trên thiết bị này.
                                 </Text>
-                            </View>
-
-                            <View style={styles.resultRow}>
-                                <Text style={styles.resultLabel}>Danh mục:</Text>
-                                <View style={styles.categoryBadge}>
-                                    {category && (
-                                        <>
-                                            <View style={[styles.categoryDot, { backgroundColor: category.color }]} />
-                                            <Text style={styles.categoryText}>{category.name}</Text>
-                                        </>
-                                    )}
+                                <Text style={styles.instructionText}>
+                                    Bằng cách nhấn ghi âm, bạn đồng ý chia sẻ văn bản để chuyển đổi
+                                </Text>
+                                <Text style={styles.instructionText}>
+                                    với Google Gemini.
+                                </Text>
+                                <View style={styles.infoIcon}>
+                                    <Ionicons name="information-circle-outline" size={20} color="#6B7280" />
                                 </View>
-                            </View>
+                            </>
+                        )}
 
-                            <View style={styles.resultActions}>
-                                <TouchableOpacity
-                                    style={[styles.actionButton, styles.retryButton]}
-                                    onPress={handleRetry}
-                                >
-                                    <Ionicons name="refresh" size={20} color="#6B7280" />
-                                    <Text style={styles.retryButtonText}>Thử lại</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={[styles.actionButton, styles.saveButton]}
-                                    onPress={handleSave}
-                                >
-                                    <Ionicons name="checkmark" size={20} color="#FFF" />
-                                    <Text style={styles.saveButtonText}>Lưu giao dịch</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    )}
-
-                    {/* Error */}
-                    {error && (
-                        <View style={styles.errorCard}>
-                            <Ionicons name="warning" size={24} color="#EF4444" />
+                        {error && (
                             <Text style={styles.errorText}>{error}</Text>
-                        </View>
-                    )}
-                </ScrollView>
-            </KeyboardAvoidingView>
+                        )}
+                    </View>
 
-            {/* Mic Button (only in voice mode) */}
-            {mode === 'voice' && !parseResult && (
-                <View style={styles.micContainer}>
-                    <TouchableOpacity
-                        style={styles.micButtonWrapper}
-                        onPress={isListening ? stopListening : startListening}
-                        activeOpacity={0.8}
-                    >
-                        <Animated.View style={[
-                            styles.micButton,
-                            { transform: [{ scale: isListening ? pulseAnim : 1 }] }
-                        ]}>
-                            <LinearGradient
-                                colors={isListening ? ['#EF4444', '#DC2626'] : ['#8B5CF6', '#7C3AED']}
-                                style={styles.micGradient}
-                            >
+                    {/* Mic Button Section */}
+                    <View style={styles.micSection}>
+                        <Text style={styles.micLabel}>
+                            {isListening ? 'Nhấn để dừng' : 'Nhấn để ghi âm'}
+                        </Text>
+
+                        <TouchableOpacity
+                            onPress={isListening ? stopListening : startListening}
+                            activeOpacity={0.8}
+                        >
+                            <Animated.View style={[
+                                styles.micButton,
+                                isListening && styles.micButtonActive,
+                                { transform: [{ scale: micScale }] }
+                            ]}>
                                 <Ionicons
                                     name={isListening ? 'stop' : 'mic'}
-                                    size={40}
+                                    size={32}
                                     color="#FFF"
                                 />
-                            </LinearGradient>
-                        </Animated.View>
-                    </TouchableOpacity>
-                    <Text style={styles.micHint}>
-                        {isListening ? 'Bấm để dừng' : 'Bấm để nói'}
-                    </Text>
+                            </Animated.View>
+                        </TouchableOpacity>
+                    </View>
                 </View>
+            ) : (
+                // Result View
+                <ScrollView style={styles.resultView} contentContainerStyle={styles.resultContent}>
+                    <View style={styles.resultCard}>
+                        <Text style={styles.resultTitle}>✨ Kết quả nhận dạng</Text>
+
+                        <View style={styles.transcriptBox}>
+                            <Text style={styles.resultTranscript}>"{parseResult.description}"</Text>
+                        </View>
+
+                        {/* Type */}
+                        <TouchableOpacity style={styles.resultRow} onPress={handleToggleType}>
+                            <Text style={styles.resultLabel}>Loại</Text>
+                            <View style={[
+                                styles.typeBadge,
+                                { backgroundColor: parseResult.type === 'expense' ? '#FEE2E2' : '#D1FAE5' }
+                            ]}>
+                                <Text style={{
+                                    color: parseResult.type === 'expense' ? '#EF4444' : '#10B981',
+                                    fontWeight: '600',
+                                }}>
+                                    {parseResult.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'}
+                                </Text>
+                                <Ionicons
+                                    name="swap-horizontal"
+                                    size={16}
+                                    color={parseResult.type === 'expense' ? '#EF4444' : '#10B981'}
+                                />
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Amount */}
+                        <View style={styles.resultRow}>
+                            <Text style={styles.resultLabel}>Số tiền</Text>
+                            <Text style={[styles.resultAmount, {
+                                color: parseResult.type === 'expense' ? '#EF4444' : '#10B981'
+                            }]}>
+                                {parseResult.type === 'expense' ? '-' : '+'}{formatMoney(parseResult.amount)}
+                            </Text>
+                        </View>
+
+                        {/* Category */}
+                        <TouchableOpacity style={styles.resultRow} onPress={() => setShowCategoryModal(true)}>
+                            <Text style={styles.resultLabel}>Danh mục</Text>
+                            <View style={styles.categorySelector}>
+                                {category && (
+                                    <View style={[styles.categoryDot, { backgroundColor: category.color }]} />
+                                )}
+                                <Text style={styles.categoryText}>{category?.name}</Text>
+                                <Ionicons name="chevron-down" size={18} color="#6B7280" />
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Actions */}
+                        <View style={styles.actionRow}>
+                            <TouchableOpacity style={styles.retryBtn} onPress={handleRetry}>
+                                <Ionicons name="refresh" size={20} color="#9CA3AF" />
+                                <Text style={styles.retryText}>Thử lại</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                                <Text style={styles.saveText}>Lưu giao dịch</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </ScrollView>
             )}
+
+            {/* Category Modal */}
+            <Modal
+                visible={showCategoryModal}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setShowCategoryModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Chọn danh mục</Text>
+                            <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                                <Ionicons name="close" size={24} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView contentContainerStyle={styles.categoryGrid}>
+                            {categories.map((cat) => (
+                                <TouchableOpacity
+                                    key={cat.id}
+                                    style={[
+                                        styles.categoryItem,
+                                        parseResult?.categoryId === cat.id && styles.categoryItemActive,
+                                    ]}
+                                    onPress={() => handleChangeCategory(cat)}
+                                >
+                                    <View style={[
+                                        styles.categoryIcon,
+                                        { backgroundColor: cat.color + '20' },
+                                        parseResult?.categoryId === cat.id && { backgroundColor: cat.color },
+                                    ]}>
+                                        <Ionicons
+                                            name={cat.icon as any}
+                                            size={22}
+                                            color={parseResult?.categoryId === cat.id ? '#FFF' : cat.color}
+                                        />
+                                    </View>
+                                    <Text style={[
+                                        styles.categoryName,
+                                        parseResult?.categoryId === cat.id && styles.categoryNameActive,
+                                    ]}>
+                                        {cat.name}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -547,230 +523,140 @@ const styles = StyleSheet.create({
         backgroundColor: '#0F0F23',
     },
     header: {
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-    },
-    headerContent: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingVertical: 12,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#FFF',
-    },
-    // Mode Switcher
-    modeSwitcher: {
-        flexDirection: 'row',
-        marginHorizontal: 16,
-        marginBottom: 12,
-        padding: 4,
-        backgroundColor: 'rgba(0,0,0,0.2)',
-        borderRadius: 12,
-    },
-    modeBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 10,
-        borderRadius: 10,
-        gap: 6,
-    },
-    modeBtnActive: {
-        backgroundColor: '#FFF',
-    },
-    modeBtnText: {
-        color: 'rgba(255,255,255,0.7)',
+        fontSize: 17,
         fontWeight: '600',
-        fontSize: 13,
-    },
-    modeBtnTextActive: {
-        color: '#8B5CF6',
-    },
-    content: {
-        flex: 1,
-    },
-    scrollContent: {
-        padding: 16,
-        paddingBottom: 140,
-    },
-    // Instructions
-    instructions: {
-        alignItems: 'center',
-        paddingVertical: 60,
-    },
-    micIconLarge: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#8B5CF620',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 24,
-    },
-    instructionTitle: {
         color: '#FFF',
-        fontSize: 22,
-        fontWeight: 'bold',
-        marginBottom: 16,
+    },
+    // Recording View
+    recordingView: {
+        flex: 1,
+        justifyContent: 'space-between',
+        paddingBottom: 60,
+    },
+    // Waveform
+    waveformContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: 100,
+        marginTop: 60,
+        gap: 3,
+    },
+    waveBar: {
+        width: 3,
+        backgroundColor: '#8B5CF6',
+        borderRadius: 2,
+    },
+    // Status
+    statusContainer: {
+        alignItems: 'center',
+        paddingHorizontal: 32,
     },
     instructionText: {
-        color: '#9CA3AF',
-        fontSize: 15,
-        marginBottom: 6,
-        textAlign: 'center',
-    },
-    // Text Input Section
-    textInputSection: {
-        marginBottom: 24,
-    },
-    inputLabel: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 12,
-    },
-    textInput: {
-        backgroundColor: '#1A1A2E',
-        borderRadius: 12,
-        padding: 16,
-        color: '#FFF',
-        fontSize: 16,
-        minHeight: 100,
-        textAlignVertical: 'top',
-        marginBottom: 12,
-    },
-    quickExamples: {
-        marginBottom: 16,
-    },
-    quickExamplesLabel: {
         color: '#6B7280',
-        fontSize: 12,
-        marginBottom: 8,
-    },
-    exampleChip: {
-        backgroundColor: '#1A1A2E',
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginRight: 8,
-    },
-    exampleChipText: {
-        color: '#A78BFA',
         fontSize: 13,
-    },
-    submitBtn: {
-        backgroundColor: '#8B5CF6',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 16,
-        borderRadius: 12,
-        gap: 8,
-    },
-    submitBtnDisabled: {
-        backgroundColor: '#4B5563',
-    },
-    submitBtnText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    // Listening
-    listeningContainer: {
-        alignItems: 'center',
-        paddingVertical: 60,
-    },
-    listeningCircle: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: '#8B5CF6',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 24,
-    },
-    listeningText: {
-        color: '#FFF',
-        fontSize: 20,
-        fontWeight: '600',
-    },
-    listeningHint: {
-        color: '#6B7280',
-        fontSize: 14,
-        marginTop: 8,
-    },
-    realtimeTranscript: {
-        color: '#A78BFA',
-        fontSize: 16,
-        fontStyle: 'italic',
-        marginTop: 16,
         textAlign: 'center',
-        paddingHorizontal: 20,
+        lineHeight: 20,
     },
-    // Transcript
-    transcriptCard: {
-        backgroundColor: '#1A1A2E',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 16,
-    },
-    transcriptLabel: {
-        color: '#6B7280',
-        fontSize: 12,
-        marginBottom: 4,
+    infoIcon: {
+        marginTop: 12,
     },
     transcriptText: {
-        color: '#FFF',
-        fontSize: 16,
+        color: '#A78BFA',
+        fontSize: 18,
+        fontWeight: '500',
+        textAlign: 'center',
         fontStyle: 'italic',
     },
-    // Processing
-    processingContainer: {
-        alignItems: 'center',
-        paddingVertical: 40,
-    },
-    processingText: {
-        color: '#9CA3AF',
-        marginTop: 12,
+    errorText: {
+        color: '#EF4444',
         fontSize: 14,
+        marginTop: 12,
     },
-    // Result Card
+    // Mic Section
+    micSection: {
+        alignItems: 'center',
+    },
+    micLabel: {
+        color: '#9CA3AF',
+        fontSize: 14,
+        marginBottom: 16,
+    },
+    micButton: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: '#EC4899',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    micButtonActive: {
+        backgroundColor: '#EF4444',
+    },
+    // Result View
+    resultView: {
+        flex: 1,
+    },
+    resultContent: {
+        padding: 16,
+    },
     resultCard: {
         backgroundColor: '#1A1A2E',
+        borderRadius: 20,
         padding: 20,
-        borderRadius: 16,
-        gap: 16,
     },
     resultTitle: {
         color: '#FFF',
         fontSize: 18,
         fontWeight: 'bold',
         textAlign: 'center',
-        marginBottom: 8,
+        marginBottom: 16,
+    },
+    transcriptBox: {
+        backgroundColor: '#0F0F23',
+        padding: 12,
+        borderRadius: 10,
+        marginBottom: 16,
+    },
+    resultTranscript: {
+        color: '#A78BFA',
+        fontSize: 14,
+        fontStyle: 'italic',
+        textAlign: 'center',
     },
     resultRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#2D2D4A',
     },
     resultLabel: {
         color: '#6B7280',
         fontSize: 14,
     },
     resultAmount: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: 'bold',
     },
     typeBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingVertical: 8,
         borderRadius: 20,
+        gap: 6,
     },
-    categoryBadge: {
+    categorySelector: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
@@ -783,77 +669,93 @@ const styles = StyleSheet.create({
     categoryText: {
         color: '#FFF',
         fontSize: 14,
-        fontWeight: '500',
     },
-    resultActions: {
+    actionRow: {
         flexDirection: 'row',
         gap: 12,
-        marginTop: 8,
+        marginTop: 20,
     },
-    actionButton: {
+    retryBtn: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        backgroundColor: '#374151',
         paddingVertical: 14,
         borderRadius: 12,
         gap: 8,
     },
-    retryButton: {
-        backgroundColor: '#374151',
-    },
-    retryButtonText: {
+    retryText: {
         color: '#9CA3AF',
         fontWeight: '600',
     },
-    saveButton: {
-        backgroundColor: '#10B981',
+    saveBtn: {
         flex: 2,
-    },
-    saveButtonText: {
-        color: '#FFF',
-        fontWeight: '600',
-    },
-    // Error
-    errorCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FEE2E220',
-        padding: 16,
-        borderRadius: 12,
-        gap: 12,
-        marginTop: 16,
-    },
-    errorText: {
-        color: '#EF4444',
-        flex: 1,
-    },
-    // Mic
-    micContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        alignItems: 'center',
-        paddingBottom: 40,
-        backgroundColor: '#0F0F23',
-    },
-    micButtonWrapper: {
-        marginBottom: 12,
-    },
-    micButton: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        overflow: 'hidden',
-    },
-    micGradient: {
-        flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
+        backgroundColor: '#10B981',
+        paddingVertical: 14,
+        borderRadius: 12,
     },
-    micHint: {
-        color: '#6B7280',
-        fontSize: 14,
+    saveText: {
+        color: '#FFF',
+        fontWeight: '600',
+        fontSize: 15,
+    },
+    // Modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: '#1A1A2E',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        maxHeight: '70%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#2D2D4A',
+    },
+    modalTitle: {
+        color: '#FFF',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    categoryGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        padding: 16,
+        gap: 12,
+    },
+    categoryItem: {
+        width: (width - 80) / 3,
+        alignItems: 'center',
+        padding: 12,
+        borderRadius: 12,
+    },
+    categoryItemActive: {
+        backgroundColor: '#2D2D4A',
+    },
+    categoryIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    categoryName: {
+        color: '#9CA3AF',
+        fontSize: 11,
+        textAlign: 'center',
+    },
+    categoryNameActive: {
+        color: '#FFF',
     },
 });

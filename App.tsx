@@ -50,6 +50,7 @@ import AddTransactionScreen from './src/screens/Finance/AddTransactionScreen';
 import VoiceInputScreen from './src/screens/Finance/VoiceInputScreen';
 import StatisticsScreen from './src/screens/Finance/StatisticsScreen';
 import CalendarScreen from './src/screens/Finance/CalendarScreen';
+import WalletsScreen from './src/screens/Finance/WalletsScreen';
 
 // Configure Notifications to show alert when app is in foreground
 Notifications.setNotificationHandler({
@@ -594,6 +595,11 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         <Stack.Screen
           name="FinanceCalendar"
           component={CalendarScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="FinanceWallets"
+          component={WalletsScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

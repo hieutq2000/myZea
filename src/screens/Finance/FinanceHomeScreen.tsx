@@ -24,6 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { Transaction, Wallet } from '../../types/finance';
 import {
@@ -117,6 +118,12 @@ export default function FinanceHomeScreen() {
             // Lấy lương tháng
             const salary = await getMonthlySalary();
             setMonthlySalaryState(salary);
+
+            // Lấy trạng thái ẩn số dư
+            const savedHideBalance = await AsyncStorage.getItem('finance_hide_balance');
+            if (savedHideBalance !== null) {
+                setHideBalance(savedHideBalance === 'true');
+            }
 
             // Kiểm tra lần đầu dùng app
             if (transactionsData.length === 0 && walletsData[0]?.balance === 0) {
@@ -228,7 +235,15 @@ export default function FinanceHomeScreen() {
         setShowBalanceModal(true);
     };
 
+    // Toggle ẩn/hiện số dư và lưu vào storage
+    const toggleHideBalance = async () => {
+        const newValue = !hideBalance;
+        setHideBalance(newValue);
+        await AsyncStorage.setItem('finance_hide_balance', newValue.toString());
+    };
+
     // Xóa tất cả dữ liệu
+
     const handleClearAllData = () => {
         Alert.alert(
             '⚠️ Xóa tất cả dữ liệu',
@@ -298,13 +313,29 @@ export default function FinanceHomeScreen() {
             <View style={styles.header}>
                 <SafeAreaView>
                     <View style={styles.headerTop}>
-                        <TouchableOpacity onPress={() => navigation.goBack()}>
-                            <Ionicons name="arrow-back" size={24} color="#FFF" />
-                        </TouchableOpacity>
+                        <View style={styles.headerLeft}>
+                            <TouchableOpacity onPress={() => navigation.goBack()}>
+                                <Ionicons name="arrow-back" size={24} color="#FFF" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={toggleHideBalance}
+                                style={styles.headerEyeBtn}
+
+                            >
+                                <Ionicons
+                                    name={hideBalance ? 'eye-off' : 'eye'}
+                                    size={20}
+                                    color="rgba(255,255,255,0.7)"
+                                />
+                            </TouchableOpacity>
+                        </View>
                         <View style={styles.headerCenter}>
-                            <Text style={styles.totalBalanceSmall}>{formatMoney(totalBalance)}</Text>
+                            <Text style={styles.totalBalanceSmall}>
+                                {hideBalance ? '••••••••' : formatMoney(totalBalance)}
+                            </Text>
                             <Text style={styles.totalBalanceLabel}>Tổng số dư</Text>
                         </View>
+
                         <TouchableOpacity
                             style={styles.walletBtn}
                             onPress={() => {
@@ -379,7 +410,7 @@ export default function FinanceHomeScreen() {
                             {hideBalance ? '••••••••' : formatMoney(totalBalance)}
                         </Text>
                         <TouchableOpacity
-                            onPress={() => setHideBalance(!hideBalance)}
+                            onPress={toggleHideBalance}
                             style={styles.eyeButton}
                         >
                             <Ionicons
@@ -480,13 +511,17 @@ export default function FinanceHomeScreen() {
 
                 {/* Menu Grid */}
                 <View style={styles.menuGrid}>
-                    <TouchableOpacity style={styles.menuItem}>
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => navigation.navigate('FinanceWallets' as any)}
+                    >
                         <View style={[styles.menuIcon, { backgroundColor: '#0EA5E920' }]}>
                             <Ionicons name="wallet-outline" size={22} color="#0EA5E9" />
                         </View>
                         <Text style={styles.menuText}>Ví</Text>
-                        <Text style={styles.menuCount}>{wallets.length}/3</Text>
+                        <Text style={styles.menuCount}>{wallets.length}/5</Text>
                     </TouchableOpacity>
+
 
                     <TouchableOpacity style={styles.menuItem}>
                         <View style={[styles.menuIcon, { backgroundColor: '#F59E0B20' }]}>
@@ -782,7 +817,17 @@ const styles = StyleSheet.create({
     eyeButton: {
         padding: 4,
     },
+    // Header Left (back + eye)
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    headerEyeBtn: {
+        padding: 4,
+    },
     // Action Buttons
+
 
     actionRow: {
         flexDirection: 'row',
