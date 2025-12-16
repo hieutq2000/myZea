@@ -45,4 +45,7 @@ export type RootStackParamList = {
     FinanceGoals: undefined;
     FinanceCalendar: undefined;
     FinanceStatistics: undefined;
+
+    // Admin Screens
+    AdminStickers: undefined;
 };

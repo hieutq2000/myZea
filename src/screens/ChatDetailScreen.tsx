@@ -3,11 +3,12 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
-import { Ionicons, Feather, FontAwesome, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, Feather, FontAwesome, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
-import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage } from '../utils/api';
+import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage, getImageUrl } from '../utils/api';
 import { launchImageLibrary, launchCamera } from '../utils/imagePicker';
 import EmojiPicker from '../components/EmojiPicker';
+import StickerPicker from '../components/StickerPicker';
 import { getAvatarUri } from '../utils/media';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -33,6 +34,7 @@ export default function ChatDetailScreen() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [pickerTab, setPickerTab] = useState<'emoji' | 'sticker'>('emoji');
     const [showMediaPicker, setShowMediaPicker] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -262,6 +264,11 @@ export default function ChatDetailScreen() {
 
     const handleEmojiSelect = (emoji: string) => {
         setInputText(prev => prev + emoji);
+    };
+
+    const handleStickerSelect = (packId: string, stickerIndex: number, sticker: any) => {
+        const stickerUrl = sticker.image_url;
+        sendMessage(undefined, 'sticker', stickerUrl);
     };
 
     const toggleEmojiPicker = () => {
@@ -496,27 +503,27 @@ export default function ChatDetailScreen() {
         }
     };
 
-    // Swipe to reply - render left action (reply icon)
+    // Swipe to reply - render right action (reply icon)
     const renderSwipeReplyAction = (
         progress: Animated.AnimatedInterpolation<number>,
         dragX: Animated.AnimatedInterpolation<number>
     ) => {
         const scale = dragX.interpolate({
-            inputRange: [0, 30, 50],
-            outputRange: [0, 0.8, 1],
+            inputRange: [-50, -30, 0],
+            outputRange: [1, 0.8, 0],
             extrapolate: 'clamp',
         });
 
         const opacity = dragX.interpolate({
-            inputRange: [0, 20, 40],
-            outputRange: [0, 0.5, 1],
+            inputRange: [-40, -20, 0],
+            outputRange: [1, 0.5, 0],
             extrapolate: 'clamp',
         });
 
         return (
-            <Animated.View style={[styles.swipeReplyContainer, { opacity }]}>
-                <Animated.View style={[styles.swipeReplyIcon, { transform: [{ scale }] }]}>
-                    <Ionicons name="arrow-undo" size={18} color="#666" />
+            <Animated.View style={[styles.swipeActionRightContainer, { opacity }]}>
+                <Animated.View style={[styles.swipeActionRightIcon, { transform: [{ scale }] }]}>
+                    <Ionicons name="arrow-undo" size={20} color="#666" />
                 </Animated.View>
             </Animated.View>
         );
@@ -545,7 +552,7 @@ export default function ChatDetailScreen() {
         const isMe = item.sender === 'me' || (currentUserId && item.senderId === currentUserId);
         const nextMessage = messages[index + 1];
         const isLast = index === messages.length - 1 || (nextMessage && nextMessage.senderId !== item.senderId);
-        const isImage = item.type === 'image' && item.imageUrl;
+        const isImage = (item.type === 'image' || item.type === 'sticker') && item.imageUrl;
 
         // Detect call messages - backward compatibility for 'text' type from DB
         let isCall = item.type === 'call_missed' || item.type === 'call_ended';
@@ -583,6 +590,7 @@ export default function ChatDetailScreen() {
                     friction={3}
                     enableTrackpadTwoFingerGesture={false}
                     containerStyle={styles.swipeableContainer}
+                    hitSlop={{ left: -50 }}
                 >
                     <View style={[
                         styles.messageRow,
@@ -609,9 +617,9 @@ export default function ChatDetailScreen() {
                                 delayLongPress={500}
                             >
                                 <Image
-                                    source={{ uri: item.imageUrl }}
+                                    source={{ uri: getImageUrl(item.imageUrl) }}
                                     style={styles.messageImage}
-                                    resizeMode="cover"
+                                    resizeMode={item.type === 'sticker' ? 'contain' : 'cover'}
                                 />
                                 <Text style={styles.messageTime}>{item.time}</Text>
                             </TouchableOpacity>
@@ -778,11 +786,13 @@ export default function ChatDetailScreen() {
                             />
                             {/* Sticker Button (Inside Input) */}
                             <TouchableOpacity style={styles.stickerInnerButton} onPress={toggleEmojiPicker}>
-                                <MaterialIcons
-                                    name={showEmojiPicker ? "keyboard" : "sticky-note-2"}
-                                    size={24}
-                                    color="#6B7280"
-                                />
+                                {showEmojiPicker ? (
+                                    <MaterialIcons name="keyboard" size={24} color="#6B7280" />
+                                ) : (
+                                    <View style={styles.stickerIconContainer}>
+                                        <MaterialCommunityIcons name="sticker-emoji" size={16} color="#FFFFFF" />
+                                    </View>
+                                )}
                             </TouchableOpacity>
                         </View>
 
@@ -799,9 +809,33 @@ export default function ChatDetailScreen() {
                     </View>
                 </View>
 
-                {/* Emoji Picker */}
+                {/* Emoji/Sticker Picker */}
                 {showEmojiPicker && (
-                    <EmojiPicker onSelectEmoji={handleEmojiSelect} />
+                    <View style={styles.pickerContainer}>
+                        {/* Tabs */}
+                        <View style={styles.pickerTabs}>
+                            <TouchableOpacity
+                                style={[styles.pickerTab, pickerTab === 'sticker' && styles.pickerTabActive]}
+                                onPress={() => setPickerTab('sticker')}
+                            >
+                                <MaterialIcons name="sticky-note-2" size={24} color={pickerTab === 'sticker' ? ZALO_BLUE : '#6B7280'} />
+                                <Text style={[styles.pickerTabText, pickerTab === 'sticker' && styles.pickerTabTextActive]}>Stickers</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.pickerTab, pickerTab === 'emoji' && styles.pickerTabActive]}
+                                onPress={() => setPickerTab('emoji')}
+                            >
+                                <Ionicons name="happy-outline" size={24} color={pickerTab === 'emoji' ? ZALO_BLUE : '#6B7280'} />
+                                <Text style={[styles.pickerTabText, pickerTab === 'emoji' && styles.pickerTabTextActive]}>Emoji</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {pickerTab === 'emoji' ? (
+                            <EmojiPicker onSelectEmoji={handleEmojiSelect} />
+                        ) : (
+                            <StickerPicker onSelectSticker={handleStickerSelect} />
+                        )}
+                    </View>
                 )}
 
                 {/* Upload indicator */}
@@ -1281,6 +1315,14 @@ const styles = StyleSheet.create({
     stickerInnerButton: {
         padding: 4,
     },
+    stickerIconContainer: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#000000',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     rightButton: {
         padding: 8,
         marginLeft: 8,
@@ -1474,5 +1516,60 @@ const styles = StyleSheet.create({
         height: StyleSheet.hairlineWidth,
         backgroundColor: '#3A3A3A',
         marginLeft: 16,
+    },
+    // Swipe Reply Styles
+    swipeActionRightContainer: {
+        width: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    swipeActionRightIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#F3F4F6',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 1.41,
+        elevation: 2,
+    },
+    // Picker Styles
+    pickerContainer: {
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+    },
+    pickerTabs: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    pickerTab: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 6,
+    },
+    pickerTabActive: {
+        backgroundColor: '#EBF4FF',
+        borderBottomWidth: 2,
+        borderBottomColor: ZALO_BLUE,
+    },
+    pickerTabText: {
+        fontSize: 14,
+        color: '#6B7280',
+        fontWeight: '500',
+    },
+    pickerTabTextActive: {
+        color: ZALO_BLUE,
+        fontWeight: '600',
     },
 });

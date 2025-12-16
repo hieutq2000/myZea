@@ -3077,9 +3077,6 @@ io.on('connection', (socket) => {
 
 // ============ STICKER API ROUTES ============
 
-// Setup multer for sticker uploads
-const multer = require('multer');
-const fs = require('fs');
 
 // Create stickers upload directory if not exists
 const stickersUploadDir = path.join(__dirname, '../uploads/stickers');

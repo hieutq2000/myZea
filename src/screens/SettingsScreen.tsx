@@ -12,7 +12,7 @@ import {
     Switch
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -178,6 +178,17 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
                         />
                     </View>
                 </View>
+
+                {/* Admin Tools */}
+                <TouchableOpacity style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]} onPress={() => navigation.navigate('AdminStickers')}>
+                    <View style={styles.cardRow}>
+                        <View style={styles.iconLabel}>
+                            <MaterialIcons name="admin-panel-settings" size={22} color={colors.primary} style={styles.cardIcon} />
+                            <Text style={[styles.cardTitle, { color: colors.text }]}>Quản lý Sticker</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                    </View>
+                </TouchableOpacity>
 
                 {/* App Update */}
                 <TouchableOpacity style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]} onPress={handleCheckUpdate}>

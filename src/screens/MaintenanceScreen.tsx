@@ -14,7 +14,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function MaintenanceScreen() {
+interface MaintenanceScreenProps {
+    message?: string;
+}
+
+export default function MaintenanceScreen({ message }: MaintenanceScreenProps) {
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
@@ -22,8 +26,7 @@ export default function MaintenanceScreen() {
                 <Ionicons name="construct" size={80} color="#F59E0B" />
                 <Text style={styles.title}>Đang bảo trì</Text>
                 <Text style={styles.description}>
-                    Hệ thống đang được nâng cấp.{'\n'}
-                    Vui lòng quay lại sau ít phút.
+                    {message || "Hệ thống đang được nâng cấp.\nVui lòng quay lại sau ít phút."}
                 </Text>
             </SafeAreaView>
         </View>

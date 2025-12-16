@@ -51,6 +51,7 @@ import VoiceInputScreen from './src/screens/Finance/VoiceInputScreen';
 import StatisticsScreen from './src/screens/Finance/StatisticsScreen';
 import CalendarScreen from './src/screens/Finance/CalendarScreen';
 import WalletsScreen from './src/screens/Finance/WalletsScreen';
+import AdminStickersScreen from './src/screens/AdminStickersScreen';
 
 // Configure Notifications to show alert when app is in foreground
 Notifications.setNotificationHandler({
@@ -602,6 +603,9 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
           component={WalletsScreen}
           options={{ headerShown: false }}
         />
+
+        {/* Admin Screens */}
+        <Stack.Screen name="AdminStickers" component={AdminStickersScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
 
       <UpdateModal
