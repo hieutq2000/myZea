@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const sizeOf = require('image-size');
 
 const app = express();
 const http = require('http');
@@ -212,6 +213,30 @@ async function initDatabase() {
         FOREIGN KEY (pack_id) REFERENCES sticker_packs(id) ON DELETE CASCADE
       )
     `);
+
+        // Feedback table
+        await pool.execute(`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        type VARCHAR(20) DEFAULT 'feedback',
+        content TEXT,
+        context TEXT,
+        media_urls JSON,
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+        // Check and add is_banned column if not exists
+        try {
+            await pool.execute("SELECT is_banned FROM users LIMIT 1");
+        } catch (e) {
+            console.log("Adding is_banned column to users table...");
+            await pool.execute("ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT FALSE");
+        }
 
         console.log('✅ Database connected and tables created');
     } catch (error) {
@@ -435,7 +460,7 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
         if (req.user.email !== 'hieu@gmail.com') {
             return res.status(403).json({ error: 'Không có quyền truy cập' });
         }
-        const [users] = await pool.execute('SELECT id, name, email, avatar, level, xp, created_at FROM users ORDER BY created_at DESC');
+        const [users] = await pool.execute('SELECT id, name, email, avatar, level, xp, is_banned, created_at FROM users ORDER BY created_at DESC');
         res.json(users);
     } catch (error) {
         console.error(error);
@@ -449,10 +474,15 @@ app.put('/api/admin/users/:id', authenticateToken, async (req, res) => {
         if (req.user.email !== 'hieu@gmail.com') return res.status(403).json({ error: 'Không có quyền truy cập' });
 
         const { id } = req.params;
-        const { name, email, xp, level, resetPassword } = req.body;
+        const { name, email, xp, level, resetPassword, is_banned } = req.body;
 
         let query = 'UPDATE users SET name = ?, email = ?, xp = ?, level = ?';
         let params = [name, email, xp, level];
+
+        if (is_banned !== undefined) {
+            query += ', is_banned = ?';
+            params.push(is_banned);
+        }
 
         if (resetPassword) {
             const hashedPassword = await bcrypt.hash(resetPassword, 10);
@@ -1375,8 +1405,7 @@ const upload = multer({
 app.use('/uploads', express.static(uploadsDir));
 
 // Upload image endpoint
-// Import image-size
-const sizeOf = require('image-size');
+
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
@@ -3263,12 +3292,25 @@ app.post('/api/upload/sticker', authenticateToken, stickerUpload.single('sticker
         const fileUrl = `/uploads/stickers/${req.file.filename}`;
         const fileFormat = path.extname(req.file.filename).slice(1) || 'webp';
 
+        let width = 512;
+        let height = 512;
+        try {
+            const dimensions = sizeOf(req.file.path);
+            width = dimensions.width;
+            height = dimensions.height;
+        } catch (e) {
+            console.error('Error getting dimensions:', e);
+        }
+
         res.json({
             success: true,
             url: fileUrl,
             imageUrl: fileUrl,
             fileFormat: fileFormat,
-            size: req.file.size
+            size: req.file.size,
+            width,
+            height,
+            is_animated: fileFormat === 'gif' || fileFormat === 'webp' // Naive guess
         });
     } catch (error) {
         console.error('Upload sticker error:', error);
@@ -3325,6 +3367,29 @@ app.delete('/api/admin/stickers/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// Update sticker (move to another pack)
+app.put('/api/admin/stickers/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { id } = req.params;
+        const { pack_id } = req.body;
+
+        if (!pack_id) {
+            return res.status(400).json({ error: 'Pack ID is required' });
+        }
+
+        await pool.execute('UPDATE stickers SET pack_id = ? WHERE id = ?', [pack_id, id]);
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Update sticker error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
 // Reorder stickers in a pack (admin)
 app.put('/api/admin/sticker-packs/:packId/stickers/reorder', authenticateToken, async (req, res) => {
     try {
@@ -3353,6 +3418,80 @@ app.put('/api/admin/sticker-packs/:packId/stickers/reorder', authenticateToken, 
 });
 
 // ============ END STICKER API ============
+
+// ============ FEEDBACK API ============
+
+// Create Feedback
+app.post('/api/feedback', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { type, content, context, media_urls } = req.body;
+
+        if (!content) {
+            return res.status(400).json({ error: 'Nội dung không được để trống' });
+        }
+
+        const id = uuidv4();
+        await pool.execute(
+            'INSERT INTO feedback (id, user_id, type, content, context, media_urls, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [id, userId, type || 'feedback', content, context || '', JSON.stringify(media_urls || []), 'pending']
+        );
+
+        res.json({ success: true, id });
+    } catch (error) {
+        console.error('Create feedback error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get My Feedback History
+app.get('/api/feedback/my', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const [rows] = await pool.execute(
+            'SELECT * FROM feedback WHERE user_id = ? ORDER BY created_at DESC',
+            [userId]
+        );
+        res.json(rows.map(r => ({ ...r, media_urls: safeJsonParse(r.media_urls) })));
+    } catch (error) {
+        console.error('Get my feedback error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get All Feedback (Admin)
+app.get('/api/admin/feedback', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+        const [rows] = await pool.execute(`
+            SELECT f.*, u.name as user_name, u.email as user_email, u.avatar as user_avatar 
+            FROM feedback f 
+            JOIN users u ON f.user_id = u.id 
+            ORDER BY f.created_at DESC
+        `);
+        res.json(rows.map(r => ({ ...r, media_urls: safeJsonParse(r.media_urls) })));
+    } catch (error) {
+        console.error('Get all feedback error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Update Feedback Status (Admin)
+app.put('/api/admin/feedback/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+        const { status } = req.body;
+        await pool.execute('UPDATE feedback SET status = ? WHERE id = ?', [status, req.params.id]);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Update feedback error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
 
 initDatabase().then(async () => {
     // Create additional tables and optimize indexes

@@ -179,47 +179,11 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
                     </View>
                 </View>
 
-                {/* Admin Tools */}
-                <TouchableOpacity style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]} onPress={() => navigation.navigate('AdminStickers')}>
-                    <View style={styles.cardRow}>
-                        <View style={styles.iconLabel}>
-                            <MaterialIcons name="admin-panel-settings" size={22} color={colors.primary} style={styles.cardIcon} />
-                            <Text style={[styles.cardTitle, { color: colors.text }]}>Quản lý Sticker</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                    </View>
-                </TouchableOpacity>
-
-                {/* App Update */}
-                <TouchableOpacity style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]} onPress={handleCheckUpdate}>
-                    <View style={styles.cardRow}>
-                        <View style={styles.iconLabel}>
-                            <Ionicons name="cloud-download-outline" size={22} color="#16A34A" style={styles.cardIcon} />
-                            <View>
-                                <Text style={[styles.cardTitle, { color: colors.text }]}>Cập nhật ứng dụng</Text>
-                                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>Phiên bản hiện tại: v{getLatestChangelog()?.version || '?'}</Text>
-                            </View>
-                        </View>
-                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                    </View>
-                </TouchableOpacity>
-
-                {/* Language Setting */}
-                <TouchableOpacity style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]}>
-                    <View style={styles.cardRow}>
-                        <View style={styles.iconLabel}>
-                            <Ionicons name="text-outline" size={22} color={colors.text} style={styles.cardIcon} />
-                            <Text style={[styles.cardTitle, { color: colors.text }]}>Cài đặt ngôn ngữ</Text>
-                        </View>
-                        <View style={styles.rightContent}>
-                            <Text style={[styles.valueText, { color: colors.textSecondary }]}>Tiếng Việt</Text>
-                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                        </View>
-                    </View>
-                </TouchableOpacity>
-
                 {/* Feedback */}
-                <TouchableOpacity style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]}>
+                <TouchableOpacity
+                    style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]}
+                    onPress={() => navigation.navigate('Feedback')}
+                >
                     <View style={styles.cardRow}>
                         <View style={styles.iconLabel}>
                             <Ionicons name="chatbox-ellipses-outline" size={22} color={colors.text} style={styles.cardIcon} />

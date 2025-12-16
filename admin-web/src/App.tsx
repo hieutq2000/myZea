@@ -8,12 +8,16 @@ import {
   VideoCameraOutlined,
   SettingOutlined,
   LogoutOutlined,
+  SmileOutlined,
+  CustomerServiceOutlined,
 } from '@ant-design/icons';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Login from './pages/Login';
 import Users from './pages/Users';
 import ContentPage from './pages/Content';
 import Settings from './pages/Settings';
+import Stickers from './pages/Stickers';
+import FeedbackPage from './pages/Feedback';
 
 const { Header, Sider, Content } = Layout;
 
@@ -71,6 +75,16 @@ const App: React.FC = () => {
                 label: <Link to="/content">Nội dung</Link>,
               },
               {
+                key: 'sticker',
+                icon: <SmileOutlined />,
+                label: <Link to="/stickers">Stickers</Link>,
+              },
+              {
+                key: 'feedback',
+                icon: <CustomerServiceOutlined />,
+                label: <Link to="/feedback">Phản hồi</Link>,
+              },
+              {
                 key: '4',
                 icon: <SettingOutlined />,
                 label: <Link to="/settings">Cài đặt</Link>,
@@ -117,6 +131,8 @@ const App: React.FC = () => {
               } />
               <Route path="/users" element={<Users />} />
               <Route path="/content" element={<ContentPage />} />
+              <Route path="/stickers" element={<Stickers />} />
+              <Route path="/feedback" element={<FeedbackPage />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </Content>

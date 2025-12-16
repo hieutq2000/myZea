@@ -89,14 +89,14 @@ const NUM_COLUMNS = Math.floor(SCREEN_WIDTH / (EMOJI_SIZE + EMOJI_MARGIN * 2));
 
 const styles = StyleSheet.create({
     container: {
-        height: 280,
+        flex: 1,
         backgroundColor: '#FFFFFF',
-        borderTopWidth: 1,
-        borderTopColor: '#E5E7EB',
+        // borderTopWidth: 1, // Handled by parent
+        // borderTopColor: '#E5E7EB',
     },
     containerDark: {
         backgroundColor: '#1A1A1A',
-        borderTopColor: '#333',
+        // borderTopColor: '#333',
     },
     categoryTabs: {
         maxHeight: 50,

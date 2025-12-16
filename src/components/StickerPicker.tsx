@@ -192,28 +192,8 @@ export default function StickerPicker({ onSelectSticker, onTabChange }: StickerP
                 )}
             </View>
 
-            {/* 4. Bottom Tab Bar */}
-            <View style={styles.bottomTabBar}>
-                <View style={styles.bottomTabsContainer}>
-                    <TouchableOpacity style={styles.bottomTabActive}>
-                        <Text style={styles.bottomTabActiveText}>Sticker</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.bottomTab}
-                        onPress={() => onTabChange && onTabChange('emoji')}
-                    >
-                        <Text style={styles.bottomTabText}>Emoji</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.bottomTab}>
-                        <Text style={styles.bottomTabText}>GIFs</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Backspace Button on the far right (usually helpful) */}
-                <TouchableOpacity style={styles.backspaceButton}>
-                    <Ionicons name="backspace-outline" size={24} color="#333" />
-                </TouchableOpacity>
-            </View>
+            {/* 4. Bottom Tab Bar - REMOVED (Controlled by Parent) */}
+            {/* <View style={styles.bottomTabBar}> ... </View> */}
         </View>
     );
 }

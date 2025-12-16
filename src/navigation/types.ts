@@ -47,5 +47,6 @@ export type RootStackParamList = {
     FinanceStatistics: undefined;
 
     // Admin Screens
-    AdminStickers: undefined;
+    // AdminStickers: undefined; // Removed
+    Feedback: undefined;
 };

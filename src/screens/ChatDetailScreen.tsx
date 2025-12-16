@@ -49,11 +49,14 @@ export default function ChatDetailScreen() {
     const [showScrollToBottom, setShowScrollToBottom] = useState(false);
     const [newMessageCount, setNewMessageCount] = useState(0);
     const [isNearBottom, setIsNearBottom] = useState(true);
+
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
     const socket = getSocket();
+    const isFirstLoad = useRef(true);
 
     useEffect(() => {
+        isFirstLoad.current = true;
         loadHistory();
         fetchCurrentUser();
 
@@ -180,7 +183,7 @@ export default function ChatDetailScreen() {
                 replyTo: m.replyTo // Map reply info
             }));
             setMessages(mapped);
-            scrollToBottom();
+            scrollToBottom(false);
 
             if (conversationId) {
                 markConversationAsRead(conversationId).catch(err =>
@@ -218,9 +221,9 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const scrollToBottom = () => {
+    const scrollToBottom = (animated: boolean = true) => {
         setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
+            flatListRef.current?.scrollToEnd({ animated: animated });
         }, 100);
         // Reset new message counter when scrolling to bottom
         setNewMessageCount(0);
@@ -762,7 +765,14 @@ export default function ChatDetailScreen() {
                     contentContainerStyle={[styles.listContent, messages.length === 0 && styles.emptyListContent]}
                     style={styles.listStyle}
                     onContentSizeChange={() => {
-                        if (isNearBottom) scrollToBottom();
+                        if (isFirstLoad.current) {
+                            setTimeout(() => {
+                                flatListRef.current?.scrollToEnd({ animated: false });
+                                isFirstLoad.current = false;
+                            }, 50);
+                        } else if (isNearBottom) {
+                            scrollToBottom();
+                        }
                     }}
                     onScroll={handleScroll}
                     scrollEventThrottle={16}
@@ -900,14 +910,44 @@ export default function ChatDetailScreen() {
                 {/* Emoji/Sticker Picker */}
                 {showEmojiPicker && (
                     <View style={styles.pickerContainer}>
-                        {pickerTab === 'emoji' ? (
-                            <EmojiPicker onSelectEmoji={handleEmojiSelect} />
-                        ) : (
-                            <StickerPicker
-                                onSelectSticker={handleStickerSelect}
-                                onTabChange={(tab) => setPickerTab(tab)}
-                            />
-                        )}
+                        <View style={{ flex: 1 }}>
+                            {pickerTab === 'emoji' ? (
+                                <EmojiPicker onSelectEmoji={handleEmojiSelect} />
+                            ) : (
+                                <StickerPicker
+                                    onSelectSticker={handleStickerSelect}
+                                    onTabChange={(tab) => setPickerTab(tab)}
+                                />
+                            )}
+                        </View>
+
+                        {/* Bottom Tab Bar */}
+                        <View style={styles.bottomTabBar}>
+                            <View style={styles.bottomTabsContainer}>
+                                <TouchableOpacity
+                                    style={pickerTab === 'sticker' ? styles.bottomTabActive : styles.bottomTab}
+                                    onPress={() => setPickerTab('sticker')}
+                                >
+                                    <Text style={pickerTab === 'sticker' ? styles.bottomTabActiveText : styles.bottomTabText}>Sticker</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={pickerTab === 'emoji' ? styles.bottomTabActive : styles.bottomTab}
+                                    onPress={() => setPickerTab('emoji')}
+                                >
+                                    <Text style={pickerTab === 'emoji' ? styles.bottomTabActiveText : styles.bottomTabText}>Emoji</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Backspace Button */}
+                            <TouchableOpacity
+                                style={styles.backspaceButton}
+                                onPress={() => {
+                                    setInputText(prev => prev.slice(0, -1));
+                                }}
+                            >
+                                <Ionicons name="backspace-outline" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 )}
 
@@ -1734,5 +1774,52 @@ const styles = StyleSheet.create({
     suggestionStickerImg: {
         width: '100%',
         height: '100%',
+    },
+    // Picker Styles
+    pickerContainer: {
+        height: 320,
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+    },
+    // Bottom Picker Tabs
+    bottomTabBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderTopWidth: 1,
+        borderTopColor: '#F3F4F6',
+        height: 50,
+    },
+    bottomTabsContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 10,
+    },
+    bottomTab: {
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        borderRadius: 16,
+    },
+    bottomTabActive: {
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        backgroundColor: '#333333', // Dark pill
+        borderRadius: 16,
+    },
+    bottomTabText: {
+        fontSize: 14,
+        color: '#666',
+        fontWeight: '500',
+    },
+    bottomTabActiveText: {
+        fontSize: 14,
+        color: '#FFF',
+        fontWeight: '500',
+    },
+    backspaceButton: {
+        paddingLeft: 10,
     },
 });
