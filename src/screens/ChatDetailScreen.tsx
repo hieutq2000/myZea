@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Image, Keyboard, Modal, Alert, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Image, Keyboard, Modal, Alert, ActivityIndicator, Dimensions, Animated } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
@@ -9,6 +9,8 @@ import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, delete
 import { launchImageLibrary, launchCamera } from '../utils/imagePicker';
 import EmojiPicker from '../components/EmojiPicker';
 import { getAvatarUri } from '../utils/media';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList, 'ChatDetail'>;
 
@@ -17,6 +19,8 @@ const ZALO_BLUE = '#0068FF';
 const ZALO_BG = '#FFFFFF'; // White background as seen in image
 const MY_BUBBLE = '#5C3C5D'; // Dark Purple from image
 const OTHER_BUBBLE = '#F2F4F5'; // Very light gray for other
+const CALL_PURPLE = '#7C3C6D'; // Purple for call icons like Zalo
+const CALL_MISSED_RED = '#E04B4B'; // Red for missed calls
 
 // ... update styles ...
 export default function ChatDetailScreen() {
@@ -38,6 +42,10 @@ export default function ChatDetailScreen() {
     const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
     const [isPartnerOnline, setIsPartnerOnline] = useState(false);
     const [partnerLastSeen, setPartnerLastSeen] = useState<Date | null>(null);
+    // Scroll to bottom states
+    const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+    const [newMessageCount, setNewMessageCount] = useState(0);
+    const [isNearBottom, setIsNearBottom] = useState(true);
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
     const socket = getSocket();
@@ -61,7 +69,7 @@ export default function ChatDetailScreen() {
         if (socket) {
             socket.on('receiveMessage', (message) => {
                 appendMessage(message);
-                markConversationAsRead(conversationId);
+                if (conversationId) markConversationAsRead(conversationId);
             });
             socket.on('messageSent', (message) => {
                 setMessages(prev => prev.map(msg => msg.id === message.tempId ? {
@@ -136,6 +144,7 @@ export default function ChatDetailScreen() {
                 imageUrl: m.imageUrl,
                 sender: m.user._id === currentUserId ? 'me' : 'other',
                 time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                createdAt: m.createdAt, // Store full date for date separator
                 senderId: m.user._id,
                 replyTo: m.replyTo // Map reply info
             }));
@@ -153,6 +162,8 @@ export default function ChatDetailScreen() {
     };
 
     const appendMessage = (msg: any) => {
+        const isFromPartner = msg.user._id !== currentUserId;
+
         setMessages(prev => {
             if (prev.find(m => m.id === msg._id)) return prev;
             return [...prev, {
@@ -160,19 +171,44 @@ export default function ChatDetailScreen() {
                 text: msg.text,
                 type: msg.type || 'text',
                 imageUrl: msg.imageUrl,
+                createdAt: msg.createdAt,
                 sender: msg.user._id === currentUserId ? 'me' : 'other',
                 time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 senderId: msg.user._id,
                 replyTo: msg.replyTo
             }];
         });
-        scrollToBottom();
+
+        // If user has scrolled up and receives new message from partner, increment counter
+        if (!isNearBottom && isFromPartner) {
+            setNewMessageCount(prev => prev + 1);
+        } else {
+            scrollToBottom();
+        }
     };
 
     const scrollToBottom = () => {
         setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
+        // Reset new message counter when scrolling to bottom
+        setNewMessageCount(0);
+        setShowScrollToBottom(false);
+    };
+
+    // Handle scroll event to show/hide scroll to bottom button
+    const handleScroll = (event: any) => {
+        const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+        const paddingToBottom = 100; // Distance from bottom to consider "near bottom"
+        const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+
+        setIsNearBottom(isCloseToBottom);
+        setShowScrollToBottom(!isCloseToBottom);
+
+        // If scrolled back to bottom, reset new message counter
+        if (isCloseToBottom) {
+            setNewMessageCount(0);
+        }
     };
 
     const sendMessage = async (text?: string, type: string = 'text', imageUrl?: string) => {
@@ -325,6 +361,45 @@ export default function ChatDetailScreen() {
         return 'Hoạt động từ lâu';
     };
 
+    // Format date separator like Zalo
+    const formatDateSeparator = (dateString: string) => {
+        const date = new Date(dateString);
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const isToday = date.toDateString() === today.toDateString();
+        const isYesterday = date.toDateString() === yesterday.toDateString();
+
+        if (isToday) return 'Hôm nay';
+        if (isYesterday) return 'Hôm qua';
+
+        // Format as "16 thg 12, 18:24"
+        const day = date.getDate();
+        const month = date.getMonth() + 1;
+        return `${day} thg ${month}`;
+    };
+
+    // Check if should show date separator
+    const shouldShowDateSeparator = (currentItem: any, prevItem: any) => {
+        if (!currentItem.createdAt) return false;
+        if (!prevItem) return true; // First message always shows date
+
+        const currentDate = new Date(currentItem.createdAt).toDateString();
+        const prevDate = new Date(prevItem.createdAt).toDateString();
+
+        return currentDate !== prevDate;
+    };
+
+    // Format call time with date like Zalo "16 thg 12, 18:24"
+    const formatCallTime = (createdAt: string, time: string) => {
+        if (!createdAt) return time;
+        const date = new Date(createdAt);
+        const day = date.getDate();
+        const month = date.getMonth() + 1;
+        return `${day} thg ${month}, ${time}`;
+    };
+
     const renderHeader = () => (
         <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -346,9 +421,7 @@ export default function ChatDetailScreen() {
                 </View>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle} numberOfLines={1}>{userName}</Text>
-                    <Text style={[styles.headerSubtitle, isPartnerOnline && { color: '#31A24C' }]}>
-                        {formatLastSeen()}
-                    </Text>
+                    <Text style={styles.headerDepartment} numberOfLines={1}>FRT - FLC - HN</Text>
                 </View>
             </View>
             <View style={styles.headerRight}>
@@ -413,6 +486,51 @@ export default function ChatDetailScreen() {
         }
     };
 
+    // Swipe to reply - render left action (reply icon)
+    const renderSwipeReplyAction = (
+        progress: Animated.AnimatedInterpolation<number>,
+        dragX: Animated.AnimatedInterpolation<number>
+    ) => {
+        const scale = dragX.interpolate({
+            inputRange: [0, 50, 100],
+            outputRange: [0, 0.8, 1],
+            extrapolate: 'clamp',
+        });
+
+        const opacity = dragX.interpolate({
+            inputRange: [0, 30, 60],
+            outputRange: [0, 0.5, 1],
+            extrapolate: 'clamp',
+        });
+
+        return (
+            <Animated.View style={[styles.swipeReplyContainer, { opacity }]}>
+                <Animated.View style={[styles.swipeReplyIcon, { transform: [{ scale }] }]}>
+                    <Ionicons name="arrow-undo" size={20} color="#666" />
+                </Animated.View>
+            </Animated.View>
+        );
+    };
+
+    // Ref to track currently open swipeable
+    const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
+    const currentlyOpenSwipeable = useRef<Swipeable | null>(null);
+
+    // Handle swipe open to trigger reply
+    const handleSwipeOpen = (item: any, swipeableRef: Swipeable | null) => {
+        // Close the swipeable immediately after triggering reply
+        if (swipeableRef) {
+            setTimeout(() => {
+                swipeableRef.close();
+            }, 100);
+        }
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setReplyingTo(item);
+        inputRef.current?.focus();
+    };
+
+
     const renderMessageItem = useCallback(({ item, index }: { item: any, index: number }) => {
         const isMe = item.sender === 'me' || (currentUserId && item.senderId === currentUserId);
         const nextMessage = messages[index + 1];
@@ -432,99 +550,115 @@ export default function ChatDetailScreen() {
             callType = 'call_ended';
         }
 
+        // Check for date separator
+        const prevMessage = index > 0 ? messages[index - 1] : null;
+        const showDateSeparator = shouldShowDateSeparator(item, prevMessage);
+
         return (
-            <View style={[
-                styles.messageRow,
-                isMe ? styles.messageRowMe : styles.messageRowOther,
-                { marginBottom: isLast ? 8 : 2 }
-            ]}>
-                {!isMe && (
-                    <View style={styles.avatarContainer}>
-                        {avatar ? (
-                            <Image source={{ uri: getAvatarUri(avatar, userName) }} style={styles.avatarSmall} />
-                        ) : (
-                            <View style={[styles.avatarSmall, { backgroundColor: '#A0AEC0', alignItems: 'center', justifyContent: 'center' }]}>
-                                <Text style={{ color: 'white', fontSize: 10 }}>{userName?.[0]?.toUpperCase()}</Text>
-                            </View>
-                        )}
+            <>
+                {showDateSeparator && item.createdAt && (
+                    <View style={styles.dateSeparator}>
+                        <Text style={styles.dateSeparatorText}>
+                            {formatDateSeparator(item.createdAt)}
+                        </Text>
                     </View>
                 )}
-
-                {isImage ? (
-                    <TouchableOpacity
-                        style={[styles.imageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
-                        onPress={() => setSelectedImage(item.imageUrl)}
-                        onLongPress={() => handleCheckSelectMessage(item)}
-                        delayLongPress={500}
-                    >
-                        <Image
-                            source={{ uri: item.imageUrl }}
-                            style={styles.messageImage}
-                            resizeMode="cover"
-                        />
-                        <Text style={styles.messageTime}>{item.time}</Text>
-                    </TouchableOpacity>
-                ) : isCall ? (
-                    <View style={[styles.callBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-                        <View style={styles.callContent}>
-                            <View style={[styles.callIconBubble, callType === 'call_missed' ? { backgroundColor: '#FF3B30' } : { backgroundColor: '#34C759' }]}>
-                                <Ionicons
-                                    name={callType === 'call_missed' ? "call" : "call"}
-                                    size={16}
-                                    color="white"
-                                />
-                                {callType === 'call_missed' && (
-                                    <View style={{ position: 'absolute', top: 0, right: 0 }}>
-                                        <MaterialIcons name="close" size={10} color="white" />
+                <Swipeable
+                    ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
+                    renderLeftActions={renderSwipeReplyAction}
+                    onSwipeableOpen={() => handleSwipeOpen(item, swipeableRefs.current[item.id])}
+                    overshootLeft={false}
+                    leftThreshold={60}
+                    friction={2}
+                    containerStyle={styles.swipeableContainer}
+                >
+                    <View style={[
+                        styles.messageRow,
+                        isMe ? styles.messageRowMe : styles.messageRowOther,
+                        { marginBottom: isLast ? 8 : 2 }
+                    ]}>
+                        {!isMe && (
+                            <View style={styles.avatarContainer}>
+                                {avatar ? (
+                                    <Image source={{ uri: getAvatarUri(avatar, userName) }} style={styles.avatarSmall} />
+                                ) : (
+                                    <View style={[styles.avatarSmall, { backgroundColor: '#A0AEC0', alignItems: 'center', justifyContent: 'center' }]}>
+                                        <Text style={{ color: 'white', fontSize: 10 }}>{userName?.[0]?.toUpperCase()}</Text>
                                     </View>
                                 )}
                             </View>
-                            <View style={styles.callInfo}>
-                                <Text style={styles.callTitle}>
-                                    {callType === 'call_missed' ? 'Cuộc gọi thoại bị nhỡ' : 'Cuộc gọi thoại'}
-                                </Text>
-                                <Text style={styles.callSubtitle}>
-                                    {callType === 'call_missed' ? item.time : item.text || item.callDuration || 'Đã kết thúc'}
-                                </Text>
-                            </View>
-                        </View>
-                        <TouchableOpacity
-                            style={styles.callBackButton}
-                            onPress={() => (navigation as any).navigate('Call', {
-                                partnerId,
-                                userName,
-                                avatar,
-                                isVideo: false,
-                                isIncoming: false,
-                                conversationId
-                            })}
-                        >
-                            <Text style={styles.callButtonText}>Gọi lại</Text>
-                        </TouchableOpacity>
+                        )}
+
+                        {isImage ? (
+                            <TouchableOpacity
+                                style={[styles.imageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
+                                onPress={() => setSelectedImage(item.imageUrl)}
+                                onLongPress={() => handleCheckSelectMessage(item)}
+                                delayLongPress={500}
+                            >
+                                <Image
+                                    source={{ uri: item.imageUrl }}
+                                    style={styles.messageImage}
+                                    resizeMode="cover"
+                                />
+                                <Text style={styles.messageTime}>{item.time}</Text>
+                            </TouchableOpacity>
+                        ) : isCall ? (
+                            <TouchableOpacity
+                                style={styles.callBubbleNew}
+                                onPress={() => (navigation as any).navigate('Call', {
+                                    partnerId,
+                                    userName,
+                                    avatar,
+                                    isVideo: false,
+                                    isIncoming: false,
+                                    conversationId
+                                })}
+                            >
+                                <View style={[styles.callIconCircle, callType === 'call_missed' ? styles.callIconMissed : styles.callIconEnded]}>
+                                    {callType === 'call_missed' ? (
+                                        <Ionicons name="call" size={18} color="#E04B4B" style={{ transform: [{ rotate: '135deg' }] }} />
+                                    ) : (
+                                        <Ionicons name="call" size={18} color={CALL_PURPLE} />
+                                    )}
+                                </View>
+                                <View style={styles.callTextContainer}>
+                                    <Text style={[styles.callMainText, callType === 'call_missed' && styles.callMissedText]}>
+                                        {callType === 'call_missed'
+                                            ? (isMe ? 'Bạn đã hủy' : 'Cuộc gọi nhỡ')
+                                            : 'Cuộc gọi thoại'
+                                        }
+                                    </Text>
+                                    <Text style={styles.callTimeText}>
+                                        {formatCallTime(item.createdAt, item.time)}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
+                                onLongPress={() => handleCheckSelectMessage(item)}
+                                delayLongPress={500}
+                                activeOpacity={0.8}
+                            >
+                                {item.replyTo && (
+                                    <View style={styles.replyPreview}>
+                                        <View style={styles.replyBar} />
+                                        <Text style={styles.replyText} numberOfLines={1}>
+                                            {item.replyTo.text || (item.replyTo.type === 'image' ? '[Hình ảnh]' : '...')}
+                                        </Text>
+                                    </View>
+                                )}
+                                <Text style={[styles.messageText, { color: isMe ? '#FFFFFF' : '#000000' }]}>{item.text}</Text>
+                                <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF' }]}>{item.time}</Text>
+                                {isMe && isLast && (
+                                    <Text style={[styles.seenText, { color: 'rgba(255,255,255,0.7)' }]}>{lastSeenMessageId === item.id ? 'Đã xem' : 'Đã gửi'}</Text>
+                                )}
+                            </TouchableOpacity>
+                        )}
                     </View>
-                ) : (
-                    <TouchableOpacity
-                        style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
-                        onLongPress={() => handleCheckSelectMessage(item)}
-                        delayLongPress={500}
-                        activeOpacity={0.8}
-                    >
-                        {item.replyTo && (
-                            <View style={styles.replyPreview}>
-                                <View style={styles.replyBar} />
-                                <Text style={styles.replyText} numberOfLines={1}>
-                                    {item.replyTo.text || (item.replyTo.type === 'image' ? '[Hình ảnh]' : '...')}
-                                </Text>
-                            </View>
-                        )}
-                        <Text style={[styles.messageText, { color: isMe ? '#FFFFFF' : '#000000' }]}>{item.text}</Text>
-                        <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF' }]}>{item.time}</Text>
-                        {isMe && isLast && (
-                            <Text style={[styles.seenText, { color: 'rgba(255,255,255,0.7)' }]}>{lastSeenMessageId === item.id ? 'Đã xem' : 'Đã gửi'}</Text>
-                        )}
-                    </TouchableOpacity>
-                )}
-            </View>
+                </Swipeable>
+            </>
         );
     }, [messages, currentUserId, avatar, userName, navigation, partnerId, conversationId, lastSeenMessageId]);
 
@@ -545,10 +679,34 @@ export default function ChatDetailScreen() {
                     renderItem={renderMessageItem}
                     contentContainerStyle={styles.listContent}
                     style={styles.listStyle}
-                    onContentSizeChange={() => scrollToBottom()}
+                    onContentSizeChange={() => {
+                        if (isNearBottom) scrollToBottom();
+                    }}
+                    onScroll={handleScroll}
+                    scrollEventThrottle={16}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="interactive"
                 />
+
+                {/* Scroll to bottom button with new message badge */}
+                {showScrollToBottom && (
+                    <TouchableOpacity
+                        style={styles.scrollToBottomButton}
+                        onPress={scrollToBottom}
+                        activeOpacity={0.8}
+                    >
+                        <View style={styles.scrollToBottomInner}>
+                            <Ionicons name="chevron-down" size={22} color="#FFFFFF" />
+                        </View>
+                        {newMessageCount > 0 && (
+                            <View style={styles.newMessageBadge}>
+                                <Text style={styles.newMessageBadgeText}>
+                                    {newMessageCount > 99 ? '99+' : newMessageCount}
+                                </Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                )}
 
                 {partnerTyping && (
                     <View style={styles.typingIndicator}>
@@ -811,6 +969,7 @@ const styles = StyleSheet.create({
     headerInfo: { flex: 1 },
     headerTitle: { color: '#000000', fontSize: 17, fontWeight: '600' },
     headerSubtitle: { color: '#666666', fontSize: 12 },
+    headerDepartment: { color: '#9CA3AF', fontSize: 12, marginTop: 1 },
     headerRight: { flexDirection: 'row', width: 100, justifyContent: 'flex-end' },
     headerIcon: { padding: 4, marginLeft: 15 },
 
@@ -818,9 +977,82 @@ const styles = StyleSheet.create({
     listStyle: { flex: 1 },
     listContent: { padding: 12, paddingBottom: 10 },
 
+    // Scroll to bottom button styles
+    scrollToBottomButton: {
+        position: 'absolute',
+        right: 16,
+        bottom: 16,
+        zIndex: 100,
+    },
+    scrollToBottomInner: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    newMessageBadge: {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+        minWidth: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#E04B4B',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 6,
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+    },
+    newMessageBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 11,
+        fontWeight: '700',
+    },
+
     messageRow: { flexDirection: 'row', alignItems: 'flex-end', marginVertical: 1 },
     messageRowMe: { justifyContent: 'flex-end' },
     messageRowOther: { justifyContent: 'flex-start' },
+
+    // Swipe to reply styles
+    swipeableContainer: {
+        backgroundColor: 'transparent',
+    },
+    swipeReplyContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 60,
+        paddingLeft: 10,
+    },
+    swipeReplyIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#E5E7EB',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    // Date separator styles
+    dateSeparator: {
+        alignItems: 'center',
+        marginVertical: 16,
+        paddingHorizontal: 20,
+    },
+    dateSeparatorText: {
+        fontSize: 12,
+        color: '#9CA3AF',
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+    },
 
     avatarContainer: { marginRight: 8, width: 28, alignItems: 'center' },
     avatarSmall: { width: 28, height: 28, borderRadius: 14 },
@@ -837,11 +1069,52 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         overflow: 'hidden',
     },
+    // New Zalo-style call bubble
+    callBubbleNew: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F2F4F5',
+        borderRadius: 20,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        maxWidth: '75%',
+    },
+    callIconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    callIconEnded: {
+        backgroundColor: 'rgba(124, 60, 109, 0.15)', // Light purple background
+    },
+    callIconMissed: {
+        backgroundColor: 'rgba(224, 75, 75, 0.15)', // Light red background
+    },
+    callTextContainer: {
+        flex: 1,
+    },
+    callMainText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: CALL_PURPLE,
+    },
+    callMissedText: {
+        color: '#E04B4B',
+    },
+    callTimeText: {
+        fontSize: 12,
+        color: '#9CA3AF',
+        marginTop: 2,
+    },
+    // Old styles kept for backward compatibility
     callBubble: {
         maxWidth: '75%',
         padding: 12,
         borderRadius: 16,
-        backgroundColor: 'rgba(0,0,0,0.4)', // Darker background for calls
+        backgroundColor: 'rgba(0,0,0,0.4)',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
     },
@@ -864,14 +1137,14 @@ const styles = StyleSheet.create({
     callTitle: {
         fontSize: 15,
         fontWeight: '600',
-        color: '#000', // Sẽ chỉnh lại color nếu background đổi
+        color: '#000',
     },
     callSubtitle: {
         fontSize: 12,
         color: '#555',
     },
     callBackButton: {
-        backgroundColor: 'rgba(0,0,0,0.05)', // Button background
+        backgroundColor: 'rgba(0,0,0,0.05)',
         height: 36,
         borderRadius: 18,
         justifyContent: 'center',
