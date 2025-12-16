@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useColorScheme, Appearance } from 'react-native';
+import { Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Định nghĩa các loại theme
@@ -59,15 +59,25 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const THEME_KEY = 'user_theme_preference';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const systemScheme = useColorScheme(); // 'light' or 'dark' from OS
     const [theme, setThemeState] = useState<ThemeType>('system');
-    const [currentSystemScheme, setCurrentSystemScheme] = useState<'light' | 'dark' | null | undefined>(systemScheme);
+    const [currentSystemScheme, setCurrentSystemScheme] = useState<'light' | 'dark'>(() => {
+        // Get initial system scheme directly from Appearance API
+        return Appearance.getColorScheme() || 'light';
+    });
+
+    // Function to get current system theme
+    const getSystemTheme = (): 'light' | 'dark' => {
+        return Appearance.getColorScheme() || 'light';
+    };
 
     // Listen for system appearance changes
     useEffect(() => {
+        // Update immediately on mount
+        setCurrentSystemScheme(getSystemTheme());
+
         const subscription = Appearance.addChangeListener(({ colorScheme }) => {
-            console.log('System color scheme changed:', colorScheme);
-            setCurrentSystemScheme(colorScheme);
+            console.log('🎨 System color scheme changed:', colorScheme);
+            setCurrentSystemScheme(colorScheme || 'light');
         });
 
         return () => {
@@ -75,10 +85,30 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         };
     }, []);
 
-    // Update currentSystemScheme when systemScheme from hook changes
+    // Polling fallback: check system theme every second when theme is 'system'
+    // This helps on devices where Appearance.addChangeListener doesn't fire
     useEffect(() => {
-        setCurrentSystemScheme(systemScheme);
-    }, [systemScheme]);
+        if (theme !== 'system') return;
+
+        const checkSystemTheme = () => {
+            const newScheme = getSystemTheme();
+            setCurrentSystemScheme(prev => {
+                if (prev !== newScheme) {
+                    console.log('🔄 Polling detected theme change:', newScheme);
+                    return newScheme;
+                }
+                return prev;
+            });
+        };
+
+        // Check immediately
+        checkSystemTheme();
+
+        // Poll every 1 second
+        const interval = setInterval(checkSystemTheme, 1000);
+
+        return () => clearInterval(interval);
+    }, [theme]);
 
     // Load saved theme on startup
     useEffect(() => {
@@ -88,6 +118,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 if (savedTheme) {
                     setThemeState(savedTheme as ThemeType);
                 }
+                // Update system scheme after loading saved theme
+                setCurrentSystemScheme(getSystemTheme());
             } catch (error) {
                 console.error('Failed to load theme preference', error);
             }
@@ -97,6 +129,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const setTheme = async (newTheme: ThemeType) => {
         setThemeState(newTheme);
+        // If switching to system, immediately get the current system theme
+        if (newTheme === 'system') {
+            setCurrentSystemScheme(getSystemTheme());
+        }
         try {
             await AsyncStorage.setItem(THEME_KEY, newTheme);
         } catch (error) {
@@ -104,12 +140,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     };
 
-    // Determine actual color scheme - use currentSystemScheme for reactivity
-    const effectiveTheme = theme === 'system' ? (currentSystemScheme || 'light') : theme;
+    // Determine actual color scheme
+    const effectiveTheme = theme === 'system' ? currentSystemScheme : theme;
     const isDark = effectiveTheme === 'dark';
     const colors = isDark ? darkColors : lightColors;
 
-    console.log('Theme state:', { theme, currentSystemScheme, effectiveTheme, isDark });
+    console.log('🎨 Theme state:', { theme, currentSystemScheme, effectiveTheme, isDark });
 
     return (
         <ThemeContext.Provider value={{ theme, colors, setTheme, isDark }}>
