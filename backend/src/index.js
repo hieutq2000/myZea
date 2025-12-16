@@ -750,25 +750,38 @@ app.post('/api/finance/parse-transaction', authenticateToken, async (req, res) =
 
         Input Text: "${text}"
 
-        Danh sách Category ID (Tham khảo để map):
+        Danh sách Category ID:
         ${categories}
 
-        LOGIC PHÂN TÍCH (THỰC TẾ):
-        1. **Phát hiện giao dịch đa luồng:**
-           - Văn bản tiếng Việt thường nói liền nhau, ít từ nối.
-           - Hãy tìm các cụm cấu trúc: [Hành động/Mặt hàng] + [Số tiền].
-           - Ví dụ: "Ăn 30k xăng 50k" -> Cụm 1: "Ăn 30k", Cụm 2: "xăng 50k".
-           - Nếu thấy 2 khoản tiền khác nhau xuất hiện trong câu => Khả năng cao là 2 giao dịch riêng biệt => HÃY TÁCH RA.
+        LOGIC PHÂN TÍCH:
+        1. Tìm các cụm [Hành động] đi kèm [Số tiền].
+        2. Nếu thấy nhiều cụm như vậy -> TÁCH THÀNH CÁC OBJECT RIÊNG BIỆT.
+        3. Số tiền: Tự động normalize (10k -> 10000).
 
-        2. **Xử lý số tiền thông minh:**
-           - Nhận diện linh hoạt: "30k", "30 nghìn", "3 chục", "500", "1 triệu", "năm trăm".
-           - Chuyển đổi về số nguyên (Integer).
+        VÍ DỤ MẪU (Học theo pattern này):
+        
+        Case 1 (Câu liền mạch):
+        Input: "Ăn sáng 30k cafe 25k"
+        Output: [
+            {"type":"expense","amount":30000,"categoryId":"food","description":"Ăn sáng"},
+            {"type":"expense","amount":25000,"categoryId":"drinks","description":"Cafe"}
+        ]
 
-        3. **Phân loại (Classification):**
-           - Dựa vào từ khóa (ăn, uống, xăng, điện, lương, thưởng...) để xác định "type" (expense/income) và "categoryId".
+        Case 2 (Có từ nối):
+        Input: "Đổ xăng 50k và mua thẻ 100k"
+        Output: [
+            {"type":"expense","amount":50000,"categoryId":"transport","description":"Đổ xăng"},
+            {"type":"expense","amount":100000,"categoryId":"bills","description":"Mua thẻ"}
+        ]
 
-        OUTPUT FORMAT:
-        Trả về duy nhất một mảng JSON (JSON Array), không kèm bất kỳ lời dẫn nào.
+        Case 3 (Thu nhập):
+        Input: "Lương 10 triệu thưởng 2 triệu"
+        Output: [
+            {"type":"income","amount":10000000,"categoryId":"salary","description":"Lương tháng"},
+            {"type":"income","amount":2000000,"categoryId":"other","description":"Tiền thưởng"}
+        ]
+
+        OUTPUT FINAL (Chỉ trả về JSON Array):
         `;
 
         const contents = [{

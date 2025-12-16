@@ -5,7 +5,7 @@ import { VoiceParseResult } from '../types/finance';
 // Change this to your server URL
 // For local development with mobile: use your WiFi IP
 // For production: https://your-domain.com
-export const API_URL = 'http://192.168.0.100:3001';
+export const API_URL = 'http://192.168.0.101:3001';
 
 /**
  * Convert a relative image path to full URL
