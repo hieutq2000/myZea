@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Image, Keyboard, Modal, Alert, ActivityIndicator, Dimensions, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Keyboard, Modal, Alert, ActivityIndicator, Dimensions, Animated } from 'react-native';
+import { Image } from 'expo-image';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
@@ -130,6 +131,34 @@ export default function ChatDetailScreen() {
             }
         };
     }, [conversationId, partnerId, currentUserId, socket]);
+
+    // State for empty screen sticker suggestions
+    const [suggestedStickers, setSuggestedStickers] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (messages.length === 0) {
+            // Fetch some stickers for suggestion
+            fetch(`${API_URL}/api/app/sticker-packs`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.packs && data.packs.length > 0 && data.packs[0].stickers) {
+                        // Take first 5 stickers from the first pack
+                        setSuggestedStickers(data.packs[0].stickers.slice(0, 5));
+                    }
+                })
+                .catch(err => console.log('Error fetching suggestions:', err));
+        }
+    }, [messages.length]);
+
+    const handleSendSuggestion = (sticker: any) => {
+        // Mock the sticker select params. PackId is needed but we might not have it if we flat map.
+        // Actually I can store full object or just use 'default' or the pack id from data.
+        // Assuming sticker object has pack_id or I can pass it.
+        // Let's assume handleStickerSelect expects (packId, index, stickerObject)
+        if (handleStickerSelect) {
+            handleStickerSelect(sticker.pack_id || 'default', 0, sticker);
+        }
+    };
 
     const fetchCurrentUser = async () => {
         const user = await getCurrentUser();
@@ -609,7 +638,31 @@ export default function ChatDetailScreen() {
                             </View>
                         )}
 
-                        {isImage ? (
+                        {item.type === 'sticker' ? (
+                            <TouchableOpacity
+                                style={[styles.stickerContainer, isMe ? styles.alignRight : styles.alignLeft]}
+                                onLongPress={() => handleCheckSelectMessage(item)}
+                                delayLongPress={500}
+                                activeOpacity={0.9}
+                            >
+                                <Image
+                                    source={{ uri: getImageUrl(item.imageUrl) }}
+                                    style={styles.stickerImageMessage}
+                                    contentFit="contain"
+                                />
+                                <Text style={[styles.messageTime, {
+                                    position: 'absolute',
+                                    bottom: 5,
+                                    right: 10,
+                                    color: 'rgba(0,0,0,0.4)',
+                                    fontSize: 10,
+                                    backgroundColor: 'rgba(255,255,255,0.5)',
+                                    borderRadius: 4,
+                                    paddingHorizontal: 2,
+                                    overflow: 'hidden'
+                                }]}>{item.time}</Text>
+                            </TouchableOpacity>
+                        ) : isImage ? (
                             <TouchableOpacity
                                 style={[styles.imageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
                                 onPress={() => setSelectedImage(item.imageUrl)}
@@ -619,7 +672,7 @@ export default function ChatDetailScreen() {
                                 <Image
                                     source={{ uri: getImageUrl(item.imageUrl) }}
                                     style={styles.messageImage}
-                                    resizeMode={item.type === 'sticker' ? 'contain' : 'cover'}
+                                    contentFit="cover"
                                 />
                                 <Text style={styles.messageTime}>{item.time}</Text>
                             </TouchableOpacity>
@@ -706,7 +759,7 @@ export default function ChatDetailScreen() {
                     data={messages}
                     keyExtractor={item => item.id}
                     renderItem={renderMessageItem}
-                    contentContainerStyle={styles.listContent}
+                    contentContainerStyle={[styles.listContent, messages.length === 0 && styles.emptyListContent]}
                     style={styles.listStyle}
                     onContentSizeChange={() => {
                         if (isNearBottom) scrollToBottom();
@@ -715,6 +768,41 @@ export default function ChatDetailScreen() {
                     scrollEventThrottle={16}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="interactive"
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <View style={styles.emptyCenter}>
+                                <View style={styles.emptyIconCircle}>
+                                    <View style={styles.emptyIconBubbles}>
+                                        <Ionicons name="chatbubbles" size={48} color="#A0AEC0" style={{ opacity: 0.5 }} />
+                                        <View style={styles.emptyIconSmile}>
+                                            <Ionicons name="happy" size={20} color="#666" />
+                                        </View>
+                                    </View>
+                                </View>
+                                <Text style={styles.emptyTitle}>Bạn chưa có tin nhắn nào!</Text>
+                                <Text style={styles.emptySubtitle}>Hãy bắt đầu{'\n'}cuộc trò chuyện ngay.</Text>
+                            </View>
+
+                            <View style={styles.suggestionContainer}>
+                                <Text style={styles.suggestionText}>Nhắn tin hoặc nhấn vào emoji để gửi lời chào.</Text>
+                                <View style={styles.suggestionRow}>
+                                    {suggestedStickers.map((sticker, index) => (
+                                        <TouchableOpacity
+                                            key={sticker.id || index}
+                                            style={styles.suggestionSticker}
+                                            onPress={() => handleSendSuggestion(sticker)}
+                                        >
+                                            <Image
+                                                source={{ uri: getImageUrl(sticker.image_url) }}
+                                                style={styles.suggestionStickerImg}
+                                                contentFit="contain"
+                                            />
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                        </View>
+                    }
                 />
 
                 {partnerTyping && (
@@ -812,28 +900,13 @@ export default function ChatDetailScreen() {
                 {/* Emoji/Sticker Picker */}
                 {showEmojiPicker && (
                     <View style={styles.pickerContainer}>
-                        {/* Tabs */}
-                        <View style={styles.pickerTabs}>
-                            <TouchableOpacity
-                                style={[styles.pickerTab, pickerTab === 'sticker' && styles.pickerTabActive]}
-                                onPress={() => setPickerTab('sticker')}
-                            >
-                                <MaterialIcons name="sticky-note-2" size={24} color={pickerTab === 'sticker' ? ZALO_BLUE : '#6B7280'} />
-                                <Text style={[styles.pickerTabText, pickerTab === 'sticker' && styles.pickerTabTextActive]}>Stickers</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.pickerTab, pickerTab === 'emoji' && styles.pickerTabActive]}
-                                onPress={() => setPickerTab('emoji')}
-                            >
-                                <Ionicons name="happy-outline" size={24} color={pickerTab === 'emoji' ? ZALO_BLUE : '#6B7280'} />
-                                <Text style={[styles.pickerTabText, pickerTab === 'emoji' && styles.pickerTabTextActive]}>Emoji</Text>
-                            </TouchableOpacity>
-                        </View>
-
                         {pickerTab === 'emoji' ? (
                             <EmojiPicker onSelectEmoji={handleEmojiSelect} />
                         ) : (
-                            <StickerPicker onSelectSticker={handleStickerSelect} />
+                            <StickerPicker
+                                onSelectSticker={handleStickerSelect}
+                                onTabChange={(tab) => setPickerTab(tab)}
+                            />
                         )}
                     </View>
                 )}
@@ -1323,6 +1396,23 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    // Sticker Message Styles
+    stickerContainer: {
+        marginBottom: 10,
+        maxWidth: '70%',
+    },
+    stickerImageMessage: {
+        width: 120,
+        height: 120,
+    },
+    alignRight: {
+        alignSelf: 'flex-end',
+        alignItems: 'flex-end',
+    },
+    alignLeft: {
+        alignSelf: 'flex-start',
+        alignItems: 'flex-start',
+    },
     rightButton: {
         padding: 8,
         marginLeft: 8,
@@ -1571,5 +1661,78 @@ const styles = StyleSheet.create({
     pickerTabTextActive: {
         color: ZALO_BLUE,
         fontWeight: '600',
+    },
+    // Empty State Styles
+    emptyListContent: {
+        flexGrow: 1,
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 40,
+    },
+    emptyCenter: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 1,
+    },
+    emptyIconCircle: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: '#F3F4F6',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+        position: 'relative',
+    },
+    emptyIconBubbles: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    emptyIconSmile: {
+        position: 'absolute',
+        bottom: 8,
+        right: 8,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        padding: 2,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333333',
+        marginBottom: 8,
+    },
+    emptySubtitle: {
+        fontSize: 14,
+        color: '#666666',
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    suggestionContainer: {
+        width: '100%',
+        paddingHorizontal: 16,
+        paddingBottom: 10,
+    },
+    suggestionText: {
+        fontSize: 13,
+        color: '#666666',
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    suggestionRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+    },
+    suggestionSticker: {
+        width: 60,
+        height: 60,
+    },
+    suggestionStickerImg: {
+        width: '100%',
+        height: '100%',
     },
 });

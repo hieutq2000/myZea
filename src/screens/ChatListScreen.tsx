@@ -235,7 +235,7 @@ export default function ChatListScreen() {
 
         // Check for sticker
         if (item.lastMessage.includes('sticker') || item.lastMessage.startsWith('{')) {
-            return '🎭 STICKER';
+            return '[STICKER]';
         }
 
         const isFromMe = item.lastMessageSenderId === currentUserId;
