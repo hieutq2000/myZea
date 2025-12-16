@@ -477,7 +477,7 @@ export default function ChatListScreen() {
                         <View style={{ marginRight: 10 }}>
                             <Image
                                 source={{ uri: getAvatarUri(currentUser?.avatar, currentUser?.name || 'User') }}
-                                style={{ width: 32, height: 32, borderRadius: 16 }}
+                                style={{ width: 38, height: 38, borderRadius: 19 }}
                             />
                             <View style={[styles.onlineDot, { right: 0, bottom: 0 }]} />
                         </View>

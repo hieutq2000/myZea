@@ -224,7 +224,8 @@ export default function ChatDetailScreen() {
             imageUrl: imageUrl,
             sender: 'me',
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            senderId: currentUserId
+            senderId: currentUserId,
+            replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, type: replyingTo.type } : null
         };
 
         setMessages(prev => [...prev, newMessage]);
@@ -421,7 +422,12 @@ export default function ChatDetailScreen() {
                 </View>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle} numberOfLines={1}>{userName}</Text>
-                    <Text style={styles.headerDepartment} numberOfLines={1}>FRT - FLC - HN</Text>
+                    <Text style={[
+                        styles.headerSubtitle,
+                        isPartnerOnline && { color: '#31A24C' }
+                    ]} numberOfLines={1}>
+                        {formatLastSeen()}
+                    </Text>
                 </View>
             </View>
             <View style={styles.headerRight}>
@@ -475,8 +481,12 @@ export default function ChatDetailScreen() {
     const handleDeleteMessageAction = async () => {
         if (!selectedMessage) return;
         const messageId = selectedMessage.id;
-        // Optimistic delete
-        setMessages(prev => prev.filter(m => m.id !== messageId));
+        // Mark as deleted locally instead of removing
+        setMessages(prev => prev.map(m =>
+            m.id === messageId
+                ? { ...m, isDeleted: true, text: 'Bạn đã xoá một tin nhắn' }
+                : m
+        ));
         setSelectedMessage(null);
         try {
             await deleteMessage(messageId);
@@ -617,9 +627,9 @@ export default function ChatDetailScreen() {
                             >
                                 <View style={[styles.callIconCircle, callType === 'call_missed' ? styles.callIconMissed : styles.callIconEnded]}>
                                     {callType === 'call_missed' ? (
-                                        <Ionicons name="call" size={18} color="#E04B4B" style={{ transform: [{ rotate: '135deg' }] }} />
+                                        <Ionicons name="call" size={16} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
                                     ) : (
-                                        <Ionicons name="call" size={18} color={CALL_PURPLE} />
+                                        <Ionicons name="call" size={16} color="#FFFFFF" />
                                     )}
                                 </View>
                                 <View style={styles.callTextContainer}>
@@ -634,6 +644,10 @@ export default function ChatDetailScreen() {
                                     </Text>
                                 </View>
                             </TouchableOpacity>
+                        ) : item.isDeleted ? (
+                            <View style={styles.deletedMessageBubble}>
+                                <Text style={styles.deletedMessageText}>{item.text}</Text>
+                            </View>
                         ) : (
                             <TouchableOpacity
                                 style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
@@ -642,10 +656,15 @@ export default function ChatDetailScreen() {
                                 activeOpacity={0.8}
                             >
                                 {item.replyTo && (
-                                    <View style={styles.replyPreview}>
-                                        <View style={styles.replyBar} />
-                                        <Text style={styles.replyText} numberOfLines={1}>
-                                            {item.replyTo.text || (item.replyTo.type === 'image' ? '[Hình ảnh]' : '...')}
+                                    <View style={[
+                                        styles.replyPreview,
+                                        !isMe && styles.replyPreviewOther
+                                    ]}>
+                                        <Text style={[
+                                            styles.replyText,
+                                            !isMe && styles.replyTextOther
+                                        ]} numberOfLines={1}>
+                                            ↩ {item.replyTo.text || (item.replyTo.type === 'image' ? '[Hình ảnh]' : '...')}
                                         </Text>
                                     </View>
                                 )}
@@ -688,7 +707,13 @@ export default function ChatDetailScreen() {
                     keyboardDismissMode="interactive"
                 />
 
-                {/* Scroll to bottom button with new message badge */}
+                {partnerTyping && (
+                    <View style={styles.typingIndicator}>
+                        <Text style={styles.typingText}>Người ấy đang nhập...</Text>
+                    </View>
+                )}
+
+                {/* Scroll to bottom button - positioned above input bar */}
                 {showScrollToBottom && (
                     <TouchableOpacity
                         style={styles.scrollToBottomButton}
@@ -696,7 +721,7 @@ export default function ChatDetailScreen() {
                         activeOpacity={0.8}
                     >
                         <View style={styles.scrollToBottomInner}>
-                            <Ionicons name="chevron-down" size={22} color="#FFFFFF" />
+                            <Ionicons name="chevron-down" size={20} color="#666666" />
                         </View>
                         {newMessageCount > 0 && (
                             <View style={styles.newMessageBadge}>
@@ -706,12 +731,6 @@ export default function ChatDetailScreen() {
                             </View>
                         )}
                     </TouchableOpacity>
-                )}
-
-                {partnerTyping && (
-                    <View style={styles.typingIndicator}>
-                        <Text style={styles.typingText}>Người ấy đang nhập...</Text>
-                    </View>
                 )}
 
                 {/* Input Container */}
@@ -737,7 +756,7 @@ export default function ChatDetailScreen() {
                     <View style={styles.inputRow}>
                         {/* Attachment Button (Left) */}
                         <TouchableOpacity style={styles.leftButton} onPress={() => setShowMediaPicker(true)}>
-                            <Ionicons name="add" size={24} color="#FFFFFF" />
+                            <Ionicons name="add" size={22} color="#FFFFFF" />
                         </TouchableOpacity>
 
                         {/* Text Input Wrapper (Center) */}
@@ -755,7 +774,7 @@ export default function ChatDetailScreen() {
                                     setTimeout(() => scrollToBottom(), 300);
                                 }}
                             />
-                            {/* Sticker Button (Inside Input) */}
+                            {/* Sticker/Emoji Button (Inside Input) */}
                             <TouchableOpacity style={styles.stickerInnerButton} onPress={toggleEmojiPicker}>
                                 <Ionicons
                                     name={showEmojiPicker ? "keypad-outline" : "happy-outline"}
@@ -768,11 +787,11 @@ export default function ChatDetailScreen() {
                         {/* Mic or Send Button (Right) */}
                         {inputText.trim() ? (
                             <TouchableOpacity style={styles.rightButton} onPress={() => sendMessage()}>
-                                <Ionicons name="send" size={24} color={ZALO_BLUE} />
+                                <Ionicons name="send" size={22} color={ZALO_BLUE} />
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity style={styles.rightButton} onPress={() => Alert.alert('Thông báo', 'Tính năng ghi âm đang phát triển')}>
-                                <Ionicons name="mic-outline" size={28} color="#6B7280" />
+                                <Ionicons name="mic" size={24} color="#6B7280" />
                             </TouchableOpacity>
                         )}
                     </View>
@@ -954,7 +973,7 @@ const styles = StyleSheet.create({
     headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     backButton: { padding: 4, marginRight: 4 },
     headerAvatarContainer: { marginRight: 10, position: 'relative' },
-    headerAvatar: { width: 36, height: 36, borderRadius: 18 },
+    headerAvatar: { width: 42, height: 42, borderRadius: 21 },
     onlineIndicator: {
         position: 'absolute',
         bottom: 0,
@@ -979,41 +998,42 @@ const styles = StyleSheet.create({
 
     // Scroll to bottom button styles
     scrollToBottomButton: {
-        position: 'absolute',
-        right: 16,
-        bottom: 16,
-        zIndex: 100,
+        alignSelf: 'flex-end',
+        marginRight: 16,
+        marginBottom: 8,
     },
     scrollToBottomInner: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
     },
     newMessageBadge: {
         position: 'absolute',
-        top: -6,
-        right: -6,
-        minWidth: 20,
-        height: 20,
-        borderRadius: 10,
+        top: -4,
+        right: -4,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
         backgroundColor: '#E04B4B',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 6,
-        borderWidth: 2,
+        paddingHorizontal: 5,
+        borderWidth: 1.5,
         borderColor: '#FFFFFF',
     },
     newMessageBadgeText: {
         color: '#FFFFFF',
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '700',
     },
 
@@ -1063,6 +1083,22 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         borderRadius: 12,
     },
+    // Deleted message style
+    deletedMessageBubble: {
+        maxWidth: '80%',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        backgroundColor: '#F0F0F0',
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        borderStyle: 'dashed',
+    },
+    deletedMessageText: {
+        fontSize: 14,
+        color: '#9CA3AF',
+        fontStyle: 'italic',
+    },
     imageBubble: {
         maxWidth: '70%',
         padding: 4,
@@ -1074,30 +1110,30 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#F2F4F5',
-        borderRadius: 20,
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        maxWidth: '75%',
+        borderRadius: 16,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        maxWidth: '65%',
     },
     callIconCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 10,
+        marginRight: 8,
     },
     callIconEnded: {
-        backgroundColor: 'rgba(124, 60, 109, 0.15)', // Light purple background
+        backgroundColor: CALL_PURPLE, // Filled purple background
     },
     callIconMissed: {
-        backgroundColor: 'rgba(224, 75, 75, 0.15)', // Light red background
+        backgroundColor: '#E04B4B', // Filled red background
     },
     callTextContainer: {
         flex: 1,
     },
     callMainText: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '500',
         color: CALL_PURPLE,
     },
@@ -1105,9 +1141,9 @@ const styles = StyleSheet.create({
         color: '#E04B4B',
     },
     callTimeText: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#9CA3AF',
-        marginTop: 2,
+        marginTop: 1,
     },
     // Old styles kept for backward compatibility
     callBubble: {
@@ -1331,19 +1367,28 @@ const styles = StyleSheet.create({
     },
     // Reply Styles
     replyPreview: {
-        backgroundColor: 'rgba(0,0,0,0.05)',
+        backgroundColor: 'rgba(255,255,255,0.2)',
         borderLeftWidth: 3,
-        borderLeftColor: '#666',
-        padding: 5,
+        borderLeftColor: '#FFFFFF',
+        paddingVertical: 6,
+        paddingHorizontal: 8,
         borderRadius: 4,
-        marginBottom: 4,
+        marginBottom: 6,
+    },
+    replyPreviewOther: {
+        backgroundColor: 'rgba(0,0,0,0.05)',
+        borderLeftColor: '#7C3C6D',
     },
     replyBar: {
         // Using borderLeft instead
     },
     replyText: {
-        color: '#555',
+        color: 'rgba(255,255,255,0.85)',
         fontSize: 12,
+        fontStyle: 'italic',
+    },
+    replyTextOther: {
+        color: '#666',
     },
     seenText: {
         fontSize: 10,
