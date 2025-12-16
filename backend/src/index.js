@@ -181,6 +181,38 @@ async function initDatabase() {
       )
     `);
 
+        // Sticker Packs table
+        await pool.execute(`
+      CREATE TABLE IF NOT EXISTS sticker_packs (
+        id VARCHAR(36) PRIMARY KEY,
+        name VARCHAR(100) UNIQUE NOT NULL,
+        title VARCHAR(255),
+        description TEXT,
+        icon_url TEXT,
+        sort_order INT DEFAULT 0,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+        // Stickers table
+        await pool.execute(`
+      CREATE TABLE IF NOT EXISTS stickers (
+        id VARCHAR(36) PRIMARY KEY,
+        pack_id VARCHAR(36) NOT NULL,
+        image_url TEXT NOT NULL,
+        file_format VARCHAR(20) DEFAULT 'webp',
+        file_size INT DEFAULT 0,
+        width INT DEFAULT 512,
+        height INT DEFAULT 512,
+        is_animated BOOLEAN DEFAULT FALSE,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (pack_id) REFERENCES sticker_packs(id) ON DELETE CASCADE
+      )
+    `);
+
         console.log('✅ Database connected and tables created');
     } catch (error) {
         console.error('❌ Database connection failed:', error.message);
@@ -3042,6 +3074,288 @@ io.on('connection', (socket) => {
         }
     });
 });
+
+// ============ STICKER API ROUTES ============
+
+// Setup multer for sticker uploads
+const multer = require('multer');
+const fs = require('fs');
+
+// Create stickers upload directory if not exists
+const stickersUploadDir = path.join(__dirname, '../uploads/stickers');
+if (!fs.existsSync(stickersUploadDir)) {
+    fs.mkdirSync(stickersUploadDir, { recursive: true });
+}
+
+const stickerStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, stickersUploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname) || '.webp';
+        cb(null, 'sticker-' + uniqueSuffix + ext);
+    }
+});
+
+const stickerUpload = multer({
+    storage: stickerStorage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = ['image/png', 'image/webp', 'image/gif', 'image/jpeg'];
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Invalid file type. Only PNG, WEBP, GIF, JPEG allowed.'));
+        }
+    }
+});
+
+// ===== PUBLIC STICKER API =====
+
+// Get all active sticker packs with stickers (for users)
+app.get('/api/app/sticker-packs', async (req, res) => {
+    try {
+        const [packs] = await pool.execute(
+            'SELECT * FROM sticker_packs WHERE is_active = TRUE ORDER BY sort_order ASC'
+        );
+
+        // Get stickers for each pack
+        const packsWithStickers = await Promise.all(packs.map(async (pack) => {
+            const [stickers] = await pool.execute(
+                'SELECT * FROM stickers WHERE pack_id = ? ORDER BY sort_order ASC',
+                [pack.id]
+            );
+            return {
+                ...pack,
+                stickers: stickers
+            };
+        }));
+
+        res.json({ packs: packsWithStickers });
+    } catch (error) {
+        console.error('Get sticker packs error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// ===== ADMIN STICKER API =====
+
+// Get all sticker packs (admin)
+app.get('/api/admin/sticker-packs', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const [packs] = await pool.execute(
+            'SELECT sp.*, COUNT(s.id) as sticker_count FROM sticker_packs sp LEFT JOIN stickers s ON sp.id = s.pack_id GROUP BY sp.id ORDER BY sp.sort_order ASC'
+        );
+
+        res.json({ packs });
+    } catch (error) {
+        console.error('Get packs error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get stickers in a pack (admin)
+app.get('/api/admin/sticker-packs/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { id } = req.params;
+        const [packs] = await pool.execute('SELECT * FROM sticker_packs WHERE id = ?', [id]);
+
+        if (packs.length === 0) {
+            return res.status(404).json({ error: 'Pack not found' });
+        }
+
+        const [stickers] = await pool.execute(
+            'SELECT * FROM stickers WHERE pack_id = ? ORDER BY sort_order ASC',
+            [id]
+        );
+
+        res.json({ pack: packs[0], stickers });
+    } catch (error) {
+        console.error('Get pack error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Create sticker pack (admin)
+app.post('/api/admin/sticker-packs', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { name, title, description, icon_url, sort_order } = req.body;
+        const packId = uuidv4();
+
+        await pool.execute(
+            'INSERT INTO sticker_packs (id, name, title, description, icon_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+            [packId, name, title || name, description || '', icon_url || '', sort_order || 0]
+        );
+
+        res.json({ success: true, packId });
+    } catch (error) {
+        console.error('Create pack error:', error);
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: 'Tên pack đã tồn tại' });
+        }
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Update sticker pack (admin)
+app.put('/api/admin/sticker-packs/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { id } = req.params;
+        const { name, title, description, icon_url, sort_order, is_active } = req.body;
+
+        await pool.execute(
+            'UPDATE sticker_packs SET name = COALESCE(?, name), title = COALESCE(?, title), description = COALESCE(?, description), icon_url = COALESCE(?, icon_url), sort_order = COALESCE(?, sort_order), is_active = COALESCE(?, is_active) WHERE id = ?',
+            [name, title, description, icon_url, sort_order, is_active, id]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Update pack error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Delete sticker pack (admin)
+app.delete('/api/admin/sticker-packs/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { id } = req.params;
+
+        // Delete stickers first (cascade should handle but let's be safe)
+        await pool.execute('DELETE FROM stickers WHERE pack_id = ?', [id]);
+        await pool.execute('DELETE FROM sticker_packs WHERE id = ?', [id]);
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Delete pack error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Upload sticker file
+app.post('/api/upload/sticker', authenticateToken, stickerUpload.single('sticker'), async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const fileUrl = `/uploads/stickers/${req.file.filename}`;
+        const fileFormat = path.extname(req.file.filename).slice(1) || 'webp';
+
+        res.json({
+            success: true,
+            url: fileUrl,
+            imageUrl: fileUrl,
+            fileFormat: fileFormat,
+            size: req.file.size
+        });
+    } catch (error) {
+        console.error('Upload sticker error:', error);
+        res.status(500).json({ error: 'Lỗi upload' });
+    }
+});
+
+// Add sticker to pack (admin)
+app.post('/api/admin/sticker-packs/:packId/stickers', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { packId } = req.params;
+        const { image_url, file_format, file_size, width, height, is_animated, sort_order } = req.body;
+        const stickerId = uuidv4();
+
+        await pool.execute(
+            'INSERT INTO stickers (id, pack_id, image_url, file_format, file_size, width, height, is_animated, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [stickerId, packId, image_url, file_format || 'webp', file_size || 0, width || 512, height || 512, is_animated || false, sort_order || 0]
+        );
+
+        res.json({ success: true, stickerId });
+    } catch (error) {
+        console.error('Add sticker error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Delete sticker (admin)
+app.delete('/api/admin/stickers/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { id } = req.params;
+
+        // Get sticker info to delete file
+        const [stickers] = await pool.execute('SELECT image_url FROM stickers WHERE id = ?', [id]);
+        if (stickers.length > 0) {
+            const stickerPath = path.join(__dirname, '..', stickers[0].image_url);
+            if (fs.existsSync(stickerPath)) {
+                fs.unlinkSync(stickerPath);
+            }
+        }
+
+        await pool.execute('DELETE FROM stickers WHERE id = ?', [id]);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Delete sticker error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Reorder stickers in a pack (admin)
+app.put('/api/admin/sticker-packs/:packId/stickers/reorder', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { stickerOrders } = req.body; // Array of { id, sort_order }
+
+        if (!Array.isArray(stickerOrders)) {
+            return res.status(400).json({ error: 'Invalid data' });
+        }
+
+        for (const item of stickerOrders) {
+            await pool.execute(
+                'UPDATE stickers SET sort_order = ? WHERE id = ?',
+                [item.sort_order, item.id]
+            );
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Reorder stickers error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// ============ END STICKER API ============
 
 initDatabase().then(async () => {
     // Create additional tables and optimize indexes

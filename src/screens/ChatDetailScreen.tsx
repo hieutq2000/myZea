@@ -502,13 +502,13 @@ export default function ChatDetailScreen() {
         dragX: Animated.AnimatedInterpolation<number>
     ) => {
         const scale = dragX.interpolate({
-            inputRange: [0, 50, 100],
+            inputRange: [0, 30, 50],
             outputRange: [0, 0.8, 1],
             extrapolate: 'clamp',
         });
 
         const opacity = dragX.interpolate({
-            inputRange: [0, 30, 60],
+            inputRange: [0, 20, 40],
             outputRange: [0, 0.5, 1],
             extrapolate: 'clamp',
         });
@@ -516,7 +516,7 @@ export default function ChatDetailScreen() {
         return (
             <Animated.View style={[styles.swipeReplyContainer, { opacity }]}>
                 <Animated.View style={[styles.swipeReplyIcon, { transform: [{ scale }] }]}>
-                    <Ionicons name="arrow-undo" size={20} color="#666" />
+                    <Ionicons name="arrow-undo" size={18} color="#666" />
                 </Animated.View>
             </Animated.View>
         );
@@ -576,10 +576,12 @@ export default function ChatDetailScreen() {
                 <Swipeable
                     ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
                     renderLeftActions={renderSwipeReplyAction}
-                    onSwipeableOpen={() => handleSwipeOpen(item, swipeableRefs.current[item.id])}
+                    onSwipeableWillOpen={() => handleSwipeOpen(item, swipeableRefs.current[item.id])}
                     overshootLeft={false}
-                    leftThreshold={60}
-                    friction={2}
+                    overshootRight={false}
+                    leftThreshold={40}
+                    friction={3}
+                    enableTrackpadTwoFingerGesture={false}
                     containerStyle={styles.swipeableContainer}
                 >
                     <View style={[
@@ -774,10 +776,10 @@ export default function ChatDetailScreen() {
                                     setTimeout(() => scrollToBottom(), 300);
                                 }}
                             />
-                            {/* Sticker/Emoji Button (Inside Input) */}
+                            {/* Sticker Button (Inside Input) */}
                             <TouchableOpacity style={styles.stickerInnerButton} onPress={toggleEmojiPicker}>
-                                <Ionicons
-                                    name={showEmojiPicker ? "keypad-outline" : "happy-outline"}
+                                <MaterialIcons
+                                    name={showEmojiPicker ? "keyboard" : "sticky-note-2"}
                                     size={24}
                                     color="#6B7280"
                                 />
@@ -1048,13 +1050,13 @@ const styles = StyleSheet.create({
     swipeReplyContainer: {
         justifyContent: 'center',
         alignItems: 'center',
-        width: 60,
-        paddingLeft: 10,
+        width: 45,
+        paddingLeft: 8,
     },
     swipeReplyIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
         backgroundColor: '#E5E7EB',
         justifyContent: 'center',
         alignItems: 'center',
