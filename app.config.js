@@ -6,7 +6,7 @@ module.exports = {
         version: "1.0.4",
         orientation: "portrait",
         icon: "./assets/icon.png",
-        userInterfaceStyle: "light",
+        userInterfaceStyle: "automatic", // Allow app to follow system theme (light/dark)
         newArchEnabled: true,
         splash: {
             image: "./assets/splash.png",
@@ -16,6 +16,7 @@ module.exports = {
         ios: {
             supportsTablet: true,
             bundleIdentifier: "com.zyea.mobile",
+            userInterfaceStyle: "automatic", // Allow iOS to follow system theme
             infoPlist: {
                 NSCameraUsageDescription: "Ứng dụng cần quyền camera để xác thực danh tính và giám sát trong quá trình thi.",
                 NSMicrophoneUsageDescription: "Ứng dụng cần quyền microphone để ghi âm câu trả lời của bạn.",
@@ -29,6 +30,7 @@ module.exports = {
                 backgroundColor: "#f97316"
             },
             package: "com.zyea.mobile",
+            userInterfaceStyle: "automatic", // Allow Android to follow system theme
             permissions: [
                 "android.permission.CAMERA",
                 "android.permission.RECORD_AUDIO",
