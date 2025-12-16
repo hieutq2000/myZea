@@ -21,9 +21,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
-import { uploadImage, getCurrentUser } from '../utils/api';
-import axios from 'axios';
-import { API_URL } from '../utils/api';
+import { uploadImage, getCurrentUser, apiRequest, API_URL } from '../utils/api';
 
 type FeedbackStatus = 'pending' | 'processing' | 'resolved' | 'rejected';
 
@@ -62,12 +60,9 @@ export default function FeedbackScreen() {
     const fetchHistory = async () => {
         setIsLoadingHistory(true);
         try {
-            const token = await getCurrentUser().then(u => u?.token); // This might fail if getCurrentUser doesn't return token. Assuming token is stored/accessible.
-            // Using axios directly for now, or use a wrapper if available.
-            // Note: In real app, we need to ensure we have the token.
-            // This is a simplified fetch.
-            const response = await axios.get(`${API_URL}/feedback/my`);
-            setHistory(response.data);
+            // No need to get token manually, apiRequest handles it.
+            const data = await apiRequest<FeedbackItem[]>('/api/feedback/my');
+            setHistory(data);
         } catch (error) {
             console.log(error);
         } finally {
@@ -104,11 +99,14 @@ export default function FeedbackScreen() {
 
         setIsSubmitting(true);
         try {
-            await axios.post(`${API_URL}/feedback`, {
-                type: feedbackType,
-                content: content,
-                context: context,
-                media_urls: images
+            await apiRequest('/api/feedback', {
+                method: 'POST',
+                body: JSON.stringify({
+                    type: feedbackType,
+                    content: content,
+                    context: context,
+                    media_urls: images
+                })
             });
             Alert.alert('Thành công', 'Cảm ơn bạn đã gửi phản hồi!');
             setContent('');
