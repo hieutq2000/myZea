@@ -6,7 +6,7 @@ module.exports = {
         version: "1.0.4",
         orientation: "portrait",
         icon: "./assets/icon.png",
-        userInterfaceStyle: "automatic", // Allow app to follow system theme (light/dark)
+        userInterfaceStyle: "automatic",
         newArchEnabled: true,
         splash: {
             image: "./assets/splash.png",
@@ -14,6 +14,11 @@ module.exports = {
             backgroundColor: "#ffffff"
         },
         ios: {
+            icon: {
+                light: "./assets/icon.png",
+                dark: "./assets/icon-dark.png",
+                tint: "./assets/icon-tinted.png"
+            },
             supportsTablet: true,
             bundleIdentifier: "com.zyea.mobile",
             userInterfaceStyle: "automatic", // Allow iOS to follow system theme
@@ -42,6 +47,7 @@ module.exports = {
         android: {
             adaptiveIcon: {
                 foregroundImage: "./assets/adaptive-icon.png",
+                monochromeImage: "./assets/monochrome-icon.png",
                 backgroundColor: "#f97316"
             },
             package: "com.zyea.mobile",
