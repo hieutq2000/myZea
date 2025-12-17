@@ -32,7 +32,7 @@ jobs:
           java-version: '17'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Expo Prebuild
         run: npx expo prebuild --platform android --no-interactive
