@@ -21,7 +21,17 @@ module.exports = {
                 NSCameraUsageDescription: "Ứng dụng cần quyền camera để xác thực danh tính và giám sát trong quá trình thi.",
                 NSMicrophoneUsageDescription: "Ứng dụng cần quyền microphone để ghi âm câu trả lời của bạn.",
                 NSPhotoLibraryUsageDescription: "Ứng dụng cần quyền truy cập thư viện ảnh để chọn ảnh đại diện.",
-                NSPhotoLibraryAddUsageDescription: "Ứng dụng cần quyền lưu ảnh vào thư viện của bạn."
+                NSPhotoLibraryAddUsageDescription: "Ứng dụng cần quyền lưu ảnh vào thư viện của bạn.",
+                // Allow HTTP connections to VPS server
+                NSAppTransportSecurity: {
+                    NSAllowsArbitraryLoads: true,
+                    NSExceptionDomains: {
+                        "103.6.168.35": {
+                            NSExceptionAllowsInsecureHTTPLoads: true,
+                            NSIncludesSubdomains: true
+                        }
+                    }
+                }
             }
         },
         android: {
