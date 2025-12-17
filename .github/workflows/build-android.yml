@@ -11,6 +11,7 @@ on:
       - 'app.config.js'
       - 'package.json'
       - 'App.tsx'
+      - 'plugins/**'
 
 jobs:
   build-android:
