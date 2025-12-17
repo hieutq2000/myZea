@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Keyboard, Modal, Alert, ActivityIndicator, Dimensions, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Keyboard, Modal, Alert, ActivityIndicator, Dimensions, Animated, KeyboardAvoidingView } from 'react-native';
 import { Image } from 'expo-image';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
@@ -49,6 +49,9 @@ export default function ChatDetailScreen() {
     const [showScrollToBottom, setShowScrollToBottom] = useState(false);
     const [newMessageCount, setNewMessageCount] = useState(0);
     const [isNearBottom, setIsNearBottom] = useState(true);
+    // Image preview with caption states
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [imageCaption, setImageCaption] = useState('');
 
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
@@ -180,7 +183,9 @@ export default function ChatDetailScreen() {
                 time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 createdAt: m.createdAt, // Store full date for date separator
                 senderId: m.user._id,
-                replyTo: m.replyTo // Map reply info
+                replyTo: m.replyTo, // Map reply info
+                isDeleted: m.isDeleted || false,
+                deletedBy: m.deletedBy || []
             }));
             setMessages(mapped);
             scrollToBottom(false);
@@ -309,6 +314,7 @@ export default function ChatDetailScreen() {
             inputRef.current?.focus();
         } else {
             Keyboard.dismiss();
+            setPickerTab('sticker'); // Default to sticker tab when opening
             setShowEmojiPicker(true);
         }
     };
@@ -324,7 +330,9 @@ export default function ChatDetailScreen() {
 
         if (result.assets && result.assets[0]) {
             const imageUri = result.assets[0].uri;
-            await uploadAndSendImage(imageUri);
+            // Show preview modal instead of sending immediately
+            setPreviewImage(imageUri);
+            setImageCaption('');
         }
     };
 
@@ -339,11 +347,13 @@ export default function ChatDetailScreen() {
 
         if (result.assets && result.assets[0]) {
             const imageUri = result.assets[0].uri;
-            await uploadAndSendImage(imageUri);
+            // Show preview modal instead of sending immediately
+            setPreviewImage(imageUri);
+            setImageCaption('');
         }
     };
 
-    const uploadAndSendImage = async (imageUri: string) => {
+    const uploadAndSendImage = async (imageUri: string, caption: string = '') => {
         setIsUploading(true);
         try {
             // Create FormData for upload
@@ -371,15 +381,30 @@ export default function ChatDetailScreen() {
             const data = await response.json();
             const imageUrl = data.url || imageUri; // Use uploaded URL or local URI as fallback
 
-            // Send message with image
-            sendMessage('[Hình ảnh]', 'image', imageUrl);
+            // Send message with image and caption
+            sendMessage(caption || '', 'image', imageUrl);
         } catch (error) {
             console.error('Upload error:', error);
             // Fallback: send with local URI
-            sendMessage('[Hình ảnh]', 'image', imageUri);
+            sendMessage(caption || '', 'image', imageUri);
         } finally {
             setIsUploading(false);
         }
+    };
+
+    // Send image with caption
+    const handleSendImageWithCaption = async () => {
+        if (!previewImage) return;
+        const caption = imageCaption.trim();
+        setPreviewImage(null);
+        setImageCaption('');
+        await uploadAndSendImage(previewImage, caption);
+    };
+
+    // Cancel image preview
+    const handleCancelImagePreview = () => {
+        setPreviewImage(null);
+        setImageCaption('');
     };
 
     // Format last seen time like Facebook
@@ -471,7 +496,7 @@ export default function ChatDetailScreen() {
             </View>
             <View style={styles.headerRight}>
                 <TouchableOpacity
-                    style={styles.headerIcon}
+                    style={styles.headerIconCircle}
                     onPress={() => (navigation as any).navigate('Call', {
                         partnerId,
                         userName,
@@ -481,10 +506,10 @@ export default function ChatDetailScreen() {
                         conversationId, // Pass conversationId
                     })}
                 >
-                    <Ionicons name="call-outline" size={24} color="#000000" />
+                    <Ionicons name="call" size={18} color="#FFFFFF" />
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={styles.headerIcon}
+                    style={styles.headerIconCircle}
                     onPress={() => (navigation as any).navigate('Call', {
                         partnerId,
                         userName,
@@ -494,7 +519,7 @@ export default function ChatDetailScreen() {
                         conversationId, // Pass conversationId
                     })}
                 >
-                    <Ionicons name="videocam-outline" size={26} color="#000000" />
+                    <Ionicons name="videocam" size={18} color="#FFFFFF" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.headerIcon}>
                     <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
@@ -520,10 +545,16 @@ export default function ChatDetailScreen() {
     const handleDeleteMessageAction = async () => {
         if (!selectedMessage) return;
         const messageId = selectedMessage.id;
-        // Mark as deleted locally instead of removing
+        // Mark as deleted locally with deletedBy array
         setMessages(prev => prev.map(m =>
             m.id === messageId
-                ? { ...m, isDeleted: true, text: 'Bạn đã xoá một tin nhắn' }
+                ? {
+                    ...m,
+                    isDeleted: true,
+                    deletedBy: [...(m.deletedBy || []), currentUserId],
+                    text: null, // Clear text
+                    imageUrl: null // Clear image
+                }
                 : m
         ));
         setSelectedMessage(null);
@@ -675,9 +706,15 @@ export default function ChatDetailScreen() {
                                 <Image
                                     source={{ uri: getImageUrl(item.imageUrl) }}
                                     style={styles.messageImage}
-                                    contentFit="cover"
+                                    contentFit="contain"
                                 />
-                                <Text style={styles.messageTime}>{item.time}</Text>
+                                {/* Show caption if exists */}
+                                {item.text && item.text.trim() !== '' && (
+                                    <Text style={[styles.imageCaptionText, { color: isMe ? '#FFFFFF' : '#000000' }]}>
+                                        {item.text}
+                                    </Text>
+                                )}
+                                <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF' }]}>{item.time}</Text>
                             </TouchableOpacity>
                         ) : isCall ? (
                             <TouchableOpacity
@@ -712,7 +749,12 @@ export default function ChatDetailScreen() {
                             </TouchableOpacity>
                         ) : item.isDeleted ? (
                             <View style={styles.deletedMessageBubble}>
-                                <Text style={styles.deletedMessageText}>{item.text}</Text>
+                                <Ionicons name="ban-outline" size={14} color="#9CA3AF" style={{ marginRight: 6 }} />
+                                <Text style={styles.deletedMessageText}>
+                                    {item.deletedBy?.includes(currentUserId)
+                                        ? 'Bạn đã xóa tin nhắn'
+                                        : 'Tin nhắn đã bị xóa'}
+                                </Text>
                             </View>
                         ) : (
                             <TouchableOpacity
@@ -825,7 +867,7 @@ export default function ChatDetailScreen() {
                 {showScrollToBottom && (
                     <TouchableOpacity
                         style={styles.scrollToBottomButton}
-                        onPress={scrollToBottom}
+                        onPress={() => scrollToBottom()}
                         activeOpacity={0.8}
                     >
                         <View style={styles.scrollToBottomInner}>
@@ -995,6 +1037,66 @@ export default function ChatDetailScreen() {
                 </TouchableOpacity>
             </Modal>
 
+            {/* Image Preview with Caption Modal */}
+            <Modal
+                visible={!!previewImage}
+                transparent={false}
+                animationType="slide"
+                onRequestClose={handleCancelImagePreview}
+            >
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    keyboardVerticalOffset={0}
+                >
+                    <SafeAreaView style={styles.imagePreviewModalContainer}>
+                        {/* Header */}
+                        <View style={styles.imagePreviewModalHeader}>
+                            <TouchableOpacity
+                                style={styles.imagePreviewModalClose}
+                                onPress={handleCancelImagePreview}
+                            >
+                                <Ionicons name="close" size={28} color="#FFFFFF" />
+                            </TouchableOpacity>
+                            <Text style={styles.imagePreviewModalTitle}>Gửi ảnh</Text>
+                            <View style={{ width: 40 }} />
+                        </View>
+
+                        {/* Image Preview */}
+                        <View style={styles.imagePreviewModalContent}>
+                            {previewImage && (
+                                <Image
+                                    source={{ uri: previewImage }}
+                                    style={styles.imagePreviewModalImage}
+                                    contentFit="contain"
+                                />
+                            )}
+                        </View>
+
+                        {/* Caption Input */}
+                        <View style={styles.imagePreviewModalFooter}>
+                            <View style={styles.imagePreviewCaptionContainer}>
+                                <TextInput
+                                    style={styles.imagePreviewCaptionInput}
+                                    placeholder="Thêm tin nhắn..."
+                                    placeholderTextColor="#999"
+                                    value={imageCaption}
+                                    onChangeText={setImageCaption}
+                                    multiline
+                                    maxLength={500}
+                                />
+                                <TouchableOpacity
+                                    style={styles.imagePreviewSendButton}
+                                    onPress={handleSendImageWithCaption}
+                                >
+                                    <Ionicons name="send" size={24} color="#FFFFFF" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </SafeAreaView>
+                </KeyboardAvoidingView>
+            </Modal>
+
             {/* Image Preview Modal */}
             <Modal
                 visible={!!selectedImage}
@@ -1138,8 +1240,17 @@ const styles = StyleSheet.create({
     headerTitle: { color: '#000000', fontSize: 17, fontWeight: '600' },
     headerSubtitle: { color: '#666666', fontSize: 12 },
     headerDepartment: { color: '#9CA3AF', fontSize: 12, marginTop: 1 },
-    headerRight: { flexDirection: 'row', width: 100, justifyContent: 'flex-end' },
-    headerIcon: { padding: 4, marginLeft: 15 },
+    headerRight: { flexDirection: 'row', width: 120, justifyContent: 'flex-end', alignItems: 'center' },
+    headerIcon: { padding: 4, marginLeft: 12 },
+    headerIconCircle: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#000000',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 10
+    },
 
     keyboardAvoid: { flex: 1 },
     listStyle: { flex: 1 },
@@ -1147,9 +1258,14 @@ const styles = StyleSheet.create({
 
     // Scroll to bottom button styles
     scrollToBottomButton: {
-        alignSelf: 'flex-end',
-        marginRight: 16,
-        marginBottom: 8,
+        position: 'absolute',
+        right: 16,
+        bottom: 70, // Above the input bar
+        zIndex: 10,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        overflow: 'hidden',
     },
     scrollToBottomInner: {
         width: 36,
@@ -1235,13 +1351,15 @@ const styles = StyleSheet.create({
     // Deleted message style
     deletedMessageBubble: {
         maxWidth: '80%',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 12,
-        backgroundColor: '#F0F0F0',
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 16,
+        backgroundColor: '#F5F5F5',
         borderWidth: 1,
-        borderColor: '#E0E0E0',
+        borderColor: '#E5E5E5',
         borderStyle: 'dashed',
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     deletedMessageText: {
         fontSize: 14,
@@ -1351,8 +1469,20 @@ const styles = StyleSheet.create({
     messageTime: { fontSize: 10, color: '#9CA3AF', marginTop: 4, alignSelf: 'flex-end' },
     messageImage: {
         width: SCREEN_WIDTH * 0.6,
-        height: SCREEN_WIDTH * 0.6,
+        height: undefined,
+        aspectRatio: 1, // Default 1:1, will be overridden by actual image
+        maxWidth: SCREEN_WIDTH * 0.65,
+        maxHeight: SCREEN_WIDTH * 0.8,
+        minHeight: 100,
         borderRadius: 8,
+        backgroundColor: '#F0F0F0', // Placeholder background
+    },
+    imageCaptionText: {
+        fontSize: 15,
+        lineHeight: 20,
+        paddingHorizontal: 8,
+        paddingTop: 8,
+        paddingBottom: 2,
     },
 
     footer: {
@@ -1821,5 +1951,66 @@ const styles = StyleSheet.create({
     },
     backspaceButton: {
         paddingLeft: 10,
+    },
+    // Image Preview Modal with Caption styles
+    imagePreviewModalContainer: {
+        flex: 1,
+        backgroundColor: '#000000',
+    },
+    imagePreviewModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+    },
+    imagePreviewModalClose: {
+        padding: 8,
+    },
+    imagePreviewModalTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    imagePreviewModalContent: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    imagePreviewModalImage: {
+        width: '100%',
+        height: '100%',
+    },
+    imagePreviewModalFooter: {
+        backgroundColor: 'rgba(0,0,0,0.9)',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        paddingBottom: Platform.OS === 'ios' ? 30 : 16,
+    },
+    imagePreviewCaptionContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        backgroundColor: '#1E1E1E',
+        borderRadius: 24,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        minHeight: 48,
+    },
+    imagePreviewCaptionInput: {
+        flex: 1,
+        fontSize: 16,
+        color: '#FFFFFF',
+        maxHeight: 100,
+        paddingVertical: 8,
+    },
+    imagePreviewSendButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#0068FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 10,
     },
 });

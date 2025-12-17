@@ -5,7 +5,8 @@ import { VoiceParseResult } from '../types/finance';
 // Change this to your server URL
 // For local development with mobile: use your WiFi IP
 // For production: https://your-domain.com
-export const API_URL = 'http://192.168.0.101:3001';
+// VPS: http://103.6.168.35:3001
+export const API_URL = 'http://103.6.168.35:3001';
 
 /**
  * Convert a relative image path to full URL
@@ -266,6 +267,7 @@ export interface Conversation {
     last_message?: string;
     last_message_time?: string;
     last_message_sender_id?: string;
+    last_message_deleted_by?: string | string[];
     unread_count?: number;
     status?: 'online' | 'offline';
     last_seen?: string;

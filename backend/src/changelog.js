@@ -4,6 +4,16 @@
 
 const CHANGELOG = [
     {
+        version: "1.0.6",
+        date: "17/12/2024",
+        title: "CẬP NHẬT CẦN THIẾT CHO NGƯỜI DÙNG",
+        changes: [
+            "Cải thiện phần chats , để người dùng trải nghiệm tốt hơn",
+            "Cải thiện UI/UX",
+            "⚡ Tối ưu hiệu năng cho người dùng"
+        ]
+    },
+    {
         version: "1.0.5",
         date: "16/12/2024",
         title: "TÍNH NĂNG QUẢN LÝ CHI TIÊU & REACTIONS",

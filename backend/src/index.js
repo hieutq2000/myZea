@@ -1126,9 +1126,18 @@ app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
                 u.cover_image,
                 u.id as partner_id,
                 CASE 
-                    WHEN m.created_at > IFNULL(cp_me.deleted_at, '1970-01-01') OR m.created_at IS NULL THEN m.content 
+                    WHEN m.created_at > IFNULL(cp_me.deleted_at, '1970-01-01') OR m.created_at IS NULL THEN 
+                        CASE 
+                            WHEN m.deleted_by IS NOT NULL AND JSON_LENGTH(m.deleted_by) > 0 THEN '[Tin nhắn đã bị xóa]'
+                            WHEN m.type = 'sticker' THEN '[Sticker]'
+                            WHEN m.type = 'image' AND (m.content IS NULL OR m.content = '' OR m.content = '[Hình ảnh]') THEN '[Hình ảnh]'
+                            WHEN m.type = 'image' AND m.content IS NOT NULL AND m.content != '' AND m.content != '[Hình ảnh]' THEN m.content
+                            ELSE IFNULL(m.content, '')
+                        END
                     ELSE '' 
                 END as last_message,
+                m.type as last_message_type,
+                m.deleted_by as last_message_deleted_by,
                 m.created_at as last_message_time,
                 m.sender_id as last_message_sender_id,
                 u.last_seen,
@@ -1204,19 +1213,22 @@ app.get('/api/chat/history/:partnerId', authenticateToken, async (req, res) => {
             LIMIT 50
         `, [conversationId, myDeletedAt, myDeletedAt]);
 
-        const filteredMessages = messages.filter(m => {
+        // Don't filter out deleted messages, instead mark them as deleted
+        res.json(messages.reverse().map(m => {
             const deletedBy = safeJsonParse(m.deleted_by);
-            return !deletedBy.includes(userId);
-        });
+            const isDeleted = deletedBy.length > 0;
 
-        res.json(filteredMessages.reverse().map(m => ({
-            _id: m.id,
-            text: m.content,
-            type: m.type || 'text',
-            imageUrl: m.image_url || null,
-            createdAt: m.created_at,
-            user: { _id: m.sender_id }
-        })));
+            return {
+                _id: m.id,
+                text: isDeleted ? null : m.content, // Clear content if deleted
+                type: m.type || 'text',
+                imageUrl: isDeleted ? null : (m.image_url || null), // Clear image if deleted
+                createdAt: m.created_at,
+                user: { _id: m.sender_id },
+                isDeleted: isDeleted,
+                deletedBy: deletedBy // Array of user IDs who deleted this message
+            };
+        }));
     } catch (error) {
         console.error('Get history error:', error);
         res.status(500).json({ error: 'Lỗi server' });

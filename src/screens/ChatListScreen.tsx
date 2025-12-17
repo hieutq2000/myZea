@@ -77,6 +77,7 @@ export default function ChatListScreen() {
                 lastMessage: c.last_message || '',
                 lastMessageTime: c.last_message_time,
                 lastMessageSenderId: c.last_message_sender_id,
+                lastMessageDeletedBy: c.last_message_deleted_by,
                 time: formatMessageTime(c.last_message_time),
                 avatar: c.avatar,
                 unread: c.unread_count || 0,
@@ -233,14 +234,44 @@ export default function ChatListScreen() {
     const formatLastMessage = (item: any): string => {
         if (!item.lastMessage) return 'Bắt đầu cuộc trò chuyện';
 
-        // Check for sticker
-        if (item.lastMessage.includes('sticker') || item.lastMessage.startsWith('{')) {
-            return '[STICKER]';
-        }
-
+        const msg = item.lastMessage;
         const isFromMe = item.lastMessageSenderId === currentUserId;
         const prefix = isFromMe ? 'Bạn: ' : '';
-        return `${prefix}${item.lastMessage}`;
+
+        // Check for deleted message (from backend or local check)
+        const deletedBy = item.lastMessageDeletedBy;
+        const isDeleted =
+            msg === '[Tin nhắn đã bị xóa]' ||
+            msg === 'Tin nhắn đã bị xóa' ||
+            msg === 'Bạn đã xóa tin nhắn' ||
+            (deletedBy && (Array.isArray(deletedBy) ? deletedBy.length > 0 : JSON.parse(deletedBy || '[]').length > 0));
+
+        if (isDeleted) {
+            return `${prefix}đã xóa một tin nhắn`;
+        }
+
+        // Check for sticker - multiple detection methods
+        if (
+            msg.includes('/sticker/') ||  // Sticker URL path
+            msg.includes('/stickers/') || // Alternative sticker path
+            msg.endsWith('.webp') ||       // Sticker file format
+            (msg.toLowerCase && msg.toLowerCase().includes('sticker')) ||     // Contains 'sticker' keyword
+            msg.startsWith('{') ||         // JSON object (might be sticker data)
+            msg.startsWith('http') && (msg.includes('.webp') || msg.includes('.gif')) // Sticker image URL
+        ) {
+            return `${prefix}[Sticker]`;
+        }
+
+        // Check for image
+        if (
+            msg.startsWith('http') && (msg.includes('.jpg') || msg.includes('.jpeg') || msg.includes('.png')) ||
+            msg.includes('/upload/') ||
+            msg.includes('/images/')
+        ) {
+            return `${prefix}[Hình ảnh]`;
+        }
+
+        return `${prefix}${msg}`;
     };
 
     const handleMute = async (conversationId: string) => {
