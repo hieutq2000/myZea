@@ -17,7 +17,7 @@ module.exports = {
             icon: {
                 light: "./assets/icon.png",
                 dark: "./assets/icon-dark.png",
-                tint: "./assets/icon-tinted.png"
+                tinted: "./assets/icon-tinted.png"
             },
             supportsTablet: true,
             bundleIdentifier: "com.zyea.mobile",
