@@ -35,7 +35,7 @@ const Stickers: React.FC = () => {
     const [packForm] = Form.useForm();
     const [uploadingSticker, setUploadingSticker] = useState(false);
 
-    const API_URL = 'http://localhost:3001/api';
+    const API_URL = '/api';
 
     useEffect(() => {
         fetchPacks();
@@ -255,7 +255,7 @@ const Stickers: React.FC = () => {
                                 ]}
                             >
                                 <List.Item.Meta
-                                    avatar={item.icon_url ? <Avatar src={`http://localhost:3001${item.icon_url}`} shape="square" size={48} /> : <div style={{ width: 48, height: 48, background: '#eee', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileImageOutlined /></div>}
+                                    avatar={item.icon_url ? <Avatar src={item.icon_url} shape="square" size={48} /> : <div style={{ width: 48, height: 48, background: '#eee', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileImageOutlined /></div>}
                                     title={item.title}
                                     description={<Tag>{item.sticker_count} stickers</Tag>}
                                 />
@@ -303,7 +303,7 @@ const Stickers: React.FC = () => {
                                 >
                                     <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 8 }}>
                                         <Image
-                                            src={`http://localhost:3001${sticker.image_url}`}
+                                            src={`${sticker.image_url}`}
                                             height={100}
                                             style={{ objectFit: 'contain' }}
                                             preview={{ mask: 'Xem' }}

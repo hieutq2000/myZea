@@ -38,7 +38,7 @@ const Users: React.FC = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('admin_token');
-            const response = await axios.get('http://localhost:3001/api/admin/users', {
+            const response = await axios.get('/api/admin/users', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUsers(response.data);
@@ -53,7 +53,7 @@ const Users: React.FC = () => {
     const handleDelete = async (id: string) => {
         try {
             const token = localStorage.getItem('admin_token');
-            await axios.delete(`http://localhost:3001/api/admin/users/${id}`, {
+            await axios.delete(`/api/admin/users/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             message.success('Đã xóa người dùng');
@@ -69,7 +69,7 @@ const Users: React.FC = () => {
             setCreating(true);
             const token = localStorage.getItem('admin_token');
 
-            await axios.post('http://localhost:3001/api/admin/users', values, {
+            await axios.post('/api/admin/users', values, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -103,7 +103,7 @@ const Users: React.FC = () => {
             setUpdating(true);
             const token = localStorage.getItem('admin_token');
 
-            await axios.put(`http://localhost:3001/api/admin/users/${editingUser?.id}`, values, {
+            await axios.put(`/api/admin/users/${editingUser?.id}`, values, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -120,7 +120,7 @@ const Users: React.FC = () => {
     const handleToggleBan = async (user: User) => {
         try {
             const token = localStorage.getItem('admin_token');
-            await axios.put(`http://localhost:3001/api/admin/users/${user.id}`, {
+            await axios.put(`/api/admin/users/${user.id}`, {
                 is_banned: !user.is_banned
             }, {
                 headers: { Authorization: `Bearer ${token}` }

@@ -282,6 +282,10 @@ app.get('/api/changelog/latest', (req, res) => {
     res.json(CHANGELOG[0]);
 });
 
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date() });
+});
+
 // ============ AUTH ROUTES ============
 
 // Register
@@ -460,7 +464,7 @@ app.post('/api/auth/push-token', authenticateToken, async (req, res) => {
 // ============ ADMIN ROUTES ============
 app.get('/api/admin/users', authenticateToken, async (req, res) => {
     try {
-        if (req.user.email !== 'hieu@gmail.com') {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
             return res.status(403).json({ error: 'Không có quyền truy cập' });
         }
         const [users] = await pool.execute('SELECT id, name, email, avatar, level, xp, is_banned, created_at FROM users ORDER BY created_at DESC');
@@ -474,7 +478,7 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
 // Update user info
 app.put('/api/admin/users/:id', authenticateToken, async (req, res) => {
     try {
-        if (req.user.email !== 'hieu@gmail.com') return res.status(403).json({ error: 'Không có quyền truy cập' });
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') return res.status(403).json({ error: 'Không có quyền truy cập' });
 
         const { id } = req.params;
         const { name, email, xp, level, resetPassword, is_banned } = req.body;
@@ -3229,7 +3233,7 @@ app.get('/api/admin/sticker-packs/:id', authenticateToken, async (req, res) => {
 // Create sticker pack (admin)
 app.post('/api/admin/sticker-packs', authenticateToken, async (req, res) => {
     try {
-        if (req.user.email !== 'hieu@gmail.com') {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
             return res.status(403).json({ error: 'Không có quyền truy cập' });
         }
 

@@ -11,9 +11,9 @@ const withManifestFix = (config) => {
 
         const app = androidManifest.manifest.application[0];
 
-        // Fix: Manifest merger failed : Attribute application@allowBackup value=(true) per conflicts with ...
-        // We force the value and tell manifest merger to replace it.
-        app.$['android:allowBackup'] = 'true';
+        // Fix: Manifest merger failed - Force allowBackup to false to avoid conflicts
+        // Many libraries set this to true/false, causing conflicts. False is safer for most apps.
+        app.$['android:allowBackup'] = 'false';
 
         // Add tools:replace="android:allowBackup" to resolve conflict
         if (app.$['tools:replace']) {

@@ -24,7 +24,7 @@ const Content: React.FC = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('admin_token');
-            const response = await axios.get('http://localhost:3001/api/admin/posts', {
+            const response = await axios.get('/api/admin/posts', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setPosts(response.data);
@@ -39,7 +39,7 @@ const Content: React.FC = () => {
     const handleDelete = async (id: string) => {
         try {
             const token = localStorage.getItem('admin_token');
-            await axios.delete(`http://localhost:3001/api/admin/posts/${id}`, {
+            await axios.delete(`/api/admin/posts/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             message.success('Đã xóa bài viết');

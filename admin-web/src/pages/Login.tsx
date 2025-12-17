@@ -11,17 +11,17 @@ const Login: React.FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess }) => 
     const onFinish = async (values: any) => {
         setLoading(true);
         try {
-            // Gọi API Login của backend hiện tại
-            // Lưu ý: Đảm bảo Backend đang chạy ở port 3001
-            const response = await axios.post('http://localhost:3001/api/auth/login', {
+            // Gọi API qua Nginx Proxy (Relative path)
+            const response = await axios.post('/api/auth/login', {
                 email: values.email,
                 password: values.password,
             });
 
             const { token, user } = response.data;
 
-            // KIỂM TRA QUYỀN ADMIN (Chỉ cho phép hieu@gmail.com)
-            if (user.email !== 'hieu@gmail.com') {
+            // KIỂM TRA QUYỀN ADMIN (Cho phép hieu@gmail.com và admin@gmail.com)
+            const adminEmails = ['hieu@gmail.com', 'admin@gmail.com'];
+            if (!adminEmails.includes(user.email)) {
                 message.error('Tài khoản không có quyền truy cập Admin!');
                 setLoading(false);
                 return;

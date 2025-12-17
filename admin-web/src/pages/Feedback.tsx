@@ -31,7 +31,7 @@ const FeedbackPage: React.FC = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('admin_token');
-            const response = await axios.get('http://localhost:3001/api/admin/feedback', {
+            const response = await axios.get('/api/admin/feedback', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setFeedbackList(response.data);
@@ -46,7 +46,7 @@ const FeedbackPage: React.FC = () => {
     const handleStatusChange = async (id: string, newStatus: string) => {
         try {
             const token = localStorage.getItem('admin_token');
-            await axios.put(`http://localhost:3001/api/admin/feedback/${id}`, { status: newStatus }, {
+            await axios.put(`/api/admin/feedback/${id}`, { status: newStatus }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             message.success('Đã cập nhật trạng thái');
@@ -60,7 +60,7 @@ const FeedbackPage: React.FC = () => {
         if (!window.confirm('Bạn có chắc muốn xóa phản hồi này không?')) return;
         try {
             const token = localStorage.getItem('admin_token');
-            await axios.delete(`http://localhost:3001/api/admin/feedback/${id}`, {
+            await axios.delete(`/api/admin/feedback/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             message.success('Đã xóa phản hồi');
@@ -73,7 +73,7 @@ const FeedbackPage: React.FC = () => {
     const getFullUrl = (url?: string) => {
         if (!url) return '';
         if (url.startsWith('http')) return url;
-        return `http://localhost:3001${url}`;
+        return url; // Relative path is fine now, handled by proxy if accessing via same domain
     };
 
     const columns = [
