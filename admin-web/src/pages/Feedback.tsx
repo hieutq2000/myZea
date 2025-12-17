@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Card, Button, message, Tag, Space, Select, Modal, Image, Typography } from 'antd';
-import { CheckCircleOutlined, SyncOutlined, ClockCircleOutlined, UserOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, SyncOutlined, ClockCircleOutlined, UserOutlined, DeleteOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
 const { Title, Text } = Typography;
@@ -56,6 +56,26 @@ const FeedbackPage: React.FC = () => {
         }
     };
 
+    const handleDelete = async (id: string) => {
+        if (!window.confirm('Bạn có chắc muốn xóa phản hồi này không?')) return;
+        try {
+            const token = localStorage.getItem('admin_token');
+            await axios.delete(`http://localhost:3001/api/admin/feedback/${id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            message.success('Đã xóa phản hồi');
+            setFeedbackList(feedbackList.filter(item => item.id !== id));
+        } catch (error) {
+            message.error('Không thể xóa phản hồi');
+        }
+    };
+
+    const getFullUrl = (url?: string) => {
+        if (!url) return '';
+        if (url.startsWith('http')) return url;
+        return `http://localhost:3001${url}`;
+    };
+
     const columns = [
         {
             title: 'Người gửi',
@@ -63,7 +83,7 @@ const FeedbackPage: React.FC = () => {
             render: (text: any, record: Feedback) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {record.user_avatar ? (
-                        <img src={record.user_avatar} alt="avatar" style={{ width: 32, height: 32, borderRadius: '50%' }} />
+                        <img src={getFullUrl(record.user_avatar)} alt="avatar" style={{ width: 32, height: 32, borderRadius: '50%' }} />
                     ) : <UserOutlined />}
                     <div>
                         <div style={{ fontWeight: 500 }}>{record.user_name}</div>
@@ -97,18 +117,30 @@ const FeedbackPage: React.FC = () => {
         {
             title: 'Ảnh/Video',
             key: 'media',
-            render: (_: any, record: Feedback) => (
-                <Space>
-                    {record.media_urls?.map((url, index) => (
-                        <Image
-                            key={index}
-                            width={50}
-                            src={url.startsWith('http') ? url : `http://localhost:3001${url}`}
-                            style={{ borderRadius: 4 }}
-                        />
-                    ))}
-                </Space>
-            )
+            render: (_: any, record: Feedback) => {
+                let media = record.media_urls;
+                if (typeof media === 'string') {
+                    try {
+                        media = JSON.parse(media);
+                    } catch (e) {
+                        media = [];
+                    }
+                }
+                if (!Array.isArray(media)) media = [];
+
+                return (
+                    <Space>
+                        {media.map((url, index) => (
+                            <Image
+                                key={index}
+                                width={50}
+                                src={getFullUrl(url)}
+                                style={{ borderRadius: 4 }}
+                            />
+                        ))}
+                    </Space>
+                );
+            }
         },
         {
             title: 'Thời gian',
@@ -131,6 +163,17 @@ const FeedbackPage: React.FC = () => {
                     <Option value="resolved">✅ Đã xong</Option>
                     <Option value="rejected">❌ Từ chối</Option>
                 </Select>
+            )
+        },
+        {
+            title: 'Hành động',
+            key: 'action',
+            render: (_: any, record: Feedback) => (
+                <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleDelete(record.id)}
+                />
             )
         }
     ];

@@ -46,13 +46,12 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
 
 // Safe JSON parse helper
 function safeJsonParse(str, defaultValue = []) {
-    if (!str || str === '' || str === 'null' || str === 'undefined') {
-        return defaultValue;
-    }
+    if (str === null || str === undefined || str === '') return defaultValue;
+    if (typeof str === 'object') return str;
     try {
+        if (str === 'null' || str === 'undefined') return defaultValue;
         return JSON.parse(str);
     } catch (e) {
-        // Return default value for invalid JSON
         return defaultValue;
     }
 }
@@ -254,8 +253,12 @@ function authenticateToken(req, res, next) {
         return res.status(401).json({ error: 'Chưa đăng nhập' });
     }
 
+    // Debug JWT
+    if (!process.env.JWT_SECRET) console.error("FATAL: JWT_SECRET is missing!");
+
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
         if (err) {
+            console.error('Token verification failed:', err.message);
             return res.status(403).json({ error: 'Token không hợp lệ' });
         }
         req.user = user;
@@ -3489,6 +3492,20 @@ app.put('/api/admin/feedback/:id', authenticateToken, async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         console.error('Update feedback error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Delete Feedback (Admin)
+app.delete('/api/admin/feedback/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+        await pool.execute('DELETE FROM feedback WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Delete feedback error:', error);
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
