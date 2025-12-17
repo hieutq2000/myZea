@@ -15,6 +15,7 @@ const withManifestFix = (config) => {
         // We force the value and tell manifest merger to replace it.
         app.$['android:allowBackup'] = 'true';
 
+        // Add tools:replace="android:allowBackup" to resolve conflict
         if (app.$['tools:replace']) {
             const currentReplace = app.$['tools:replace'];
             if (!currentReplace.includes('android:allowBackup')) {
@@ -22,6 +23,15 @@ const withManifestFix = (config) => {
             }
         } else {
             app.$['tools:replace'] = 'android:allowBackup';
+        }
+
+        // Add android:exported="true" to main activity if missing (required for Android 12+)
+        if (app.activity) {
+            app.activity.forEach(activity => {
+                if (activity.$['android:name'] === '.MainActivity') {
+                    activity.$['android:exported'] = 'true';
+                }
+            });
         }
 
         return config;

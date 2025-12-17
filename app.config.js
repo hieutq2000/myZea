@@ -29,6 +29,11 @@ module.exports = {
                         "103.6.168.35": {
                             NSExceptionAllowsInsecureHTTPLoads: true,
                             NSIncludesSubdomains: true
+                        },
+                        "data5g.site": {
+                            NSExceptionAllowsInsecureHTTPLoads: true,
+                            NSIncludesSubdomains: true,
+                            NSRequiresCertificateTransparency: false
                         }
                     }
                 }

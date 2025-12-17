@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Card, Button, message, Tag, Space, Select, Modal, Image, Typography } from 'antd';
-import { CheckCircleOutlined, SyncOutlined, ClockCircleOutlined, UserOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Card, Button, message, Tag, Space, Select, Image, Typography } from 'antd';
+import { UserOutlined, DeleteOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
 const { Title, Text } = Typography;
@@ -80,7 +80,7 @@ const FeedbackPage: React.FC = () => {
         {
             title: 'Người gửi',
             key: 'user',
-            render: (text: any, record: Feedback) => (
+            render: (_: any, record: Feedback) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {record.user_avatar ? (
                         <img src={getFullUrl(record.user_avatar)} alt="avatar" style={{ width: 32, height: 32, borderRadius: '50%' }} />
