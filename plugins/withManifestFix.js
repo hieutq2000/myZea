@@ -4,31 +4,40 @@ const withManifestFix = (config) => {
     return withAndroidManifest(config, (config) => {
         const androidManifest = config.modResults;
 
-        // Ensure the tools namespace is defined
-        if (!androidManifest.manifest.$['xmlns:tools']) {
-            androidManifest.manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools';
+        // 1. Đảm bảo xmlns:tools tồn tại ở thẻ <manifest>
+        if (!androidManifest.manifest.$) {
+            androidManifest.manifest.$ = {};
+        }
+        androidManifest.manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools';
+
+        // 2. Lấy thẻ <application>
+        const app = androidManifest.manifest.application[0];
+        if (!app.$) {
+            app.$ = {};
         }
 
-        const app = androidManifest.manifest.application[0];
-
-        // Fix: Manifest merger failed - Force allowBackup to false to avoid conflicts
-        // Many libraries set this to true/false, causing conflicts. False is safer for most apps.
+        // 3. Ép giá trị cho các thuộc tính hay gây xung đột
         app.$['android:allowBackup'] = 'false';
+        app.$['android:supportsRtl'] = 'true';
 
-        // Add tools:replace="android:allowBackup" to resolve conflict
+        // 4. Thêm tools:replace để Gradle ưu tiên giá trị của App thay vì thư viện
+        const replaceAttributes = 'android:allowBackup,android:supportsRtl';
+
         if (app.$['tools:replace']) {
             const currentReplace = app.$['tools:replace'];
-            if (!currentReplace.includes('android:allowBackup')) {
-                app.$['tools:replace'] = `${currentReplace},android:allowBackup`;
-            }
+            // Hợp nhất các thuộc tính mà không làm mất cái cũ
+            const attributes = currentReplace.split(',').map(a => a.trim());
+            if (!attributes.includes('android:allowBackup')) attributes.push('android:allowBackup');
+            if (!attributes.includes('android:supportsRtl')) attributes.push('android:supportsRtl');
+            app.$['tools:replace'] = attributes.join(',');
         } else {
-            app.$['tools:replace'] = 'android:allowBackup';
+            app.$['tools:replace'] = replaceAttributes;
         }
 
-        // Add android:exported="true" to main activity if missing (required for Android 12+)
+        // 5. Đảm bảo MainActivity có android:exported="true" (Cần cho Android 12+)
         if (app.activity) {
             app.activity.forEach(activity => {
-                if (activity.$['android:name'] === '.MainActivity') {
+                if (activity.$ && activity.$['android:name'] === '.MainActivity') {
                     activity.$['android:exported'] = 'true';
                 }
             });
