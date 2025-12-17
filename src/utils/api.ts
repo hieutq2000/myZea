@@ -5,8 +5,8 @@ import { VoiceParseResult } from '../types/finance';
 // Change this to your server URL
 // For local development with mobile: use your WiFi IP
 // For production: https://your-domain.com
-// VPS: http://103.6.168.35:3001
-export const API_URL = 'http://103.6.168.35:3001';
+// VPS: https://data5g.site (using Cloudflare SSL)
+export const API_URL = 'https://data5g.site';
 
 /**
  * Convert a relative image path to full URL

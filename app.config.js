@@ -80,7 +80,8 @@ module.exports = {
                     microphonePermission: "Cho phép $(PRODUCT_NAME) nhận dạng giọng nói của bạn.",
                     speechRecognitionPermission: "Cho phép $(PRODUCT_NAME) nhận dạng giọng nói của bạn."
                 }
-            ]
+            ],
+            "./plugins/withManifestFix"
         ],
         updates: {
             url: "https://u.expo.dev/7244ecfc-4a54-4232-a0a3-e17d5039b55c",

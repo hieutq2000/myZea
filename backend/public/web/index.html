@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zyea Chat - Đăng nhập</title>
+    <meta name="description" content="Zyea Chat - Đăng nhập bằng mã QR">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #F97316;
+            --primary-light: #FB923C;
+            --accent-blue: #3B82F6;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* Left Panel - Branding */
+        .left-panel {
+            flex: 1;
+            background: linear-gradient(135deg, var(--primary), #ea580c);
+            padding: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .left-panel::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+            animation: pulse 8s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.3;
+            }
+        }
+
+        .brand-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+        }
+
+        .brand-icon {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+
+        .brand-name {
+            font-size: 28px;
+            font-weight: 800;
+            color: white;
+        }
+
+        .brand-tagline {
+            font-size: 42px;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .brand-desc {
+            font-size: 18px;
+            opacity: 0.9;
+            line-height: 1.6;
+            color: white;
+        }
+
+        /* Phone Mockup */
+        .phone-preview {
+            margin-top: 50px;
+            position: relative;
+        }
+
+        .phone-frame {
+            width: 280px;
+            height: 560px;
+            background: #1a1a1a;
+            border-radius: 40px;
+            padding: 12px;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+            transform: perspective(1000px) rotateY(-5deg) rotateX(2deg);
+        }
+
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background: #fff;
+            border-radius: 30px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .phone-notch {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 24px;
+            background: #1a1a1a;
+            border-radius: 0 0 16px 16px;
+            z-index: 10;
+        }
+
+        .chat-preview {
+            padding: 40px 16px 20px;
+            height: 100%;
+            background: #f8fafc;
+        }
+
+        .chat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .chat-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .chat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .chat-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: white;
+            padding: 12px;
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .chat-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+            font-weight: 600;
+        }
+
+        .chat-info {
+            flex: 1;
+        }
+
+        .chat-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .chat-msg {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        .chat-time {
+            font-size: 11px;
+            color: #9ca3af;
+        }
+
+        /* Right Panel - Login */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 40px 60px;
+            background: var(--bg-dark);
+        }
+
+        .lang-switch {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-bottom: 40px;
+        }
+
+        .lang-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 14px;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .lang-btn.active {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .login-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .login-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .login-subtitle {
+            color: var(--text-muted);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .qr-container {
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .qr-code {
+            width: 200px;
+            height: 200px;
+            background: #f3f4f6;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .qr-placeholder {
+            font-size: 14px;
+            color: #6b7280;
+            text-align: center;
+        }
+
+        .qr-logo {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
+        }
+
+        .instructions {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .instruction-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .instruction-number {
+            width: 24px;
+            height: 24px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .instruction-text {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-muted);
+        }
+
+        .instruction-text strong {
+            color: var(--text);
+        }
+
+        .divider {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .sso-btn {
+            width: 100%;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .sso-btn:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+        }
+
+        /* Loading Animation for QR */
+        .qr-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e5e7eb;
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Mobile Redirect */
+        @media (max-width: 1024px) {
+            body {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Left Panel -->
+    <div class="left-panel">
+        <div class="brand-content">
+            <div class="brand-logo">
+                <div class="brand-icon">🎓</div>
+                <span class="brand-name">Zyea</span>
+            </div>
+            <h1 class="brand-tagline">
+                Kết nối mọi<br>
+                khoảng cách,<br>
+                hiệu suất<br>
+                không giới hạn!
+            </h1>
+            <p class="brand-desc">
+                Zyea Chat, cùng tạo nhịp thành công
+            </p>
+
+            <div class="phone-preview">
+                <div class="phone-frame">
+                    <div class="phone-screen">
+                        <div class="phone-notch"></div>
+                        <div class="chat-preview">
+                            <div class="chat-header">
+                                <span class="chat-title">Chats</span>
+                                <span>✏️</span>
+                            </div>
+                            <div class="chat-list">
+                                <div class="chat-item">
+                                    <div class="chat-avatar">LQ</div>
+                                    <div class="chat-info">
+                                        <div class="chat-name">Lê Nguyễn Quỳnh Chi</div>
+                                        <div class="chat-msg">Chúc mừng năm mới chị 🎉</div>
+                                    </div>
+                                    <span class="chat-time">08:30</span>
+                                </div>
+                                <div class="chat-item">
+                                    <div class="chat-avatar"
+                                        style="background: linear-gradient(135deg, #f97316, #ea580c);">BT</div>
+                                    <div class="chat-info">
+                                        <div class="chat-name">Bùi Thùy Trình</div>
+                                        <div class="chat-msg">Đang nhập...</div>
+                                    </div>
+                                    <span class="chat-time">08:05</span>
+                                </div>
+                                <div class="chat-item">
+                                    <div class="chat-avatar"
+                                        style="background: linear-gradient(135deg, #10b981, #059669);">TN</div>
+                                    <div class="chat-info">
+                                        <div class="chat-name">Trịnh Hoài Ngọc 🔥</div>
+                                        <div class="chat-msg">📎 Anh-1.png</div>
+                                    </div>
+                                    <span class="chat-time">08:00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="right-panel">
+        <div class="lang-switch">
+            <button class="lang-btn" onclick="setLang('en')">Tiếng Anh</button>
+            <span style="color: var(--text-muted)">|</span>
+            <button class="lang-btn active" onclick="setLang('vi')">Tiếng Việt</button>
+        </div>
+
+        <div class="login-content">
+            <h2 class="login-title" id="loginTitle">Đăng nhập Zyea Chat</h2>
+            <p class="login-subtitle" id="loginSubtitle">bằng mã QR</p>
+
+            <div class="qr-container">
+                <div class="qr-code" id="qrCode">
+                    <div class="qr-loading">
+                        <div class="spinner"></div>
+                        <span class="qr-placeholder">Đang tạo mã QR...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="instructions">
+                <div class="instruction-item">
+                    <span class="instruction-number">1</span>
+                    <span class="instruction-text">Mở ứng dụng <strong>Zyea Chat</strong> trên thiết bị di động</span>
+                </div>
+                <div class="instruction-item">
+                    <span class="instruction-number">2</span>
+                    <span class="instruction-text">Vào mục <strong>Thông tin tài khoản > Quản lý thiết bị > Liên kết
+                            thiết bị mới</strong></span>
+                </div>
+                <div class="instruction-item">
+                    <span class="instruction-number">3</span>
+                    <span class="instruction-text">Quét mã QR để đăng nhập</span>
+                </div>
+            </div>
+
+            <div class="divider">Hoặc</div>
+
+            <button class="sso-btn" onclick="loginWithSSO()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6M12,8A4,4 0 0,0 8,12A4,4 0 0,0 12,16A4,4 0 0,0 16,12A4,4 0 0,0 12,8Z" />
+                </svg>
+                Đăng nhập bằng SSO
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script>
+        // Check if mobile and redirect
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (isMobile) {
+            window.location.href = '/';
+        }
+
+        // Generate QR Code
+        let qrSessionId = null;
+
+        async function generateQRCode() {
+            try {
+                // Create a unique session ID
+                qrSessionId = 'qr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+                const qrData = JSON.stringify({
+                    type: 'web_login',
+                    sessionId: qrSessionId,
+                    url: window.location.origin,
+                    timestamp: Date.now()
+                });
+
+                const qrContainer = document.getElementById('qrCode');
+                qrContainer.innerHTML = '';
+
+                // Create canvas for QR
+                const canvas = document.createElement('canvas');
+                canvas.style.borderRadius = '12px';
+
+                await QRCode.toCanvas(canvas, qrData, {
+                    width: 180,
+                    margin: 2,
+                    color: {
+                        dark: '#1f2937',
+                        light: '#ffffff'
+                    }
+                });
+
+                qrContainer.appendChild(canvas);
+
+                // Add logo overlay
+                const logo = document.createElement('div');
+                logo.className = 'qr-logo';
+                logo.textContent = '🎓';
+                qrContainer.appendChild(logo);
+
+                // Start polling for login
+                pollForLogin();
+
+            } catch (error) {
+                console.error('QR Error:', error);
+                document.getElementById('qrCode').innerHTML = `
+                    <div class="qr-placeholder">Không thể tạo mã QR</div>
+                `;
+            }
+        }
+
+        // Poll server to check if QR was scanned
+        async function pollForLogin() {
+            // This would connect to your backend to check if mobile app scanned the QR
+            // For now, just a placeholder
+            console.log('Polling for QR scan...', qrSessionId);
+        }
+
+        // SSO Login
+        function loginWithSSO() {
+            // Redirect to SSO provider or show login form
+            alert('Chức năng SSO đang được phát triển!');
+        }
+
+        // Language switch
+        function setLang(lang) {
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            if (lang === 'en') {
+                document.getElementById('loginTitle').textContent = 'Login to Zyea Chat';
+                document.getElementById('loginSubtitle').textContent = 'with QR Code';
+            } else {
+                document.getElementById('loginTitle').textContent = 'Đăng nhập Zyea Chat';
+                document.getElementById('loginSubtitle').textContent = 'bằng mã QR';
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', generateQRCode);
+    </script>
+</body>
+
+</html>
