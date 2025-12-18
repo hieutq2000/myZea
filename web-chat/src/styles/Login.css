@@ -1,0 +1,249 @@
+/* Login.css - FPT Chat Style Replica */
+
+/* Reset & Container */
+.login-container {
+    height: 100vh;
+    display: flex;
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+}
+
+/* LEFT PANEL (Dark Branding) */
+.login-left {
+    flex: 1;
+    background-color: #0f1015;
+    /* Extremely dark background like FPT Chat */
+    color: white;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 60px;
+    overflow: hidden;
+    background: radial-gradient(circle at 10% 20%, rgb(40, 40, 50) 0%, rgb(15, 16, 21) 90%);
+}
+
+.brand-content {
+    z-index: 2;
+    max-width: 600px;
+}
+
+.logo-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 40px;
+}
+
+.brand-name {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.login-left h1 {
+    font-size: 42px;
+    line-height: 1.2;
+    margin-bottom: 20px;
+    font-weight: 700;
+}
+
+.brand-slogan {
+    font-size: 18px;
+    color: #a0a0a0;
+    margin-bottom: 50px;
+}
+
+/* Phone Presentation */
+.phone-preview {
+    position: relative;
+    /* Adjust position to show partial phone like reference */
+    margin-left: 20px;
+}
+
+.mockup-frame {
+    width: 300px;
+    border-radius: 40px;
+    border: 8px solid #2a2a2a;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    background: #000;
+}
+
+.mockup-frame img {
+    width: 100%;
+    display: block;
+    height: auto;
+}
+
+/* RIGHT PANEL (Login Form) */
+.login-right {
+    width: 500px;
+    /* Fixed width for form area */
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.login-box {
+    width: 100%;
+    max-width: 360px;
+    padding: 20px;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-header h2 {
+    font-size: 24px;
+    color: #333;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+/* Form Styles */
+.login-form .form-group {
+    margin-bottom: 20px;
+}
+
+.login-form label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.login-form input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 15px;
+    transition: all 0.2s;
+    box-sizing: border-box;
+    /* Important */
+}
+
+.login-form input:focus {
+    border-color: #000;
+    outline: none;
+    background: #fff;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 25px;
+}
+
+.forgot-password {
+    font-size: 14px;
+    color: #0084ff;
+    text-decoration: none;
+}
+
+/* Buttons */
+.btn-login {
+    width: 100%;
+    padding: 14px;
+    background: #111;
+    /* Black button like reference */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-login:hover {
+    background: #333;
+}
+
+.btn-login:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    margin: 25px 0;
+    color: #888;
+    font-size: 13px;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #eee;
+}
+
+.divider span {
+    padding: 0 10px;
+}
+
+.btn-qr-login {
+    width: 100%;
+    padding: 14px;
+    background: white;
+    color: #333;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-qr-login:hover {
+    background: #f9f9f9;
+    border-color: #bbb;
+}
+
+.login-footer {
+    margin-top: 30px;
+    text-align: center;
+    font-size: 14px;
+    color: #666;
+}
+
+.login-footer a {
+    color: #0084ff;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .login-container {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .login-left {
+        padding: 40px 20px;
+        align-items: center;
+        text-align: center;
+    }
+
+    .phone-preview,
+    .mockup-frame {
+        display: none;
+        /* Hide complex image on mobile login for simplicity */
+    }
+
+    .login-right {
+        width: 100%;
+        padding: 40px 20px;
+    }
+}

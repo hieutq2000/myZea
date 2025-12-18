@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>myZyea - Mạng xã hội AI thế hệ mới</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #FF6B00;
+            /* Z-Feed Orange */
+            --primary-dark: #E65100;
+            --secondary: #2A2A2A;
+            --bg-light: #F9FAFB;
+            --text-main: #1F2937;
+            --text-light: #6B7280;
+            --white: #FFFFFF;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-light);
+            color: var(--text-main);
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        header {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .nav-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 80px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .logo span {
+            color: var(--secondary);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-main);
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: var(--white);
+            padding: 12px 24px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            box-shadow: 0 4px 14px rgba(255, 107, 0, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 0, 0.4);
+        }
+
+        /* Hero Section */
+        .hero {
+            padding-top: 160px;
+            padding-bottom: 100px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-bg-blob {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: linear-gradient(135deg, rgba(255, 107, 0, 0.1), rgba(255, 200, 0, 0.1));
+            border-radius: 50%;
+            top: -100px;
+            right: -100px;
+            z-index: -1;
+            filter: blur(80px);
+        }
+
+        .hero-content {
+            display: flex;
+            align-items: center;
+            gap: 60px;
+        }
+
+        .hero-text {
+            flex: 1;
+        }
+
+        .hero-title {
+            font-size: 56px;
+            line-height: 1.2;
+            font-weight: 800;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-desc {
+            font-size: 18px;
+            color: var(--text-light);
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .hero-image {
+            flex: 1;
+            position: relative;
+        }
+
+        .phone-mockup {
+            width: 300px;
+            height: 600px;
+            background: #000;
+            border-radius: 40px;
+            border: 10px solid #222;
+            margin: 0 auto;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+        }
+
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background-color: #fff;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .phone-slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+
+        .phone-slide.active {
+            opacity: 1;
+        }
+
+        /* Features */
+        .features {
+            padding: 100px 0;
+            background: #fff;
+        }
+
+        .section-title {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .section-title h2 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+        }
+
+        .feature-card {
+            padding: 30px;
+            border-radius: 20px;
+            background: var(--bg-light);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 107, 0, 0.1);
+            color: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin: 0 auto 20px;
+        }
+
+        .feature-card h3 {
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+
+        .feature-card p {
+            color: var(--text-light);
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        /* Download Section */
+        .download-section {
+            background: var(--secondary);
+            color: var(--white);
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        .download-section h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+
+        .btn-large {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--primary);
+            color: #fff;
+            padding: 16px 40px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            text-decoration: none;
+            margin-top: 30px;
+            transition: background 0.3s;
+        }
+
+        .btn-large:hover {
+            background: var(--primary-dark);
+        }
+
+        /* Footer */
+        footer {
+            background: #111;
+            color: #888;
+            padding: 60px 0 30px;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+
+        .footer-logo {
+            color: var(--white);
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .copyright {
+            text-align: center;
+            border-top: 1px solid #333;
+            padding-top: 30px;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .hero-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .hero-title {
+                font-size: 40px;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+
+        /* Mobile Smart Banner */
+        .smart-banner {
+            display: none;
+            /* Hidden by default */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            background: #1a1a1a;
+            color: #fff;
+            z-index: 9999;
+            align-items: center;
+            padding: 0 15px;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .banner-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .banner-close {
+            font-size: 22px;
+            color: #888;
+            cursor: pointer;
+            padding: 0 5px;
+            line-height: 1;
+        }
+
+        .banner-icon-bg {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+        }
+
+        .banner-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .banner-title {
+            font-weight: 600;
+            font-size: 15px;
+            line-height: 1.2;
+        }
+
+        .banner-author {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .banner-btn {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 6px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* Adjust body when banner is present */
+        body.has-banner {
+            padding-top: 60px;
+        }
+
+        body.has-banner header {
+            top: 60px;
+        }
+
+        /* Mobile CTA Section */
+        .mobile-only {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .hero-text {
+                display: none !important;
+                /* Hide desktop text on mobile */
+            }
+
+            .hero-bg-blob {
+                display: none;
+            }
+
+            .mobile-only {
+                display: block;
+            }
+
+            .mobile-cta-bottom {
+                text-align: center;
+                margin-top: 30px;
+                padding: 0 10px;
+            }
+
+            .mobile-cta-bottom h3 {
+                font-size: 22px;
+                font-weight: 700;
+                margin-bottom: 20px;
+                line-height: 1.4;
+                color: var(--text-main);
+            }
+
+            .btn-mobile-open {
+                display: block;
+                width: 100%;
+                background: #007AFF;
+                /* Blue like standard iOS action */
+                color: white;
+                padding: 16px;
+                border-radius: 12px;
+                font-weight: 700;
+                text-decoration: none;
+                font-size: 17px;
+                box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+                transition: transform 0.2s;
+            }
+
+            .btn-mobile-open:active {
+                transform: scale(0.98);
+            }
+
+            .hero {
+                padding-top: 80px;
+                /* Reduced padding for mobile */
+                padding-bottom: 40px;
+            }
+
+            .phone-mockup {
+                width: 280px;
+                /* Slightly smaller for mobile fit */
+                height: 560px;
+                margin-top: 20px;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            }
+
+            /* Hide everything else on mobile */
+            .features,
+            .download-section,
+            footer {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Mobile Smart Banner -->
+    <div id="smart-banner" class="smart-banner">
+        <div class="banner-left">
+            <div class="banner-close" onclick="closeBanner()">&times;</div>
+            <div class="banner-icon-bg"><i class="fas fa-bolt"></i></div>
+            <div class="banner-info">
+                <div class="banner-title">myZyea</div>
+                <div class="banner-author">Zyea Group</div>
+            </div>
+        </div>
+        <a href="javascript:openApp()" class="banner-btn">MỞ</a>
+    </div>
+
+    <header>
+        <div class="container">
+            <div class="nav-wrapper">
+                <a href="#" class="logo"><i class="fas fa-bolt"></i> myZyea</a>
+                <div class="nav-links">
+                    <a href="#features">Tính năng</a>
+                    <a href="#about">Về chúng tôi</a>
+                    <a href="#contact">Liên hệ</a>
+                </div>
+                <a href="#download" class="btn-download">Tải App Ngay</a>
+            </div>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="hero-bg-blob"></div>
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <h1 class="hero-title">Khám phá thế giới với myZyea AI</h1>
+                    <p class="hero-desc">Mạng xã hội tiên phong tích hợp trí tuệ nhân tạo. Kết nối bạn bè, chia sẻ
+                        khoảnh khắc và trải nghiệm công nghệ AI trong từng cú chạm.</p>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <a href="#" class="btn-download" style="padding: 15px 35px;">Tải cho Android <i
+                                class="fab fa-android"></i></a>
+                        <a href="#" class="btn-download" style="background: #333; box-shadow: none;">Phiên bản iOS <i
+                                class="fab fa-apple"></i></a>
+                    </div>
+                </div>
+                <div class="hero-image">
+                    <div class="phone-mockup">
+                        <div class="phone-screen">
+                            <img src="./app-screen-2.png" class="phone-slide active" alt="Home Screen">
+                            <img src="./app-screen.png" class="phone-slide" alt="Feed Screen">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Only CTA -->
+        <div class="mobile-only mobile-cta-bottom">
+            <h3>Truy cập myZyea bằng ứng dụng để có trải nghiệm đầy đủ</h3>
+            <a href="javascript:openApp()" class="btn-mobile-open">Mở myZyea</a>
+        </div>
+
+    </section>
+
+    <section id="features" class="features">
+        <div class="container">
+            <div class="section-title">
+                <h2>Tại sao chọn myZyea?</h2>
+                <p>Những tính năng đột phá mang lại trải nghiệm đỉnh cao</p>
+            </div>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-robot"></i></div>
+                    <h3>AI Trợ Lý Thông Minh</h3>
+                    <p>Tương tác với AI trực tiếp ngay trong ứng dụng để giải đáp thắc mắc, tạo nội dung và hơn thế nữa.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-images"></i></div>
+                    <h3>Feed Ảnh Chất Lượng</h3>
+                    <p>Chia sẻ khoảnh khắc với chất lượng hình ảnh tốt nhất, hỗ trợ upload nhanh chóng và mượt mà.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-shield-alt"></i></div>
+                    <h3>Bảo Mật Tiên Tiến</h3>
+                    <p>Dữ liệu của bạn được bảo vệ với công nghệ mã hóa hiện đại nhất. An toàn là ưu tiên hàng đầu.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="download" class="download-section">
+        <div class="container">
+            <h2>Sẵn sàng trải nghiệm?</h2>
+            <p>Tải xuống myZyea ngay hôm nay và tham gia cộng đồng hàng nghìn người dùng.</p>
+            <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                <a href="#" class="btn-large"><i class="fab fa-google-play"></i> Tải xuống từ CH Play</a>
+                <a href="#" class="btn-large" style="background: #333;"><i class="fab fa-apple"></i> Tải xuống từ App
+                    Store</a>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div>
+                    <div class="footer-logo">myZyea</div>
+                    <p>Sản phẩm của tập đoàn Zyea.</p>
+                </div>
+                <div>
+                    <h4>Liên hệ</h4>
+                    <p>Email: support@data5g.site</p>
+                    <p>Hotline: 1900 xxxx</p>
+                </div>
+            </div>
+            <div class="copyright">
+                &copy; 2025 Zyea Warriors. All rights reserved.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Slideshow logic
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.phone-slide');
+
+        if (slides.length > 0) {
+            setInterval(() => {
+                slides[currentSlide].classList.remove('active');
+                currentSlide = (currentSlide + 1) % slides.length;
+                slides[currentSlide].classList.add('active');
+            }, 3000); // Change every 3 seconds
+        }
+
+        // Check if mobile device
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+        if (isMobile) {
+            const banner = document.getElementById('smart-banner');
+            if (banner) {
+                banner.style.display = 'flex';
+                document.body.classList.add('has-banner');
+            }
+        }
+
+        function closeBanner() {
+            const banner = document.getElementById('smart-banner');
+            banner.style.display = 'none';
+            document.body.classList.remove('has-banner');
+        }
+
+        function openApp() {
+            // Deep link scheme
+            const scheme = "zyea://";
+
+            // Save start time
+            const start = new Date().getTime();
+
+            // Try to open app
+            window.location.href = scheme;
+
+            // Fallback if app not installed (check logic: if user is still here after timeout)
+            setTimeout(() => {
+                const end = new Date().getTime();
+                if (end - start < 1500) {
+                    // If browser didn't switch to app, show download section or alert
+                    if (confirm("Có vẻ bạn chưa cài đặt myZyea. Tải xuống ngay?")) {
+                        document.getElementById('download').scrollIntoView({ behavior: 'smooth' });
+                    }
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+
+</html>

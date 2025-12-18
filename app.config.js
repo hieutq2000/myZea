@@ -68,6 +68,19 @@ module.exports = {
             "expo-dev-client",
             "expo-notifications",
             [
+                "expo-build-properties",
+                {
+                    android: {
+                        compileSdkVersion: 35,
+                        targetSdkVersion: 35,
+                        buildToolsVersion: "35.0.0",
+                        enableProguardInReleaseBuilds: true,
+                        enableShrinkResourcesInReleaseBuilds: true,
+                        usesCleartextTraffic: true
+                    }
+                }
+            ],
+            [
                 "expo-camera",
                 {
                     cameraPermission: "Cho phép $(PRODUCT_NAME) sử dụng camera để xác thực và giám sát."

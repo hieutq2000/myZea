@@ -11,7 +11,7 @@ const Settings: React.FC = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('admin_token');
-            await axios.post('http://localhost:3001/api/admin/system/notification', values, {
+            await axios.post('/api/admin/system/notification', values, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             message.success('Đã gửi thông báo đến toàn hệ thống!');

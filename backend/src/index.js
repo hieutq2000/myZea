@@ -3123,6 +3123,147 @@ io.on('connection', (socket) => {
     });
 });
 
+// ============ CHAT API ROUTES ============
+
+// Get Conversations List
+app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        console.log(`📋 Getting conversations for user: ${userId}`);
+
+        // Step 1: Get all conversations user is part of
+        const [myConvs] = await pool.execute(
+            'SELECT conversation_id FROM conversation_participants WHERE user_id = ?',
+            [userId]
+        );
+
+        console.log(`Found ${myConvs.length} conversations`);
+
+        if (myConvs.length === 0) {
+            return res.json([]);
+        }
+
+        const convIds = myConvs.map(c => c.conversation_id);
+
+        // Step 2: For each conversation, get partner info
+        const conversations = [];
+        for (const convId of convIds) {
+            // Get conversation details
+            const [convDetails] = await pool.execute(
+                'SELECT id, updated_at, last_message_id FROM conversations WHERE id = ?',
+                [convId]
+            );
+
+            if (convDetails.length === 0) continue;
+            const conv = convDetails[0];
+
+            // Get partner (the other user in this conversation)
+            const [partners] = await pool.execute(
+                'SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?',
+                [convId, userId]
+            );
+
+            if (partners.length === 0) continue;
+            const partnerId = partners[0].user_id;
+
+            // Get partner user info
+            const [partnerInfo] = await pool.execute(
+                'SELECT id, name, avatar FROM users WHERE id = ?',
+                [partnerId]
+            );
+
+            if (partnerInfo.length === 0) continue;
+            const partner = partnerInfo[0];
+
+            // Get last message
+            let lastMessage = 'Bắt đầu trò chuyện';
+            let lastMessageTime = conv.updated_at;
+
+            if (conv.last_message_id) {
+                const [msgs] = await pool.execute(
+                    'SELECT content, created_at FROM messages WHERE id = ?',
+                    [conv.last_message_id]
+                );
+                if (msgs.length > 0) {
+                    lastMessage = msgs[0].content;
+                    lastMessageTime = msgs[0].created_at;
+                }
+            }
+
+            conversations.push({
+                id: conv.id,
+                partner: {
+                    id: partner.id,
+                    name: partner.name,
+                    avatar: partner.avatar
+                },
+                lastMessage: lastMessage,
+                updatedAt: formatDateForClient(lastMessageTime)
+            });
+        }
+
+        // Sort by updated time
+        conversations.sort((a, b) => {
+            // This is naive sort by string, ideally use timestamp
+            return b.updatedAt.localeCompare(a.updatedAt);
+        });
+
+        console.log(`✅ Returning ${conversations.length} conversations`);
+        console.log('Sample:', JSON.stringify(conversations[0], null, 2));
+        res.json(conversations);
+    } catch (error) {
+        console.error('❌ Get conversations error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get Messages with a Partner
+app.get('/api/chat/messages/:partnerId', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const partnerId = req.params.partnerId;
+
+        // Find conversation between these two
+        const [convRows] = await pool.execute(`
+            SELECT c.id 
+            FROM conversations c
+            JOIN conversation_participants cp1 ON c.id = cp1.conversation_id
+            JOIN conversation_participants cp2 ON c.id = cp2.conversation_id
+            WHERE c.type = 'private' 
+            AND cp1.user_id = ? 
+            AND cp2.user_id = ?
+            LIMIT 1
+        `, [userId, partnerId]);
+
+        if (convRows.length === 0) {
+            return res.json([]); // No conversation yet
+        }
+
+        const conversationId = convRows[0].id;
+
+        // Get messages
+        const [messages] = await pool.execute(`
+            SELECT * FROM messages 
+            WHERE conversation_id = ? 
+            ORDER BY created_at ASC 
+            LIMIT 50
+        `, [conversationId]);
+
+        res.json(messages.map(m => ({
+            id: m.id,
+            senderId: m.sender_id,
+            content: m.content,
+            type: m.type,
+            createdAt: formatDateForClient(m.created_at)
+        })));
+
+    } catch (error) {
+        console.error('Get messages error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+
 // ============ STICKER API ROUTES ============
 
 
