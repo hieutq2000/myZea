@@ -65,7 +65,6 @@ module.exports = {
             favicon: "./assets/favicon.png"
         },
         plugins: [
-            "expo-dev-client",
             "expo-notifications",
             [
                 "expo-build-properties",
@@ -74,9 +73,11 @@ module.exports = {
                         compileSdkVersion: 35,
                         targetSdkVersion: 35,
                         buildToolsVersion: "35.0.0",
-                        enableProguardInReleaseBuilds: true,
-                        enableShrinkResourcesInReleaseBuilds: true,
-                        usesCleartextTraffic: true
+                        enableProguardInReleaseBuilds: false,
+                        enableShrinkResourcesInReleaseBuilds: false,
+                        usesCleartextTraffic: true,
+                        minSdkVersion: 24,
+                        extraMavenRepos: ["https://jitpack.io"]
                     }
                 }
             ],
@@ -105,7 +106,8 @@ module.exports = {
                     speechRecognitionPermission: "Cho phép $(PRODUCT_NAME) nhận dạng giọng nói của bạn."
                 }
             ],
-            "./plugins/withManifestFix"
+            "./plugins/withManifestFix",
+            // "./plugins/withGradleFix"
         ],
         updates: {
             url: "https://u.expo.dev/7244ecfc-4a54-4232-a0a3-e17d5039b55c",

@@ -6,7 +6,6 @@ import {
     Image,
     TouchableOpacity,
     FlatList,
-    SafeAreaView,
     TextInput,
     KeyboardAvoidingView,
     Platform,
@@ -16,6 +15,7 @@ import {
     ImageBackground,
     ScrollView
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome, Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';

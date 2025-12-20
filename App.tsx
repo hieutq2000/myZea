@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { ActivityIndicator, View, Text, Alert } from 'react-native';
 import AuthScreen from './src/screens/AuthScreen';
@@ -631,10 +632,12 @@ export default function App() {
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
 
   return (
-    <ThemeProvider>
-      <NavigationContainer ref={navigationRef}>
-        <AppContent navigationRef={navigationRef} />
-      </NavigationContainer>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <NavigationContainer ref={navigationRef}>
+          <AppContent navigationRef={navigationRef} />
+        </NavigationContainer>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

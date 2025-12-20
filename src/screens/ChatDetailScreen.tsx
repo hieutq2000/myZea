@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, SafeAreaView, StatusBar, Keyboard, Modal, Alert, ActivityIndicator, Dimensions, Animated, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, StatusBar, Keyboard, Modal, Alert, ActivityIndicator, Dimensions, Animated, KeyboardAvoidingView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
@@ -1904,13 +1905,6 @@ const styles = StyleSheet.create({
     suggestionStickerImg: {
         width: '100%',
         height: '100%',
-    },
-    // Picker Styles
-    pickerContainer: {
-        height: 320,
-        backgroundColor: '#fff',
-        borderTopWidth: 1,
-        borderTopColor: '#E5E7EB',
     },
     // Bottom Picker Tabs
     bottomTabBar: {

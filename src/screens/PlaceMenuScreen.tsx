@@ -5,11 +5,11 @@ import {
     StyleSheet,
     TouchableOpacity,
     Image,
-    SafeAreaView,
     StatusBar,
     Platform,
     ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getAvatarUri } from '../utils/media';

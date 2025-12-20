@@ -5,13 +5,13 @@ import {
     StyleSheet,
     TouchableOpacity,
     Image,
-    SafeAreaView,
     StatusBar,
     Platform,
     Alert,
     Dimensions,
     Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, Feather } from '@expo/vector-icons';

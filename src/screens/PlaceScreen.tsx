@@ -6,7 +6,6 @@ import {
     Image,
     TouchableOpacity,
     FlatList,
-    SafeAreaView,
     StatusBar,
     Modal,
     TextInput,
@@ -19,6 +18,7 @@ import {
     Share,
     KeyboardAvoidingView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getPosts, createPost, toggleLikePost, Post, uploadImage, trackPostView, searchUsers, getUnreadNotificationCount } from '../utils/api';

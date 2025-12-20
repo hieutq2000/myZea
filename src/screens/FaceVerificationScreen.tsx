@@ -4,10 +4,10 @@ import {
     Text,
     TouchableOpacity,
     StyleSheet,
-    SafeAreaView,
     ActivityIndicator,
     Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';

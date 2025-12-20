@@ -6,7 +6,6 @@ import {
     FlatList,
     TouchableOpacity,
     Image,
-    SafeAreaView,
     StatusBar,
     Platform,
     ActivityIndicator,
@@ -19,6 +18,7 @@ import {
     Animated,
     Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { apiRequest, createGroupPost, uploadImage, getCurrentUser, Post, getImageUrl, toggleLikePost } from '../utils/api';
 import { launchImageLibrary } from '../utils/imagePicker';

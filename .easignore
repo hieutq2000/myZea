@@ -1,0 +1,21 @@
+# Exclude directories not needed for mobile build
+admin-web/
+backend/
+web-chat/
+landing-page/
+dist/
+.git/
+.github/
+
+# Exclude large/unnecessary files
+*.log
+*.txt
+docker-compose.yml
+seed_admin.js
+create-splash.js
+round-corners.js
+README.md
+
+# Exclude temp files
+.expo/
+*.tsbuildinfo

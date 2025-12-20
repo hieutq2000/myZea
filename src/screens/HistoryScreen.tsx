@@ -4,10 +4,10 @@ import {
     Text,
     StyleSheet,
     ScrollView,
-    SafeAreaView,
     StatusBar,
     RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { User, ExamResult } from '../types';

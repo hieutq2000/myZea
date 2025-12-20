@@ -10,7 +10,6 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    SafeAreaView,
     StatusBar,
     Platform,
     ScrollView,
@@ -19,6 +18,7 @@ import {
     Dimensions,
     Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { TransactionType, Wallet, Category } from '../../types/finance';

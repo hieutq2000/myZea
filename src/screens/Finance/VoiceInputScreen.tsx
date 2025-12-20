@@ -10,7 +10,6 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    SafeAreaView,
     StatusBar,
     Platform,
     Alert,
@@ -20,6 +19,7 @@ import {
     Dimensions,
     ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { addTransaction, getWallets } from '../../utils/finance/storage';
@@ -527,7 +527,7 @@ export default function VoiceInputScreen() {
                                     key={cat.id}
                                     style={[
                                         styles.categoryItem,
-                                        parseResult?.categoryId === cat.id && styles.categoryItemActive,
+                                        parseResults[editingIndex || 0]?.categoryId === cat.id && styles.categoryItemActive,
                                     ]}
                                     onPress={() => handleChangeCategory(cat)}
                                 >

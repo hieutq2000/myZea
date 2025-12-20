@@ -6,12 +6,12 @@ import {
     StyleSheet,
     ScrollView,
     Image,
-    SafeAreaView,
     Alert,
     StatusBar,
     Modal,
     Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';

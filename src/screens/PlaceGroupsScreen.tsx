@@ -6,13 +6,13 @@ import {
     FlatList,
     TouchableOpacity,
     Image,
-    SafeAreaView,
     StatusBar,
     Platform,
     ActivityIndicator,
     RefreshControl,
     Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { apiRequest } from '../utils/api';
 import { getAvatarUri } from '../utils/media';

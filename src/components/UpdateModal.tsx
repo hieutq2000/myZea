@@ -8,8 +8,8 @@ import {
     Dimensions,
     ScrollView,
     ActivityIndicator,
-    Image,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { ChangelogEntry } from '../utils/changelog';
 import { API_URL } from '../utils/api';
@@ -66,10 +66,10 @@ export default function UpdateModal({ visible, onUpdate, onClose, isDownloading 
                 <View style={styles.container}>
                     {/* Icon */}
                     <View style={styles.imageContainer}>
-                        <Image
-                            source={require('../../assets/megaphone.png')}
-                            style={styles.image}
-                            resizeMode="contain"
+                        <MaterialCommunityIcons
+                            name="bullhorn-variant"
+                            size={64}
+                            color={COLORS.primary}
                         />
                     </View>
 
