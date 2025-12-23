@@ -2,6 +2,7 @@ import React from 'react';
 import {
     View,
     TouchableOpacity,
+    Text,
     StyleSheet,
     Platform,
 } from 'react-native';
@@ -13,9 +14,16 @@ export type PlaceTabType = 'HOME' | 'GROUPS' | 'CHAT' | 'NOTIFICATIONS' | 'MENU'
 interface PlaceBottomBarProps {
     activeTab: PlaceTabType;
     onTabChange: (tab: PlaceTabType) => void;
+    unreadChatCount?: number;
+    unreadNotifCount?: number;
 }
 
-export default function PlaceBottomBar({ activeTab, onTabChange }: PlaceBottomBarProps) {
+export default function PlaceBottomBar({
+    activeTab,
+    onTabChange,
+    unreadChatCount = 0,
+    unreadNotifCount = 0
+}: PlaceBottomBarProps) {
     const navigation = useNavigation<any>();
 
     const handleTabPress = (tab: PlaceTabType) => {
@@ -40,6 +48,12 @@ export default function PlaceBottomBar({ activeTab, onTabChange }: PlaceBottomBa
             <View style={styles.tabBar}>
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.id;
+
+                    // Determine badge count for this tab
+                    let badgeCount = 0;
+                    if (tab.id === 'CHAT') badgeCount = unreadChatCount;
+                    if (tab.id === 'NOTIFICATIONS') badgeCount = unreadNotifCount;
+
                     return (
                         <TouchableOpacity
                             key={tab.id}
@@ -53,6 +67,13 @@ export default function PlaceBottomBar({ activeTab, onTabChange }: PlaceBottomBa
                                     size={26}
                                     color={isActive ? '#F97316' : '#6B7280'}
                                 />
+                                {badgeCount > 0 && (
+                                    <View style={styles.badge}>
+                                        <Text style={styles.badgeText}>
+                                            {badgeCount > 99 ? '99+' : badgeCount}
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
                         </TouchableOpacity>
                     );
@@ -95,5 +116,25 @@ const styles = StyleSheet.create({
     iconContainer: {
         alignItems: 'center',
         justifyContent: 'center',
+        position: 'relative',
+    },
+    badge: {
+        position: 'absolute',
+        top: -6,
+        right: -10,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        borderWidth: 1.5,
+        borderColor: 'white',
+    },
+    badgeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: 'bold',
     },
 });

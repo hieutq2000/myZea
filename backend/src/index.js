@@ -7,6 +7,9 @@ const mysql = require('mysql2/promise');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const sizeOf = require('image-size');
+const fs = require('fs');
+const fileUpload = require('express-fileupload');
+const axios = require('axios');
 
 const app = express();
 const http = require('http');
@@ -32,8 +35,27 @@ function isUserOnline(userId) {
     return onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
 }
 
+// Helper function to create URL-friendly slug from app name
+function createSlug(text) {
+    return text
+        .toString()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+        .replace(/[đĐ]/g, 'd')
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single
+        .replace(/^-+|-+$/g, ''); // Trim hyphens from start/end
+}
+
 app.use(cors());
-app.use(express.json({ limit: '50mb' })); // Increase limit for images
+app.use(express.json({ limit: '500mb' })); // Increase for large IPA
+app.use(express.urlencoded({ extended: true, limit: '500mb' }));
+app.use(fileUpload({
+    createParentPath: true,
+    limits: { fileSize: 500 * 1024 * 1024 } // 500MB max
+}));
 
 // Serve static files from public directory (landing page)
 app.use(express.static(path.join(__dirname, '../public')));
@@ -229,12 +251,81 @@ async function initDatabase() {
       )
     `);
 
+        // App Settings table
+        await pool.execute(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        setting_key VARCHAR(100) PRIMARY KEY,
+        setting_value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+        // Initialize default links
+        try {
+            const [rows] = await pool.execute('SELECT setting_key FROM app_settings WHERE setting_key IN ("google_play_link", "app_store_link")');
+            if (rows.length < 2) {
+                console.log("🛠 Initializing default app links...");
+                const defaultIOS = "https://is.gd/ABp5h2";
+                const defaultAndroid = "https://play.google.com/store/apps/details?id=com.zyea.mobile";
+                await pool.execute('INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?), (?, ?)',
+                    ['google_play_link', defaultAndroid, 'app_store_link', defaultIOS]);
+            }
+        } catch (err) {
+            console.log("🛠 Failed to initialize app settings:", err.message);
+        }
+
         // Check and add is_banned column if not exists
         try {
             await pool.execute("SELECT is_banned FROM users LIMIT 1");
         } catch (e) {
             console.log("Adding is_banned column to users table...");
             await pool.execute("ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT FALSE");
+        }
+
+        // Fix messages table schema for group chat support
+        console.log("🛠 Starting schema update for group chat...");
+        try {
+            await pool.execute("SET FOREIGN_KEY_CHECKS=0");
+            console.log("🛠 FK checks disabled");
+
+            try {
+                const [fks] = await pool.query(`
+                    SELECT CONSTRAINT_NAME 
+                    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                    WHERE TABLE_NAME = 'messages' 
+                    AND COLUMN_NAME = 'conversation_id' 
+                    AND TABLE_SCHEMA = DATABASE()
+                    AND REFERENCED_TABLE_NAME IS NOT NULL
+                `);
+                console.log(`🛠 Found ${fks.length} FK constraints on messages.conversation_id`);
+
+                for (const fk of fks) {
+                    console.log(`🛠 Dropping FK constraint: ${fk.CONSTRAINT_NAME}`);
+                    try {
+                        await pool.execute(`ALTER TABLE messages DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+                    } catch (err) {
+                        console.log(`🛠 Failed to drop FK ${fk.CONSTRAINT_NAME}:`, err.message);
+                    }
+                }
+            } catch (fkSearchErr) {
+                console.log("🛠 FK lookup failed:", fkSearchErr.message);
+            }
+
+            console.log("🛠 Modifying conversation_id to be NULLABLE...");
+            await pool.execute("ALTER TABLE messages MODIFY conversation_id VARCHAR(36) NULL");
+
+            console.log("🛠 Ensuring group_id column exists...");
+            try {
+                await pool.execute("ALTER TABLE messages ADD COLUMN group_id VARCHAR(36) NULL");
+            } catch (e) {
+                console.log("🛠 group_id column exists or add failed:", e.message);
+            }
+
+            await pool.execute("SET FOREIGN_KEY_CHECKS=1");
+            console.log("✅ Messages table schema successfully updated for group chat");
+        } catch (e) {
+            console.log("❌ Messages table schema update failed:", e.message);
+            try { await pool.execute("SET FOREIGN_KEY_CHECKS=1"); } catch (e2) { }
         }
 
         console.log('✅ Database connected and tables created');
@@ -578,6 +669,669 @@ app.post('/api/admin/system/notification', authenticateToken, async (req, res) =
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// ============ APP SETTINGS (Public & Admin) ============
+
+// Get current settings (Public)
+app.get('/api/app-settings', async (req, res) => {
+    try {
+        const [rows] = await pool.execute('SELECT setting_key, setting_value FROM app_settings');
+        const settings = {};
+        rows.forEach(row => {
+            settings[row.setting_key] = row.setting_value;
+        });
+        res.json(settings);
+    } catch (error) {
+        console.error('Get settings error:', error);
+        res.status(500).json({ status: 'error', error: 'Lỗi server' });
+    }
+});
+
+// Update settings (Admin only)
+app.post('/api/admin/app-settings', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { settings } = req.body; // Expecting { "key": "value" }
+        if (!settings || typeof settings !== 'object') {
+            return res.status(400).json({ error: 'Dữ liệu không hợp lệ' });
+        }
+
+        for (const [key, value] of Object.entries(settings)) {
+            await pool.execute(
+                'INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+                [key, value, value]
+            );
+        }
+
+        res.json({ success: true, message: 'Cập nhật thành công' });
+    } catch (error) {
+        console.error('Update settings error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// IPA Upload & Auto-generating Manifest (.plist)
+app.post('/api/admin/upload-ipa', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        if (!req.files || !req.files.ipa) {
+            return res.status(400).json({ error: 'Vui lòng chọn file IPA' });
+        }
+
+        const ipaFile = req.files.ipa;
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        // Use timestamp to allow multiple versions and prevent caching
+        const timestamp = Date.now();
+        const fileName = `zyea_${timestamp}.ipa`;
+        const filePath = path.join(uploadDir, fileName);
+
+        await ipaFile.mv(filePath);
+
+        // Get app metadata from request body
+        const appName = req.body.appName || 'Zyea';
+        const version = req.body.version || '1.0.0';
+        const bundleId = req.body.bundleId || 'com.zyea.mobile';
+        const description = req.body.description || '';
+        const developer = req.body.developer || 'Zyea Software';
+        const supportEmail = req.body.supportEmail || 'support@data5g.site';
+        const changelog = req.body.changelog || '';
+
+        // Save app icon if uploaded
+        let iconFileName = null;
+        if (req.files && req.files.icon) {
+            const iconFile = req.files.icon;
+            iconFileName = `icon_${timestamp}.png`;
+            const iconPath = path.join(uploadDir, iconFileName);
+            await iconFile.mv(iconPath);
+        }
+
+        // Save screenshots if uploaded
+        const screenshotFileNames = [];
+        if (req.files && req.files.screenshots) {
+            const screenshots = Array.isArray(req.files.screenshots) ? req.files.screenshots : [req.files.screenshots];
+            for (let i = 0; i < screenshots.length; i++) {
+                const screenshotFileName = `screenshot_${timestamp}_${i}.png`;
+                const screenshotPath = path.join(uploadDir, screenshotFileName);
+                await screenshots[i].mv(screenshotPath);
+                screenshotFileNames.push(screenshotFileName);
+            }
+        }
+
+        // Save metadata to JSON file
+        const metadataFileName = `metadata_${timestamp}.json`;
+        const metadataPath = path.join(uploadDir, metadataFileName);
+        const appSlug = createSlug(appName);
+        const metadata = {
+            timestamp,
+            appName,
+            appSlug,
+            version,
+            bundleId,
+            description,
+            developer,
+            supportEmail,
+            changelog,
+            iconFileName,
+            screenshots: screenshotFileNames,
+            ipaFileName: fileName,
+            size: ipaFile.size,
+            createdAt: new Date().toISOString()
+        };
+        fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+
+        // Generate PLIST
+        // Use main domain data5g.site which has valid SSL certificate via Cloudflare
+        const baseUrl = 'https://data5g.site';
+        const ipaUrl = `${baseUrl}/uploads/ipa/${fileName}`;
+        const plistName = `manifest_${timestamp}.plist`;
+        const plistPath = path.join(uploadDir, plistName);
+
+        const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>items</key>
+    <array>
+        <dict>
+            <key>assets</key>
+            <array>
+                <dict>
+                    <key>kind</key>
+                    <string>software-package</string>
+                    <key>url</key>
+                    <string>${ipaUrl}</string>
+                </dict>
+            </array>
+            <key>metadata</key>
+            <dict>
+                <key>bundle-identifier</key>
+                <string>${bundleId}</string>
+                <key>bundle-version</key>
+                <string>${version}</string>
+                <key>kind</key>
+                <string>software</string>
+                <key>title</key>
+                <string>${appName}</string>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>`;
+
+        fs.writeFileSync(plistPath, plistContent);
+
+        // Final itms-services link
+        const plistUrl = `${baseUrl}/uploads/ipa/${plistName}`;
+        const itmsLink = `itms-services://?action=download-manifest&url=${plistUrl}`;
+
+        res.json({
+            success: true,
+            ipaUrl,
+            plistUrl,
+            itmsLink,
+            timestamp,
+            appName,
+            version,
+            bundleId
+        });
+    } catch (error) {
+        console.error('IPA Upload error:', error);
+        res.status(500).json({ error: 'Lỗi server khi xử lý file' });
+    }
+});
+
+// Update IPA metadata
+app.put('/api/admin/ipas/:timestamp', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const timestamp = req.params.timestamp;
+        const { appName, version, bundleId, description, developer, supportEmail, changelog } = req.body;
+
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+        const metadataPath = path.join(uploadDir, `metadata_${timestamp}.json`);
+
+        if (!fs.existsSync(metadataPath)) {
+            return res.status(404).json({ error: 'File metadata không tồn tại' });
+        }
+
+        // Read existing metadata
+        let metadata = {};
+        try {
+            metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+        } catch (e) {
+            console.error('Error reading metadata for update:', e);
+            return res.status(500).json({ error: 'Lỗi đọc metadata' });
+        }
+
+        const oldIpaFileName = metadata.ipaFileName;
+
+        // Handle File Upload (New IPA)
+        if (req.files && req.files.ipa) {
+            const ipaFile = req.files.ipa;
+            // Generate new filename with new timestamp to avoid caching, but keep record timestamp
+            const newTimestamp = Date.now();
+            const newIpaFileName = `zyea_${newTimestamp}.ipa`;
+            const newIpaPath = path.join(uploadDir, newIpaFileName);
+
+            await ipaFile.mv(newIpaPath);
+
+            // Delete old IPA file if it exists and is different
+            if (oldIpaFileName && oldIpaFileName !== newIpaFileName) {
+                const oldIpaPath = path.join(uploadDir, oldIpaFileName);
+                if (fs.existsSync(oldIpaPath)) {
+                    try {
+                        fs.unlinkSync(oldIpaPath);
+                    } catch (err) {
+                        console.error('Failed to delete old IPA:', err);
+                    }
+                }
+            }
+
+            // Update metadata with new file info
+            metadata.ipaFileName = newIpaFileName;
+            metadata.size = ipaFile.size;
+        }
+
+        // Update fields
+        metadata.appName = appName || metadata.appName;
+        metadata.version = version || metadata.version;
+        metadata.bundleId = bundleId || metadata.bundleId;
+        metadata.description = description !== undefined ? description : (metadata.description || '');
+        metadata.developer = developer || metadata.developer;
+        metadata.supportEmail = supportEmail || metadata.supportEmail;
+        metadata.changelog = changelog !== undefined ? changelog : (metadata.changelog || '');
+        metadata.updatedAt = new Date().toISOString(); // Update timestamp
+
+        // Save metadata
+        fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+
+        // Update plist
+        const baseUrl = 'https://data5g.site';
+        const ipaUrl = `${baseUrl}/uploads/ipa/${metadata.ipaFileName}`;
+        const iconUrl = metadata.iconFileName ? `${baseUrl}/uploads/ipa/${metadata.iconFileName}` : '';
+
+        const plistPath = path.join(uploadDir, `manifest_${timestamp}.plist`);
+        const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>items</key>
+    <array>
+        <dict>
+            <key>assets</key>
+            <array>
+                <dict>
+                    <key>kind</key>
+                    <string>software-package</string>
+                    <key>url</key>
+                    <string>${ipaUrl}</string>
+                </dict>
+                ${iconUrl ? `
+                <dict>
+                    <key>kind</key>
+                    <string>display-image</string>
+                    <key>url</key>
+                    <string>${iconUrl}</string>
+                </dict>
+                <dict>
+                    <key>kind</key>
+                    <string>full-size-image</string>
+                    <key>url</key>
+                    <string>${iconUrl}</string>
+                </dict>` : ''}
+            </array>
+            <key>metadata</key>
+            <dict>
+                <key>bundle-identifier</key>
+                <string>${metadata.bundleId}</string>
+                <key>bundle-version</key>
+                <string>${metadata.version}</string>
+                <key>kind</key>
+                <string>software</string>
+                <key>title</key>
+                <string>${metadata.appName}</string>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>`;
+        fs.writeFileSync(plistPath, plistContent);
+
+        res.json({ success: true, metadata });
+    } catch (error) {
+        console.error('Update IPA error:', error);
+        res.status(500).json({ error: 'Lỗi server khi cập nhật' });
+    }
+});
+
+// List IPA files
+app.get('/api/admin/ipas', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+        if (!fs.existsSync(uploadDir)) {
+            return res.json([]);
+        }
+
+        const baseUrl = 'https://data5g.site';
+
+        // Iterate over METADATA files instead of IPA files to ensure source of truth
+        const files = fs.readdirSync(uploadDir).map(file => {
+            if (!file.startsWith('metadata_') || !file.endsWith('.json')) return null;
+
+            const timestamp = file.replace('metadata_', '').replace('.json', '');
+            const metadataPath = path.join(uploadDir, file);
+            let metadata = null;
+
+            try {
+                metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+            } catch (e) {
+                console.error('Error reading metadata:', e);
+                return null;
+            }
+
+            // Check if actual IPA file exists (optional, but good for cleanup status)
+            // const ipaPath = path.join(uploadDir, metadata.ipaFileName);
+            // const ipaExists = fs.existsSync(ipaPath);
+            const stats = { size: metadata.size || 0, birthtime: new Date(metadata.createdAt || parseInt(timestamp)) };
+            // Note: We use the Original Timestamp for the 'name' (ID) to match frontend logic
+            // The real IPA filename is in metadata.ipaFileName
+
+            return {
+                name: `zyea_${timestamp}.ipa`, // Virtual ID for Frontend consistency
+                realFileName: metadata.ipaFileName,
+                size: stats.size,
+                createdAt: stats.birthtime,
+                updatedAt: metadata.updatedAt,
+                appName: metadata.appName || 'Zyea',
+                appSlug: metadata.appSlug || createSlug(metadata.appName || 'app'),
+                version: metadata.version || `1.0.${timestamp.slice(-6)}`,
+                bundleId: metadata.bundleId || 'com.zyea.mobile',
+                developer: metadata.developer,
+                supportEmail: metadata.supportEmail,
+                description: metadata.description,
+                changelog: metadata.changelog,
+                iconUrl: metadata.iconFileName ? `${baseUrl}/uploads/ipa/${metadata.iconFileName}` : null
+            };
+        }).filter(Boolean).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        res.json(files);
+    } catch (error) {
+        console.error('List IPA error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+
+// Delete IPA file
+app.delete('/api/admin/ipas/:filename', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const filename = req.params.filename; // This is the ID (zyea_TIMESTAMP.ipa)
+        if (filename.includes('..') || filename.includes('/')) {
+            return res.status(400).json({ error: 'Tên file không hợp lệ' });
+        }
+
+        const timestamp = filename.replace('zyea_', '').replace('.ipa', '');
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+
+        // 1. Read Metadata first to find the REAL IPA filename
+        const metadataPath = path.join(uploadDir, `metadata_${timestamp}.json`);
+        let realIpaFileName = filename;
+
+        if (fs.existsSync(metadataPath)) {
+            try {
+                const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+                if (metadata && metadata.ipaFileName) {
+                    realIpaFileName = metadata.ipaFileName;
+                }
+            } catch (e) {
+                console.error('Error reading metadata for delete:', e);
+            }
+            // Delete Metadata
+            fs.unlinkSync(metadataPath);
+        }
+
+        // 2. Delete the Real IPA File
+        const realIpaPath = path.join(uploadDir, realIpaFileName);
+        if (fs.existsSync(realIpaPath)) {
+            fs.unlinkSync(realIpaPath);
+        }
+
+        // 3. Delete Plist
+        const plistPath = path.join(uploadDir, `manifest_${timestamp}.plist`);
+        if (fs.existsSync(plistPath)) {
+            fs.unlinkSync(plistPath);
+        }
+
+        // 4. Delete Icon
+        const iconPath = path.join(uploadDir, `icon_${timestamp}.png`);
+        if (fs.existsSync(iconPath)) {
+            fs.unlinkSync(iconPath);
+        }
+
+        // 5. Delete Screenshots
+        const screenshotPattern = `screenshot_${timestamp}_`;
+        fs.readdirSync(uploadDir).forEach(file => {
+            if (file.startsWith(screenshotPattern)) {
+                fs.unlinkSync(path.join(uploadDir, file));
+            }
+        });
+
+        res.json({ success: true, message: 'Đã xóa file và dữ liệu liên quan' });
+
+    } catch (error) {
+        console.error('Delete IPA error:', error);
+        res.status(500).json({ error: 'Lỗi khi xóa file' });
+    }
+});
+
+// Get app info by timestamp (public - for TestFlight UI page)
+app.get('/api/app-info/:timestamp', (req, res) => {
+    try {
+        const timestamp = req.params.timestamp;
+        if (!timestamp || timestamp.includes('..') || timestamp.includes('/')) {
+            return res.status(400).json({ error: 'Invalid timestamp' });
+        }
+
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+        const metadataPath = path.join(uploadDir, `metadata_${timestamp}.json`);
+
+        if (fs.existsSync(metadataPath)) {
+            const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+            const baseUrl = 'https://data5g.site';
+
+            res.json({
+                success: true,
+                appName: metadata.appName,
+                version: metadata.version,
+                bundleId: metadata.bundleId,
+                description: metadata.description,
+                developer: metadata.developer,
+                supportEmail: metadata.supportEmail,
+                changelog: metadata.changelog || '',
+                size: metadata.size,
+                createdAt: metadata.createdAt,
+                updatedAt: metadata.updatedAt,
+                iconUrl: metadata.iconFileName ? `${baseUrl}/uploads/ipa/${metadata.iconFileName}` : null,
+                screenshots: (metadata.screenshots || []).map(s => `${baseUrl}/uploads/ipa/${s}`),
+                installLink: `itms-services://?action=download-manifest&url=${baseUrl}/uploads/ipa/manifest_${timestamp}.plist`
+            });
+        } else {
+            // Return default values for old IPAs without metadata
+            const ipaPath = path.join(uploadDir, `zyea_${timestamp}.ipa`);
+            if (fs.existsSync(ipaPath)) {
+                const stats = fs.statSync(ipaPath);
+                res.json({
+                    success: true,
+                    appName: 'Zyea',
+                    version: `1.0.${timestamp.slice(-6)}`,
+                    bundleId: 'com.zyea.mobile',
+                    description: 'Ứng dụng Zyea - Kết nối cộng đồng',
+                    size: stats.size,
+                    createdAt: stats.birthtime,
+                    iconUrl: null,
+                    screenshots: [],
+                    installLink: `itms-services://?action=download-manifest&url=https://data5g.site/uploads/ipa/manifest_${timestamp}.plist`
+                });
+            } else {
+                res.status(404).json({ error: 'App not found' });
+            }
+        }
+    } catch (error) {
+        console.error('Get app info error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Clean URL route for app install page: /app/:appSlug/:timestamp
+app.get('/app/:appSlug/:timestamp', (req, res) => {
+    try {
+        const { appSlug, timestamp } = req.params;
+
+        // Validate timestamp
+        if (!timestamp || timestamp.includes('..') || timestamp.includes('/')) {
+            return res.status(400).send('Invalid request');
+        }
+
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+        const metadataPath = path.join(uploadDir, `metadata_${timestamp}.json`);
+
+        // Check if app exists
+        if (fs.existsSync(metadataPath)) {
+            // Serve the app-install.html with the timestamp
+            const htmlPath = path.join(__dirname, '../public/app-install.html');
+            let html = fs.readFileSync(htmlPath, 'utf8');
+
+            // Inject timestamp into the page so JS can use it
+            html = html.replace(
+                "const urlParams = new URLSearchParams(window.location.search);",
+                `const urlParams = { get: (key) => key === 'id' ? '${timestamp}' : null };`
+            );
+
+            res.send(html);
+        } else {
+            // res.status(404).send('App not found');
+            const notFoundPath = path.join(__dirname, '../public/404.html');
+            if (fs.existsSync(notFoundPath)) {
+                res.status(404).sendFile(notFoundPath);
+            } else {
+                res.status(404).send('App not found');
+            }
+        }
+    } catch (error) {
+        console.error('App page error:', error);
+        res.status(500).send('Server error');
+    }
+});
+
+// Catch-all for invalid /app/... routes
+app.get(['/app', '/app/*'], (req, res) => {
+    const notFoundPath = path.join(__dirname, '../public/404.html');
+    if (fs.existsSync(notFoundPath)) {
+        res.status(404).sendFile(notFoundPath);
+    } else {
+        res.status(404).send('Không tìm thấy trang yêu cầu');
+    }
+});
+
+// Shorten link via is.gd
+app.post('/api/admin/shorten', authenticateToken, async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) {
+            return res.status(400).json({ error: 'URL is required' });
+        }
+
+        // is.gd API call
+        const response = await axios.get(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`);
+
+        if (response.data) {
+            res.json({ success: true, shortUrl: response.data });
+        } else {
+            res.status(500).json({ error: 'Failed to shorten link' });
+        }
+    } catch (error) {
+        console.error('Shorten link error:', error);
+        res.status(500).json({ error: 'Failed to connect to is.gd' });
+    }
+});
+
+// Track page view (public - called from app-install page)
+app.post('/api/app-stats/:timestamp/view', (req, res) => {
+    try {
+        const timestamp = req.params.timestamp;
+        if (!timestamp || timestamp.includes('..') || timestamp.includes('/')) {
+            return res.status(400).json({ error: 'Invalid timestamp' });
+        }
+
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+        const statsPath = path.join(uploadDir, `stats_${timestamp}.json`);
+
+        let stats = { views: 0, downloads: 0 };
+        if (fs.existsSync(statsPath)) {
+            stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+        }
+
+        stats.views = (stats.views || 0) + 1;
+        stats.lastViewAt = new Date().toISOString();
+
+        fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2));
+        res.json({ success: true, views: stats.views });
+    } catch (error) {
+        console.error('Track view error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Track download/install (public - called when user clicks Install)
+app.post('/api/app-stats/:timestamp/download', (req, res) => {
+    try {
+        const timestamp = req.params.timestamp;
+        if (!timestamp || timestamp.includes('..') || timestamp.includes('/')) {
+            return res.status(400).json({ error: 'Invalid timestamp' });
+        }
+
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+        const statsPath = path.join(uploadDir, `stats_${timestamp}.json`);
+
+        let stats = { views: 0, downloads: 0 };
+        if (fs.existsSync(statsPath)) {
+            stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+        }
+
+        stats.downloads = (stats.downloads || 0) + 1;
+        stats.lastDownloadAt = new Date().toISOString();
+
+        fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2));
+        res.json({ success: true, downloads: stats.downloads });
+    } catch (error) {
+        console.error('Track download error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Get app statistics (admin only)
+app.get('/api/admin/app-stats/:timestamp', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const timestamp = req.params.timestamp;
+        if (!timestamp || timestamp.includes('..') || timestamp.includes('/')) {
+            return res.status(400).json({ error: 'Invalid timestamp' });
+        }
+
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+        const statsPath = path.join(uploadDir, `stats_${timestamp}.json`);
+        const metadataPath = path.join(uploadDir, `metadata_${timestamp}.json`);
+
+        let stats = { views: 0, downloads: 0 };
+        if (fs.existsSync(statsPath)) {
+            stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+        }
+
+        let appName = 'Zyea';
+        if (fs.existsSync(metadataPath)) {
+            const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+            appName = metadata.appName || 'Zyea';
+        }
+
+        res.json({
+            success: true,
+            appName,
+            timestamp,
+            views: stats.views || 0,
+            downloads: stats.downloads || 0,
+            lastViewAt: stats.lastViewAt || null,
+            lastDownloadAt: stats.lastDownloadAt || null
+        });
+    } catch (error) {
+        console.error('Get stats error:', error);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
@@ -1230,7 +1984,9 @@ app.get('/api/chat/history/:partnerId', authenticateToken, async (req, res) => {
                 createdAt: m.created_at,
                 user: { _id: m.sender_id },
                 isDeleted: isDeleted,
-                deletedBy: deletedBy // Array of user IDs who deleted this message
+                deletedBy: deletedBy, // Array of user IDs who deleted this message
+                isEdited: m.is_edited === 1,
+                editedAt: m.edited_at
             };
         }));
     } catch (error) {
@@ -1383,7 +2139,6 @@ app.post('/api/chat/conversations/:id/read', authenticateToken, async (req, res)
 
 // ============ IMAGE UPLOAD ============
 const multer = require('multer');
-const fs = require('fs');
 
 // Create uploads directory if not exists
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -2919,67 +3674,32 @@ io.on('connection', (socket) => {
 
     // Handle sending messages
     // Handle sending messages
+    // User joins a group room
+    socket.on('joinGroup', (groupId) => {
+        socket.join(groupId);
+        console.log(`User ${socket.userId} joined group room ${groupId}`);
+    });
+
+    // User leaves a group room
+    socket.on('leaveGroup', (groupId) => {
+        socket.leave(groupId);
+        console.log(`User ${socket.userId} left group room ${groupId}`);
+    });
+
+    // Handle sending messages
     socket.on('sendMessage', async (data) => {
-        // data: { senderId, receiverId, message, type = 'text' }
+        // data: { senderId, receiverId, groupId, message, type = 'text', ... }
         console.log('Message:', data);
 
         try {
             let conversationId = null;
-
-            // Find or create conversation
-            const [convRows] = await pool.execute(`
-                SELECT c.id 
-                FROM conversations c
-                JOIN conversation_participants cp1 ON c.id = cp1.conversation_id
-                JOIN conversation_participants cp2 ON c.id = cp2.conversation_id
-                WHERE c.type = 'private' 
-                AND cp1.user_id = ? 
-                AND cp2.user_id = ?
-                LIMIT 1
-            `, [data.senderId, data.receiverId]);
-
-            if (convRows.length > 0) {
-                conversationId = convRows[0].id;
-
-                // IMPORTANT: Unhide conversation for BOTH users when new message is sent
-                // This fixes the bug where deleted conversations don't reappear
-                await pool.execute(
-                    'UPDATE conversation_participants SET is_hidden = 0 WHERE conversation_id = ? AND (user_id = ? OR user_id = ?)',
-                    [conversationId, data.senderId, data.receiverId]
-                );
-            } else {
-                conversationId = uuidv4();
-                await pool.execute('INSERT INTO conversations (id, type) VALUES (?, "private")', [conversationId]);
-                await pool.execute('INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)', [conversationId, data.senderId]);
-                await pool.execute('INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)', [conversationId, data.receiverId]);
-            }
-
-            // Save message (with image_url if present)
             const messageId = uuidv4();
-
-            // Add image_url column if not exists (quick hack for development)
-            try {
-                await pool.execute('ALTER TABLE messages ADD COLUMN image_url TEXT');
-            } catch (e) {
-                // Column likely exists
-            }
-
-            // Map call types to 'text' for database but keep original type for client if needed
-            // Or better: Assume DB column is ENUM('text', 'image', 'video', 'call_ended', 'call_missed')
-            // Since we got truncation error, it's likely ENUM('text', 'image', 'video').
-
             let dbType = data.type || 'text';
+
+            // Handle Call Types Fallback
             if (dbType === 'call_ended' || dbType === 'call_missed') {
-                dbType = 'text'; // Fallback to 'text' to avoid truncation error
+                dbType = 'text';
             }
-
-            await pool.execute(
-                'INSERT INTO messages (id, conversation_id, sender_id, content, type, image_url) VALUES (?, ?, ?, ?, ?, ?)',
-                [messageId, conversationId, data.senderId, data.message, dbType, data.imageUrl || null]
-            );
-
-            // Update conversation last message
-            await pool.execute('UPDATE conversations SET last_message_id = ? WHERE id = ?', [messageId, conversationId]);
 
             // Fetch sender details
             const [senders] = await pool.execute('SELECT name, avatar FROM users WHERE id = ?', [data.senderId]);
@@ -2987,53 +3707,157 @@ io.on('connection', (socket) => {
 
             const fullMessage = {
                 _id: messageId,
+                id: messageId,
                 text: data.message,
                 type: data.type || 'text',
                 imageUrl: data.imageUrl || null,
-                createdAt: new Date(),
+                imageWidth: data.imageWidth,
+                imageHeight: data.imageHeight,
+                createdAt: new Date().toISOString(),
                 user: {
                     _id: data.senderId,
                     name: senderInfo.name,
                     avatar: senderInfo.avatar
                 },
-                conversationId,
-                tempId: data.tempId // Include tempId for optimistic UI update
+                senderId: data.senderId,
+                senderName: senderInfo.name,
+                senderAvatar: senderInfo.avatar,
+                replyTo: data.replyTo,
+                groupId: data.groupId
             };
 
-            // Emit to receiver
-            io.to(data.receiverId).emit('receiveMessage', fullMessage);
+            // GROUP CHAT MESSAGE
+            if (data.groupId) {
+                console.log(`💾 Received group message for group: ${data.groupId}`);
+                try {
+                    await pool.execute(
+                        'INSERT INTO messages (id, conversation_id, group_id, sender_id, content, type, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                        [messageId, null, data.groupId, data.senderId, data.message, dbType, data.imageUrl || null]
+                    );
+                    console.log(`✅ Group message ${messageId} saved successfully for group ${data.groupId}`);
+                } catch (saveErr) {
+                    console.error(`❌ ERROR saving group message: ${saveErr.message}`);
+                    console.log("Data check:", { messageId, groupId: data.groupId, senderId: data.senderId });
+                }
 
-            // Emit back to sender
-            io.to(data.senderId).emit('messageSent', fullMessage);
+                // Emit to group room
+                socket.to(data.groupId).emit('receiveMessage', fullMessage);
+                console.log(`📡 Emitted receiveMessage to group: ${data.groupId}`);
+
+                // Also emit back to sender primarily for confirmation
+                io.to(data.senderId).emit('messageSent', fullMessage);
+
+            }
+            // PRIVATE CHAT MESSAGE
+            else {
+                // Find or create conversation
+                const [convRows] = await pool.execute(`
+                    SELECT c.id 
+                    FROM conversations c
+                    JOIN conversation_participants cp1 ON c.id = cp1.conversation_id
+                    JOIN conversation_participants cp2 ON c.id = cp2.conversation_id
+                    WHERE c.type = 'private' 
+                    AND cp1.user_id = ? 
+                    AND cp2.user_id = ?
+                    LIMIT 1
+                `, [data.senderId, data.receiverId]);
+
+                if (convRows.length > 0) {
+                    conversationId = convRows[0].id;
+                    await pool.execute(
+                        'UPDATE conversation_participants SET is_hidden = 0 WHERE conversation_id = ? AND (user_id = ? OR user_id = ?)',
+                        [conversationId, data.senderId, data.receiverId]
+                    );
+                } else {
+                    conversationId = uuidv4();
+                    await pool.execute('INSERT INTO conversations (id, type) VALUES (?, "private")', [conversationId]);
+                    await pool.execute('INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)', [conversationId, data.senderId]);
+                    await pool.execute('INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)', [conversationId, data.receiverId]);
+                }
+
+                await pool.execute(
+                    'INSERT INTO messages (id, conversation_id, sender_id, content, type, image_url) VALUES (?, ?, ?, ?, ?, ?)',
+                    [messageId, conversationId, data.senderId, data.message, dbType, data.imageUrl || null]
+                );
+
+                await pool.execute('UPDATE conversations SET last_message_id = ? WHERE id = ?', [messageId, conversationId]);
+
+                // Emit to receiver
+                io.to(data.receiverId).emit('receiveMessage', fullMessage);
+
+                // Emit back to sender
+                io.to(data.senderId).emit('messageSent', fullMessage);
+            }
 
             // --- SEND PUSH NOTIFICATION ---
-            try {
-                const { Expo } = require('expo-server-sdk');
-                const expo = new Expo();
+            // Only send if receiver is not in the room? For now send always if we have token and it's private or group mention (logic omitted for brevity)
+            if (data.receiverId) {
+                try {
+                    const { Expo } = require('expo-server-sdk');
+                    const expo = new Expo();
 
-                const [receivers] = await pool.execute('SELECT push_token FROM users WHERE id = ?', [data.receiverId]);
-                const pushToken = receivers[0]?.push_token;
+                    const [receivers] = await pool.execute('SELECT push_token FROM users WHERE id = ?', [data.receiverId]);
+                    const pushToken = receivers[0]?.push_token;
 
-                if (pushToken && Expo.isExpoPushToken(pushToken)) {
-                    await expo.sendPushNotificationsAsync([{
-                        to: pushToken,
-                        sound: 'default',
-                        title: senderInfo.name || 'Tin nhắn mới',
-                        body: data.message || 'Đã gửi một tin nhắn',
-                        data: {
-                            conversationId,
-                            partnerId: data.senderId,
-                            url: `vinalive://chat/${conversationId}` // Deep link scheme if supported
-                        },
-                    }]);
-                    console.log('✅ Push notification sent to', data.receiverId);
+                    if (pushToken && Expo.isExpoPushToken(pushToken)) {
+                        await expo.sendPushNotificationsAsync([{
+                            to: pushToken,
+                            sound: 'default',
+                            title: senderInfo.name || 'Tin nhắn mới',
+                            body: data.message || 'Đã gửi một tin nhắn',
+                            data: {
+                                conversationId,
+                                groupId: data.groupId,
+                                partnerId: data.senderId,
+                            },
+                        }]);
+                    }
+                } catch (pushError) {
+                    console.error('⚠️ Push notification failed:', pushError);
                 }
-            } catch (pushError) {
-                console.error('⚠️ Push notification failed:', pushError);
             }
 
         } catch (error) {
             console.error('Save message error:', error);
+        }
+    });
+
+    // Revoke message (Delete)
+    socket.on('revokeMessage', async ({ conversationId, messageId }) => {
+        try {
+            // Find participants to notify
+            const [participants] = await pool.execute(
+                'SELECT user_id FROM conversation_participants WHERE conversation_id = ?',
+                [conversationId]
+            );
+
+            participants.forEach(p => {
+                io.to(p.user_id).emit('messageRevoked', { conversationId, messageId });
+            });
+        } catch (error) {
+            console.error('Revoke message error:', error);
+        }
+    });
+
+    // Edit message
+    socket.on('editMessage', async ({ conversationId, messageId, newText, editedAt }) => {
+        try {
+            await pool.execute(
+                'UPDATE messages SET content = ?, is_edited = 1, edited_at = NOW() WHERE id = ?',
+                [newText, messageId]
+            );
+
+            // Find participants to notify
+            const [participants] = await pool.execute(
+                'SELECT user_id FROM conversation_participants WHERE conversation_id = ?',
+                [conversationId]
+            );
+
+            participants.forEach(p => {
+                io.to(p.user_id).emit('messageEdited', { conversationId, messageId, newText, editedAt });
+            });
+        } catch (error) {
+            console.error('Edit message error:', error);
         }
     });
 
@@ -3254,7 +4078,9 @@ app.get('/api/chat/messages/:partnerId', authenticateToken, async (req, res) => 
             senderId: m.sender_id,
             content: m.content,
             type: m.type,
-            createdAt: formatDateForClient(m.created_at)
+            createdAt: formatDateForClient(m.created_at),
+            isEdited: m.is_edited === 1,
+            editedAt: m.edited_at
         })));
 
     } catch (error) {
@@ -3667,9 +4493,16 @@ app.delete('/api/admin/feedback/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// ============ GROUP CHAT ROUTES ============
+// Import group routes (will be initialized after database is ready)
+const initGroupRoutes = require('./groupRoutes');
+
 initDatabase().then(async () => {
     // Create additional tables and optimize indexes
     await optimizeDatabase();
+
+    // Initialize group routes AFTER database is ready
+    initGroupRoutes(app, pool, authenticateToken, uuidv4, formatDateForClient);
 
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Server running on port ${PORT}`);

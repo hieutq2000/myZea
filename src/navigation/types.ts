@@ -12,16 +12,21 @@ export type RootStackParamList = {
     Profile: undefined;
     Settings: undefined;
     PostDetail: { postId: string };
+    PlaceNotifications: undefined;
 
     // Chat Screens
     ChatList: undefined;
     ChatDetail: {
         conversationId?: string;
-        partnerId: string;
+        partnerId?: string;
+        groupId?: string;
         userName?: string;
         avatar?: string;
+        isGroup?: boolean;
+        members?: any[];
     };
     NewChat: undefined;
+    CreateGroup: undefined;
 
     // Call Screen
     Call: {

@@ -10,6 +10,7 @@ import {
   LogoutOutlined,
   SmileOutlined,
   CustomerServiceOutlined,
+  AppleFilled,
 } from '@ant-design/icons';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Login from './pages/Login';
@@ -18,6 +19,7 @@ import ContentPage from './pages/Content';
 import Settings from './pages/Settings';
 import Stickers from './pages/Stickers';
 import FeedbackPage from './pages/Feedback';
+import IpaManager from './pages/IpaManager';
 
 const { Header, Sider, Content } = Layout;
 
@@ -85,6 +87,11 @@ const App: React.FC = () => {
                 label: <Link to="/feedback">Phản hồi</Link>,
               },
               {
+                key: 'ipa-manager',
+                icon: <AppleFilled />,
+                label: <Link to="/ipa-manager">IPA Files</Link>,
+              },
+              {
                 key: '4',
                 icon: <SettingOutlined />,
                 label: <Link to="/settings">Cài đặt</Link>,
@@ -133,6 +140,7 @@ const App: React.FC = () => {
               <Route path="/content" element={<ContentPage />} />
               <Route path="/stickers" element={<Stickers />} />
               <Route path="/feedback" element={<FeedbackPage />} />
+              <Route path="/ipa-manager" element={<IpaManager />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </Content>

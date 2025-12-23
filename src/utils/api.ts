@@ -287,6 +287,10 @@ export async function searchUsers(query: string): Promise<ChatUser[]> {
     return apiRequest<ChatUser[]>(`/api/users/search?q=${encodeURIComponent(query)}`);
 }
 
+export async function getUserInfo(userId: string): Promise<ChatUser> {
+    return apiRequest<ChatUser>(`/api/users/${userId}`);
+}
+
 // Pin/Unpin a conversation
 export async function pinConversation(conversationId: string, pin: boolean): Promise<any> {
     return apiRequest('/api/chat/conversations/' + conversationId + '/pin', {
@@ -445,6 +449,18 @@ export async function createPost(
         body: JSON.stringify({ content, imageUrl, images, originalPostId, taggedUserIds }),
     });
 }
+
+export async function updatePost(
+    postId: string,
+    content: string,
+    images?: (string | ImageObj)[],
+    taggedUserIds?: string[]
+): Promise<Post> {
+    return apiRequest<Post>(`/api/place/posts/${postId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ content, images, taggedUserIds }),
+    });
+}
 // ... existing code ...
 
 export async function toggleLikePost(postId: string): Promise<{ liked: boolean }> {
@@ -535,4 +551,8 @@ export async function markNotificationAsRead(notificationId: string): Promise<vo
 
 export async function markAllNotificationsAsRead(): Promise<void> {
     return apiRequest('/api/place/notifications/read-all', { method: 'PATCH' });
+}
+
+export async function deleteNotification(notificationId: string): Promise<void> {
+    return apiRequest(`/api/place/notifications/${notificationId}`, { method: 'DELETE' });
 }

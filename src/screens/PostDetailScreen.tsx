@@ -44,7 +44,7 @@ type PostDetailRouteProp = RouteProp<RootStackParamList, 'PostDetail'>;
 export default function PostDetailScreen() {
     const navigation = useNavigation();
     const route = useRoute<PostDetailRouteProp>();
-    const { postId } = route.params;
+    const { postId, autoFocus } = route.params as any;
     const { colors, isDark } = useTheme();
 
     // State
@@ -429,6 +429,7 @@ export default function PostDetailScreen() {
                                 value={commentText}
                                 onChangeText={setCommentText}
                                 multiline
+                                autoFocus={autoFocus}
                             />
                         </View>
                         <TouchableOpacity
@@ -476,7 +477,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 12,
-        paddingVertical: 12,
+        paddingVertical: 8,
     },
     backButton: {
         padding: 4,

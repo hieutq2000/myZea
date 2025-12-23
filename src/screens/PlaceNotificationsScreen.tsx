@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -12,6 +12,7 @@ import {
     RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatTime } from '../utils/formatTime';
@@ -19,9 +20,11 @@ import {
     getPlaceNotifications,
     markNotificationAsRead as apiMarkAsRead,
     markAllNotificationsAsRead,
+    deleteNotification as apiDeleteNotification,
     PlaceNotification
 } from '../utils/api';
 import { getAvatarUri } from '../utils/media';
+import { useNavigation } from '@react-navigation/native';
 
 // Mock notification data (later replace with API)
 interface Notification {
@@ -40,7 +43,7 @@ interface Notification {
 }
 
 interface PlaceNotificationsScreenProps {
-    onBack: () => void;
+    onBack?: () => void;
     onOpenPost?: (postId: string) => void;
 }
 
@@ -62,61 +65,24 @@ const getNotificationStyle = (type: string) => {
     }
 };
 
-// Mock notifications
-const MOCK_NOTIFICATIONS: Notification[] = [
-    {
-        id: '1',
-        type: 'like',
-        user: { id: 'u1', name: 'Nguyễn Văn A', avatar: 'https://ui-avatars.com/api/?name=Nguyen+Van+A&background=667eea&color=fff' },
-        postId: 'p1',
-        postPreview: 'Bài viết về công nghệ...',
-        message: 'đã thích bài viết của bạn',
-        createdAt: new Date(Date.now() - 5 * 60000).toISOString(),
-        isRead: false,
-    },
-    {
-        id: '2',
-        type: 'comment',
-        user: { id: 'u2', name: 'Trần Thị B', avatar: 'https://ui-avatars.com/api/?name=Tran+Thi+B&background=f97316&color=fff' },
-        postId: 'p1',
-        postPreview: 'Bài viết về công nghệ...',
-        message: 'đã bình luận: "Bài viết rất hay!"',
-        createdAt: new Date(Date.now() - 30 * 60000).toISOString(),
-        isRead: false,
-    },
-    {
-        id: '3',
-        type: 'like',
-        user: { id: 'u3', name: 'Lê Văn C' },
-        postId: 'p2',
-        message: 'và 5 người khác đã thích bài viết của bạn',
-        createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
-        isRead: true,
-    },
-    {
-        id: '4',
-        type: 'share',
-        user: { id: 'u4', name: 'Phạm Thị D', avatar: 'https://ui-avatars.com/api/?name=Pham+Thi+D&background=10b981&color=fff' },
-        postId: 'p3',
-        message: 'đã chia sẻ bài viết của bạn',
-        createdAt: new Date(Date.now() - 24 * 3600000).toISOString(),
-        isRead: true,
-    },
-    {
-        id: '5',
-        type: 'mention',
-        user: { id: 'u5', name: 'Hoàng Văn E' },
-        postId: 'p4',
-        message: 'đã nhắc đến bạn trong một bình luận',
-        createdAt: new Date(Date.now() - 48 * 3600000).toISOString(),
-        isRead: true,
-    },
-];
+
+
 
 export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNotificationsScreenProps) {
+    const navigation = useNavigation<any>();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+
+    // Handle back - use prop or navigation
+    const handleBack = () => {
+        if (onBack) {
+            onBack();
+        } else {
+            navigation.goBack();
+        }
+    };
 
     useEffect(() => {
         loadNotifications();
@@ -137,16 +103,10 @@ export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNo
                 isRead: n.isRead
             }));
 
-            // If API returns empty, use mock data for demo
-            if (mappedData.length === 0) {
-                setNotifications(MOCK_NOTIFICATIONS);
-            } else {
-                setNotifications(mappedData);
-            }
+            setNotifications(mappedData);
         } catch (error) {
             console.error('Load notifications error:', error);
-            // Fallback to mock data on error
-            setNotifications(MOCK_NOTIFICATIONS);
+            setNotifications([]);
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
@@ -172,6 +132,7 @@ export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNo
     };
 
     const handleMarkAllAsRead = async () => {
+        setShowSettingsMenu(false);
         // Optimistic update
         setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
         // Call API
@@ -182,6 +143,12 @@ export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNo
         }
     };
 
+    const handleNotificationSettings = () => {
+        setShowSettingsMenu(false);
+        // TODO: Navigate to notification settings screen
+        // For now, just close the menu
+    };
+
     const handleNotificationPress = (notification: Notification) => {
         markAsRead(notification.id);
         if (notification.postId && onOpenPost) {
@@ -189,39 +156,69 @@ export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNo
         }
     };
 
+    const handleDeleteNotification = async (id: string) => {
+        // Remove notification from list (optimistic update)
+        setNotifications(prev => prev.filter(n => n.id !== id));
+
+        // Call API to delete notification on server
+        try {
+            await apiDeleteNotification(id);
+        } catch (error) {
+            console.error('Delete notification error:', error);
+            // Optionally: restore the notification if delete failed
+        }
+    };
+
+    // Render right actions (delete button)
+    const renderRightActions = (notificationId: string) => (
+        <TouchableOpacity
+            style={styles.deleteAction}
+            onPress={() => handleDeleteNotification(notificationId)}
+        >
+            <Ionicons name="trash-outline" size={24} color="#FFF" />
+            <Text style={styles.deleteActionText}>Xóa</Text>
+        </TouchableOpacity>
+    );
+
     const renderNotification = ({ item }: { item: Notification }) => {
         const style = getNotificationStyle(item.type);
         const avatarUri = getAvatarUri(item.user.avatar, item.user.name);
 
         return (
-            <TouchableOpacity
-                style={[
-                    styles.notificationItem,
-                    !item.isRead && styles.unreadItem
-                ]}
-                onPress={() => handleNotificationPress(item)}
-                activeOpacity={0.7}
+            <Swipeable
+                renderRightActions={() => renderRightActions(item.id)}
+                overshootRight={false}
+                friction={2}
             >
-                {/* Avatar with badge */}
-                <View style={styles.avatarContainer}>
-                    <Image source={{ uri: avatarUri }} style={styles.avatar} />
-                    <View style={[styles.typeBadge, { backgroundColor: style.bgColor }]}>
-                        <Ionicons name={style.icon as any} size={12} color={style.color} />
+                <TouchableOpacity
+                    style={[
+                        styles.notificationItem,
+                        !item.isRead && styles.unreadItem
+                    ]}
+                    onPress={() => handleNotificationPress(item)}
+                    activeOpacity={0.7}
+                >
+                    {/* Avatar with badge */}
+                    <View style={styles.avatarContainer}>
+                        <Image source={{ uri: avatarUri }} style={styles.avatar} />
+                        <View style={[styles.typeBadge, { backgroundColor: style.bgColor }]}>
+                            <Ionicons name={style.icon as any} size={12} color={style.color} />
+                        </View>
                     </View>
-                </View>
 
-                {/* Content */}
-                <View style={styles.notificationContent}>
-                    <Text style={styles.notificationText} numberOfLines={3}>
-                        <Text style={styles.userName}>{item.user.name}</Text>
-                        {' '}{item.message}
-                    </Text>
-                    <Text style={styles.timeText}>{formatTime(item.createdAt)}</Text>
-                </View>
+                    {/* Content */}
+                    <View style={styles.notificationContent}>
+                        <Text style={styles.notificationText} numberOfLines={3}>
+                            <Text style={styles.userName}>{item.user.name}</Text>
+                            {' '}{item.message}
+                        </Text>
+                        <Text style={styles.timeText}>{formatTime(item.createdAt)}</Text>
+                    </View>
 
-                {/* Unread indicator */}
-                {!item.isRead && <View style={styles.unreadDot} />}
-            </TouchableOpacity>
+                    {/* Unread indicator */}
+                    {!item.isRead && <View style={styles.unreadDot} />}
+                </TouchableOpacity>
+            </Swipeable>
         );
     };
 
@@ -240,20 +237,49 @@ export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNo
             >
                 <SafeAreaView>
                     <View style={[styles.headerContent, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
-                        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
                             <Ionicons name="arrow-back" size={24} color="#333" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>Thông báo</Text>
                         <View style={styles.headerRight}>
-                            {unreadCount > 0 && (
-                                <View style={styles.unreadBadge}>
-                                    <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
-                                </View>
-                            )}
+                            <TouchableOpacity
+                                style={styles.settingsButton}
+                                onPress={() => setShowSettingsMenu(!showSettingsMenu)}
+                            >
+                                <Ionicons name="settings-outline" size={24} color="#333" />
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </SafeAreaView>
             </LinearGradient>
+
+            {/* Settings Popup Menu */}
+            {showSettingsMenu && (
+                <View style={styles.settingsMenuOverlay}>
+                    <TouchableOpacity
+                        style={styles.settingsMenuBackdrop}
+                        onPress={() => setShowSettingsMenu(false)}
+                        activeOpacity={1}
+                    />
+                    <View style={styles.settingsMenu}>
+                        <TouchableOpacity
+                            style={styles.settingsMenuItem}
+                            onPress={handleMarkAllAsRead}
+                        >
+                            <Ionicons name="checkmark-done-outline" size={22} color="#333" />
+                            <Text style={styles.settingsMenuText}>Đánh dấu tất cả là đã đọc</Text>
+                        </TouchableOpacity>
+                        <View style={styles.settingsMenuDivider} />
+                        <TouchableOpacity
+                            style={styles.settingsMenuItem}
+                            onPress={handleNotificationSettings}
+                        >
+                            <Ionicons name="settings-outline" size={22} color="#333" />
+                            <Text style={styles.settingsMenuText}>Cài đặt thông báo</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
 
             {/* Notifications List */}
             {isLoading ? (
@@ -290,6 +316,7 @@ export default function PlaceNotificationsScreen({ onBack, onOpenPost }: PlaceNo
         </View>
     );
 }
+
 
 const styles = StyleSheet.create({
     container: {
@@ -426,5 +453,65 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#999',
         marginTop: 16,
+    },
+    settingsButton: {
+        padding: 4,
+    },
+    settingsMenuOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1000,
+    },
+    settingsMenuBackdrop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    settingsMenu: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 100 : 80,
+        right: 16,
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+        minWidth: 250,
+    },
+    settingsMenuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+    },
+    settingsMenuText: {
+        fontSize: 15,
+        color: '#333',
+        marginLeft: 12,
+    },
+    settingsMenuDivider: {
+        height: 1,
+        backgroundColor: '#F0F0F0',
+        marginHorizontal: 16,
+    },
+    deleteAction: {
+        backgroundColor: '#EF4444',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        height: '100%',
+    },
+    deleteActionText: {
+        color: '#FFF',
+        fontSize: 12,
+        fontWeight: '600',
+        marginTop: 4,
     },
 });

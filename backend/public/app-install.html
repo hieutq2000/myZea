@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Download App</title>
+    <link rel="icon" type="image/png" id="favicon" href="">
+    <link rel="apple-touch-icon" id="appleIcon" href="">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 420px;
+            margin: 0 auto;
+            background: #fff;
+            min-height: 100vh;
+        }
+
+        /* Header Section */
+        .header {
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .app-icon {
+            width: 100px;
+            height: 100px;
+            border-radius: 22px;
+            background: white;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .app-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .app-icon svg {
+            width: 60px;
+            height: 60px;
+        }
+
+        .app-name {
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .install-btn {
+            display: inline-block;
+            background: white;
+            color: #ff6b35;
+            padding: 12px 32px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            border: none;
+            margin: 0 6px;
+        }
+
+        .install-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .install-btn:active {
+            transform: scale(0.98);
+        }
+
+        .feedback-btn {
+            display: inline-block;
+            background: transparent;
+            color: white;
+            padding: 12px 32px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 2px solid white;
+            margin: 0 6px;
+        }
+
+        .feedback-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .buttons-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        /* Content Section */
+        .content {
+            padding: 24px 20px;
+        }
+
+        .description {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            white-space: pre-line;
+            transition: max-height 0.3s ease;
+            overflow: hidden;
+            /* Removed old card styles and orange border */
+        }
+
+        .description p {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #555;
+            margin-bottom: 12px;
+            white-space: pre-line;
+        }
+
+        .description p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Screenshots */
+        .screenshots {
+            margin-bottom: 24px;
+        }
+
+        .screenshots-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .screenshots-scroll {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .screenshots-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+        .screenshot {
+            flex-shrink: 0;
+            width: 140px;
+            height: 280px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            background: #f5f5f5;
+        }
+
+        .screenshot img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .screenshot-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .no-screenshots {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+            font-size: 14px;
+        }
+
+        /* App Info */
+        .app-info {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .app-info-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 24px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .footer-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: #999;
+            font-size: 13px;
+        }
+
+        .footer-logo svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* What's New Section */
+        .whats-new {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .whats-new-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .whats-new-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .whats-new-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .version-text {
+            font-size: 13px;
+            color: #666;
+            order: 2;
+            /* Move version to right */
+        }
+
+        .time-text {
+            font-size: 13px;
+            color: #8e8e93;
+            order: 1;
+            /* Move time to left */
+        }
+
+        .whats-new-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            white-space: pre-line;
+        }
+
+        .whats-new-content ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .whats-new-content li {
+            margin-bottom: 6px;
+        }
+
+        /* Description with Read More */
+        /* Description with Read More */
+        .description-container {
+            margin: 24px 0;
+            padding: 20px;
+            background-color: #f5f5f7;
+            border-radius: 20px;
+            /* border: 1px solid #ff6b35; Remove if exists - ensuring clean look */
+        }
+
+        .description {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            white-space: pre-line;
+            transition: max-height 0.3s ease;
+            overflow: hidden;
+        }
+
+        .description.collapsed {
+            max-height: 4.8em;
+            /* Show approx 3 lines */
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .description.expanded {
+            max-height: none;
+            display: block;
+        }
+
+        .read-more-btn {
+            background: none;
+            border: none;
+            color: #007aff;
+            font-size: 14px;
+            padding: 0;
+            margin-top: 8px;
+            cursor: pointer;
+            display: none;
+            /* Hidden by default, shown via JS if content is long */
+            /* float: right; */
+            width: 100%;
+            text-align: right;
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+            color: white;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* iOS Warning */
+        .ios-warning {
+            display: none;
+            background: #FFF4E5;
+            border: 1px solid #FFCC80;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px;
+            text-align: left;
+        }
+
+        .ios-warning.show {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .warning-icon svg {
+            width: 32px;
+            height: 32px;
+            fill: none;
+            stroke: #222;
+            stroke-width: 2;
+        }
+
+        .warning-content h3 {
+            color: #B94A48;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .warning-content p {
+            color: #B94A48;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        /* Error State */
+        .error-state {
+            display: none;
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .error-state.show {
+            display: block;
+        }
+
+        .error-state h2 {
+            color: #e74c3c;
+            margin-bottom: 16px;
+        }
+
+        .error-state p {
+            color: #666;
+        }
+
+        /* Hide content until loaded */
+        .app-content {
+            display: none;
+        }
+
+        .app-content.loaded {
+            display: block;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #000000 !important;
+            }
+
+            .container {
+                background: #000000 !important;
+                color: #ffffff !important;
+            }
+
+            /* Header adjustments for Dark Mode */
+            /* Keep brand header or darken it? User asked to "remove white bg". Let's keep header brand color but ensure no white leak. */
+
+            .app-name {
+                color: #ffffff !important;
+            }
+
+            .install-btn {
+                background: #1c1c1e !important;
+                color: #ffffff !important;
+                box-shadow: none !important;
+            }
+
+            .feedback-btn {
+                border-color: #ffffff !important;
+                color: #ffffff !important;
+            }
+
+            /* CARD BACKGROUNDS - DARK GREY instead of White/Light Grey */
+            .description-container,
+            .app-info,
+            .whats-new,
+            .description {
+                background-color: #1c1c1e !important;
+                /* Dark Grey Card */
+                color: #e5e5e5 !important;
+                border: none !important;
+            }
+
+            .read-more-btn {
+                color: #0a84ff !important;
+            }
+
+            .whats-new-title {
+                color: #ffffff !important;
+            }
+
+            .version-text,
+            .time-text {
+                color: #8e8e93 !important;
+            }
+
+            .whats-new-content {
+                color: #e5e5e5 !important;
+            }
+
+            .info-label {
+                color: #8e8e93 !important;
+            }
+
+            .info-value {
+                color: #ffffff !important;
+            }
+
+            .info-row {
+                border-bottom-color: #2c2c2e !important;
+            }
+
+            .screenshots-title {
+                color: #8e8e93 !important;
+            }
+
+            /* Warning Box */
+            .ios-warning {
+                background-color: #1c1c1e !important;
+                border-color: #2c2c2e !important;
+            }
+
+            .ios-warning-title {
+                color: #ff9f0a !important;
+            }
+
+            .ios-warning-text {
+                color: #e5e5e5 !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Loading State -->
+        <div class="loading" id="loadingState">
+            <div class="spinner"></div>
+            <p>Đang tải thông tin ứng dụng...</p>
+        </div>
+
+        <!-- Error State -->
+        <div class="error-state" id="errorState">
+            <h2>❌ Không tìm thấy ứng dụng</h2>
+            <p>Link không hợp lệ hoặc ứng dụng đã bị xóa.</p>
+        </div>
+
+        <!-- App Content -->
+        <div class="app-content" id="appContent">
+            <div class="header">
+                <div class="app-icon" id="appIcon">
+                    <!-- Default icon -->
+                    <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="100" height="100" rx="22" fill="url(#gradient)" />
+                        <path d="M50 20C35 20 25 35 25 50C25 65 35 80 50 80C65 80 75 65 75 50" stroke="white"
+                            stroke-width="4" stroke-linecap="round" />
+                        <circle cx="50" cy="35" r="8" fill="white" />
+                        <path d="M45 55L55 45M55 45V52M55 45H48" stroke="white" stroke-width="3"
+                            stroke-linecap="round" />
+                        <defs>
+                            <linearGradient id="gradient" x1="0" y1="0" x2="100" y2="100">
+                                <stop offset="0%" stop-color="#ff6b35" />
+                                <stop offset="100%" stop-color="#f7931e" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1 class="app-name" id="appName">Đang tải...</h1>
+                <div class="buttons-row">
+                    <button class="install-btn" id="installBtn" onclick="installApp()">Cài đặt</button>
+                    <button class="feedback-btn" onclick="sendFeedback()">Gửi phản hồi</button>
+                </div>
+            </div>
+
+            <div class="ios-warning" id="iosWarning">
+                <div class="warning-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                        </path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                </div>
+                <div class="warning-content">
+                    <h3>Chỉ dành cho thiết bị iOS</h3>
+                    <p>Ứng dụng này chỉ có thể tải xuống trên iPhone, iPad hoặc iPod Touch. Vui lòng truy cập từ thiết
+                        bị iOS để tải xuống.</p>
+                </div>
+            </div>
+
+            <div class="content">
+                <!-- What's New Section -->
+                <div class="whats-new" id="whatsNewSection" style="display: none;">
+                    <div class="whats-new-header">
+                        <div class="whats-new-title">Tính năng mới</div>
+                        <div class="whats-new-info">
+                            <span class="version-text" id="whatsNewVersion"></span>
+                            <span class="time-text" id="whatsNewTime"></span>
+                        </div>
+                    </div>
+                    <div class="whats-new-content" id="whatsNewContent"></div>
+                </div>
+
+                <div class="screenshots" id="screenshotsSection">
+                    <div class="screenshots-title">Xem Trước</div>
+                    <div class="screenshots-scroll" id="screenshotsContainer">
+                        <!-- Screenshots will be loaded here -->
+                    </div>
+                </div>
+
+                <div class="description-container" id="descriptionSection">
+                    <div class="description collapsed" id="appDescriptionBox">
+                        <p id="appDescription">Đang tải mô tả...</p>
+                    </div>
+                    <button class="read-more-btn" id="readMoreBtn" onclick="toggleDescription()">thêm</button>
+                </div>
+
+                <div class="app-info">
+                    <div class="app-info-title">Thông tin ứng dụng</div>
+                    <div class="info-row">
+                        <span class="info-label">Nhà phát triển</span>
+                        <span class="info-value" id="developer">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Ngày phát hành</span>
+                        <span class="info-value" id="releaseDate">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Phiên bản</span>
+                        <span class="info-value" id="version">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Kích cỡ</span>
+                        <span class="info-value" id="size">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Hết hạn</span>
+                        <span class="info-value" id="expires">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Email</span>
+                        <span class="info-value" id="email">support@data5g.site</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get params from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const timestamp = urlParams.get('id') || '';
+        let installLink = '';
+
+        // Fetch app info from API
+        // Helper to get relative time string
+        function getRelativeTime(timestamp) {
+            const now = new Date();
+            const date = new Date(timestamp);
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+
+            if (minutes < 1) return 'Vừa xong';
+            if (minutes < 60) return `${minutes} phút trước`;
+            if (hours < 24) return `${hours} giờ trước`;
+            if (days < 7) return `${days} ngày trước`;
+            return `ngày ${date.getDate()} thg ${date.getMonth() + 1}`;
+        }
+
+        // Toggle description
+        function toggleDescription() {
+            const desc = document.getElementById('appDescriptionBox');
+            const btn = document.getElementById('readMoreBtn');
+            const isCollapsed = desc.classList.contains('collapsed');
+
+            if (isCollapsed) {
+                desc.classList.remove('collapsed');
+                desc.classList.add('expanded');
+                btn.textContent = 'thu gọn';
+            } else {
+                desc.classList.add('collapsed');
+                desc.classList.remove('expanded');
+                btn.textContent = 'thêm';
+            }
+        }
+
+        async function loadAppInfo() {
+            if (!timestamp) {
+                showError();
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/app-info/${timestamp}`);
+                const data = await response.json();
+
+                if (!data.success) {
+                    showError();
+                    return;
+                }
+
+                // Update page with app info
+                document.getElementById('appName').textContent = data.appName || 'Unknown App';
+
+                // Description handling
+                const descElement = document.getElementById('appDescription');
+                const descContainer = document.getElementById('appDescriptionBox');
+                const readMoreBtn = document.getElementById('readMoreBtn');
+
+                descElement.textContent = data.description || 'Ứng dụng di động phát triển bởi Zyea Software.';
+
+                // Check if description is long enough to show "read more"
+                // We use a timeout to allow layout to update
+                setTimeout(() => {
+                    // Check if content overflows container
+                    if (descContainer.scrollHeight > descContainer.clientHeight + 1) { // +1 for pixel rounding safety
+                        readMoreBtn.style.display = 'block';
+                    } else {
+                        descContainer.classList.remove('collapsed');
+                        readMoreBtn.style.display = 'none';
+                    }
+                }, 200);
+
+                document.getElementById('version').textContent = data.version || '1.0.0';
+                document.getElementById('developer').textContent = data.developer || 'Zyea Software';
+                document.getElementById('size').textContent = data.size ? (data.size / 1024 / 1024).toFixed(1) + ' MB' : '-';
+
+                // Release date
+                if (data.createdAt) {
+                    const date = new Date(data.createdAt);
+                    document.getElementById('releaseDate').textContent = 'ngày ' + date.getDate() + ' thg ' + (date.getMonth() + 1) + ', ' + date.getFullYear();
+
+                    // Expiry date (90 days from release)
+                    const expiryDate = new Date(date.getTime() + 90 * 24 * 60 * 60 * 1000);
+                    document.getElementById('expires').textContent = expiryDate.getHours() + ':' + String(expiryDate.getMinutes()).padStart(2, '0') + ' ngày ' + expiryDate.getDate() + ' thg ' + (expiryDate.getMonth() + 1) + ', ' + expiryDate.getFullYear();
+                }
+
+                // App icon
+                if (data.iconUrl) {
+                    document.getElementById('appIcon').innerHTML = `<img src="${data.iconUrl}" alt="App Icon">`;
+                }
+
+                // Screenshots
+                const screenshotsContainer = document.getElementById('screenshotsContainer');
+                if (data.screenshots && data.screenshots.length > 0) {
+                    screenshotsContainer.innerHTML = data.screenshots.map((url, index) => `
+                        <div class="screenshot">
+                            <img src="${url}" alt="Screenshot ${index + 1}">
+                        </div>
+                    `).join('');
+                } else {
+                    document.getElementById('screenshotsSection').innerHTML = `
+                        <div class="screenshots-title">Ảnh chụp màn hình</div>
+                        <div class="no-screenshots">Chưa có ảnh chụp màn hình</div>
+                    `;
+                }
+
+                // Install link
+                installLink = data.installLink;
+                document.title = data.appName + ' - Tải ứng dụng';
+
+                // Set favicon if icon available
+                if (data.iconUrl) {
+                    document.getElementById('favicon').href = data.iconUrl;
+                    document.getElementById('appleIcon').href = data.iconUrl;
+                }
+
+                // Show What's New section if changelog exists
+                if (data.changelog && data.changelog.trim()) {
+                    const whatsNewSection = document.getElementById('whatsNewSection');
+                    const whatsNewContent = document.getElementById('whatsNewContent');
+                    const whatsNewVersion = document.getElementById('whatsNewVersion');
+                    const whatsNewTime = document.getElementById('whatsNewTime');
+
+                    whatsNewVersion.textContent = 'Phiên bản ' + data.version;
+                    whatsNewTime.textContent = getRelativeTime(data.updatedAt || data.createdAt);
+
+                    // Format changelog - convert lines starting with - or * to bullet points
+                    let formattedChangelog = data.changelog.trim();
+                    const lines = formattedChangelog.split('\n');
+                    const hasBullets = lines.some(line => line.trim().startsWith('-') || line.trim().startsWith('*') || line.trim().startsWith('•'));
+
+                    if (hasBullets) {
+                        const listItems = lines
+                            .map(line => line.trim())
+                            .filter(line => line.length > 0)
+                            .map(line => {
+                                // Remove leading -, *, • if present
+                                const cleanLine = line.replace(/^[-*•]\s*/, '');
+                                return '<li>' + cleanLine + '</li>';
+                            })
+                            .join('');
+                        whatsNewContent.innerHTML = '<ul>' + listItems + '</ul>';
+                    } else {
+                        whatsNewContent.textContent = formattedChangelog;
+                    }
+
+                    whatsNewSection.style.display = 'block';
+                }
+
+                // Show content
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('appContent').classList.add('loaded');
+
+            } catch (error) {
+                console.error('Error loading app info:', error);
+                showError();
+            }
+        }
+
+        function showError() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').classList.add('show');
+        }
+
+        // Track page view
+        async function trackView() {
+            if (timestamp) {
+                try {
+                    await fetch(`/api/app-stats/${timestamp}/view`, { method: 'POST' });
+                } catch (e) {
+                    console.log('View tracking failed');
+                }
+            }
+        }
+
+        // Track download
+        async function trackDownload() {
+            if (timestamp) {
+                try {
+                    await fetch(`/api/app-stats/${timestamp}/download`, { method: 'POST' });
+                } catch (e) {
+                    console.log('Download tracking failed');
+                }
+            }
+        }
+
+        function installApp() {
+            // Check if iOS - improved detection for iOS 13+
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+            if (!isIOS) {
+                document.getElementById('iosWarning').classList.add('show');
+                return;
+            }
+
+            if (installLink) {
+                // Track download before redirecting
+                trackDownload();
+                window.location.href = installLink;
+            }
+        }
+
+        function sendFeedback() {
+            // Open email client to send feedback
+            const appName = document.getElementById('appName').textContent;
+            const subject = encodeURIComponent(`Phản hồi về ứng dụng ${appName}`);
+            const body = encodeURIComponent(`Xin chào,\n\nTôi muốn gửi phản hồi về ứng dụng ${appName}:\n\n`);
+            window.location.href = `mailto:support@data5g.site?subject=${subject}&body=${body}`;
+        }
+
+        // Load app info and track view on page load
+        loadAppInfo();
+        trackView();
+    </script>
+</body>
+
+</html>

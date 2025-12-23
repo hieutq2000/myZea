@@ -304,9 +304,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.headerIconBtn}
-                            onPress={() => {
-                                Alert.alert('Thông báo', `Bạn có ${unreadCount} thông báo mới`);
-                            }}
+                            onPress={() => navigation.navigate('PlaceNotifications')}
                         >
                             <Ionicons name="notifications-outline" size={24} color="white" />
                             {unreadCount > 0 && (
@@ -349,12 +347,15 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                         </View>
                         <Text style={styles.quickMenuLabel}>My Gold</Text>
                     </View>
-                    <View style={styles.quickMenuItem}>
-                        <View style={[styles.quickMenuIcon, { backgroundColor: '#DBEAFE' }]}>
-                            <MaterialIcons name="security" size={24} color="#3B82F6" />
+                    <TouchableOpacity
+                        style={styles.quickMenuItem}
+                        onPress={() => navigation.navigate('FinanceHome')}
+                    >
+                        <View style={[styles.quickMenuIcon, { backgroundColor: '#DCFCE7' }]}>
+                            <Ionicons name="wallet" size={24} color="#16A34A" />
                         </View>
-                        <Text style={styles.quickMenuLabel}>FPT Care</Text>
-                    </View>
+                        <Text style={styles.quickMenuLabel}>Ví</Text>
+                    </TouchableOpacity>
                     <View style={styles.quickMenuItem}>
                         <View style={[styles.quickMenuIcon, { backgroundColor: '#FFEDD5' }]}>
                             <Ionicons name="clipboard" size={24} color="#F97316" />

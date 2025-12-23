@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
-import { ActivityIndicator, View, Text, Alert } from 'react-native';
+import { ActivityIndicator, View, Text, Alert, AppState } from 'react-native';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -21,7 +21,7 @@ import {
   User, ExamResult, LiveMode, Topic, TargetAudience,
   BADGES, LEVEL_THRESHOLDS
 } from './src/types';
-import { getCurrentUser, logout as apiLogout, updateProfile, saveExamResult } from './src/utils/api';
+import { getCurrentUser, logout as apiLogout, updateProfile, saveExamResult, getUnreadNotificationCount, getConversations } from './src/utils/api';
 import { getLatestChangelog } from './src/utils/changelog';
 import { COLORS } from './src/utils/theme';
 import { useAppUpdates } from './src/hooks/useAppUpdates';
@@ -53,6 +53,8 @@ import StatisticsScreen from './src/screens/Finance/StatisticsScreen';
 import CalendarScreen from './src/screens/Finance/CalendarScreen';
 import WalletsScreen from './src/screens/Finance/WalletsScreen';
 import FeedbackScreen from './src/screens/FeedbackScreen';
+import PlaceNotificationsScreen from './src/screens/PlaceNotificationsScreen';
+import CreateGroupScreen from './src/screens/CreateGroupScreen';
 
 // Configure Notifications to show alert when app is in foreground
 Notifications.setNotificationHandler({
@@ -88,6 +90,9 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     enabled: false,
   });
 
+  // Badge counts for bottom tab bar
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   const [pushToken, setPushToken] = useState<string | null>(null);
 
@@ -110,19 +115,39 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       const data = response.notification.request.content.data;
       console.log('🔔 Notification Tapped:', data);
 
-      if (data && data.conversationId && data.partnerId) {
+      if (data && (data.conversationId || data.partnerId)) {
         // Delay slightly to allow app to wake up/mount navigation
         setTimeout(() => {
           if (navigationRef.isReady()) {
             navigationRef.navigate('ChatDetail', {
               conversationId: data.conversationId,
               partnerId: data.partnerId,
-              userName: response.notification.request.content.title || 'Người dùng',
+              userName: data.userName || response.notification.request.content.title || 'Người dùng',
+              avatar: data.avatar
             });
           } else {
             console.log('⚠️ Navigation not ready');
           }
         }, 500);
+      }
+    });
+
+    // Handle App Cold Start from Notification
+    Notifications.getLastNotificationResponseAsync().then(response => {
+      if (response) {
+        const data = response.notification.request.content.data;
+        if (data && (data.conversationId || data.partnerId)) {
+          setTimeout(() => {
+            if (navigationRef.isReady()) {
+              navigationRef.navigate('ChatDetail', {
+                conversationId: data.conversationId,
+                partnerId: data.partnerId,
+                userName: data.userName || response.notification.request.content.title || 'Người dùng',
+                avatar: data.avatar
+              });
+            }
+          }, 1000);
+        }
       }
     });
 
@@ -155,7 +180,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
           if (message.user && message.user._id !== user.id) {
             await schedulePushNotification(
               message.user.name || 'Tin nhắn mới',
-              message.text || 'Đã gửi một tin nhắn',
+              message.type === 'image' ? '[Hình ảnh]' : (message.type === 'sticker' ? '[Nhãn dán]' : (message.text || 'Tin nhắn mới')),
               {
                 conversationId: message.conversationId,
                 partnerId: message.user._id,
@@ -163,10 +188,19 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
                 avatar: message.user.avatar
               }
             );
+
+            // Immediately increase unread chat count
+            setUnreadChatCount(prev => prev + 1);
           }
         };
 
         socket.on('receiveMessage', socketListener);
+
+        // Listen for new notifications and update count immediately
+        socket.on('newNotification', (notification: any) => {
+          console.log('📢 New notification:', notification);
+          setUnreadNotifCount(prev => prev + 1);
+        });
 
         // Handle incoming call - show beautiful modal
         socket.on('incomingCall', (data: any) => {
@@ -200,9 +234,31 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       const socket = getSocket();
       if (socket && socketListener) {
         socket.off('receiveMessage', socketListener);
+        socket.off('newNotification');
         socket.off('incomingCall');
         socket.off('callEnded');
       }
+    };
+  }, [user?.id]);
+
+  // Handle App State changes (Background -> Active) to ensure socket connection
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active' && user?.id) {
+        const socket = getSocket();
+        if (socket) {
+          if (!socket.connected) socket.connect();
+          socket.emit('join', user.id); // Ensure we are in our room
+
+          // Also refresh unread counts
+          getUnreadNotificationCount().then(res => setUnreadNotifCount(res.count));
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
     };
   }, [user?.id]);
 
@@ -234,6 +290,31 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
     };
     checkMaintenance();
   }, []);
+
+  // Fetch unread counts for bottom tab badges
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnreadCounts = async () => {
+      try {
+        // Fetch unread notification count
+        const { count: notifCount } = await getUnreadNotificationCount();
+        setUnreadNotifCount(notifCount);
+
+        // Fetch unread chat count from conversations
+        const conversations = await getConversations();
+        const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0);
+        setUnreadChatCount(totalUnread);
+      } catch (error) {
+        console.log('Error fetching unread counts:', error);
+      }
+    };
+
+    fetchUnreadCounts();
+    const interval = setInterval(fetchUnreadCounts, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user]);
 
   // Handle accepting incoming call
   const handleAcceptCall = () => {
@@ -522,6 +603,8 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
                 <BottomTabBar
                   activeTab={getActiveTab()}
                   onTabChange={handleTabChange}
+                  unreadChatCount={unreadChatCount}
+                  unreadNotifCount={unreadNotifCount}
                 />
               )}
               {/* Version check for logged in users */}
@@ -538,6 +621,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         <Stack.Screen name="ChatList" component={ChatListScreen} />
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
         <Stack.Screen name="NewChat" component={NewChatScreen} />
+        <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
 
         {/* Call Screen */}
         <Stack.Screen
@@ -607,6 +691,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
 
         {/* Admin Screens */}
         <Stack.Screen name="Feedback" component={FeedbackScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="PlaceNotifications" component={PlaceNotificationsScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
 
       <UpdateModal

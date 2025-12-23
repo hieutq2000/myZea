@@ -4,6 +4,17 @@
 
 const CHANGELOG = [
     {
+        version: "1.0.8",
+        date: "21/12/2024",
+        title: "SỬA LỖI HIỂN THỊ TRÊN iOS",
+        changes: [
+            "📱 Sửa lỗi header bị đẩy xuống trên iOS",
+            "🔧 Khắc phục padding/safe area trên iPhone có notch",
+            "✨ Cải thiện UI/UX trên iOS và Android",
+            "⚡ Tối ưu hiệu năng hiển thị"
+        ]
+    },
+    {
         version: "1.0.7",
         date: "21/12/2024",
         title: "CẬP NHẬT CẦN THIẾT CHO NGƯỜI DÙNG",

@@ -14,6 +14,8 @@ export type TabType = 'HOME' | 'HISTORY' | 'PROFILE' | 'PLACE' | 'CHAT_TAB';
 interface BottomTabBarProps {
     activeTab: TabType;
     onTabChange: (tab: TabType) => void;
+    unreadChatCount?: number;
+    unreadNotifCount?: number;
 }
 
 interface TabItem {
@@ -31,7 +33,7 @@ const tabs: TabItem[] = [
     { key: 'PROFILE', icon: 'grid-outline', iconSet: Ionicons, label: 'Store' },
 ];
 
-export default function BottomTabBar({ activeTab, onTabChange }: BottomTabBarProps) {
+export default function BottomTabBar({ activeTab, onTabChange, unreadChatCount = 0, unreadNotifCount = 0 }: BottomTabBarProps) {
     return (
         <View style={styles.container}>
             <View style={styles.tabBar}>
@@ -48,6 +50,11 @@ export default function BottomTabBar({ activeTab, onTabChange }: BottomTabBarPro
                         if (tab.key === 'PROFILE') iconName = 'grid';
                     }
 
+                    // Determine badge count for this tab
+                    let badgeCount = 0;
+                    if (tab.key === 'CHAT_TAB') badgeCount = unreadChatCount;
+                    if (tab.key === 'PLACE') badgeCount = unreadNotifCount;
+
                     return (
                         <TouchableOpacity
                             key={tab.key}
@@ -61,6 +68,13 @@ export default function BottomTabBar({ activeTab, onTabChange }: BottomTabBarPro
                                     size={24}
                                     color={isActive ? '#F97316' : '#94A3B8'}
                                 />
+                                {badgeCount > 0 && (
+                                    <View style={styles.badge}>
+                                        <Text style={styles.badgeText}>
+                                            {badgeCount > 99 ? '99+' : badgeCount}
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
                             <Text style={[
                                 styles.label,
@@ -75,6 +89,7 @@ export default function BottomTabBar({ activeTab, onTabChange }: BottomTabBarPro
         </View>
     );
 }
+
 
 const styles = StyleSheet.create({
     container: {
@@ -104,6 +119,7 @@ const styles = StyleSheet.create({
     },
     iconContainer: {
         marginBottom: 4,
+        position: 'relative',
     },
     label: {
         fontSize: 10,
@@ -113,5 +129,24 @@ const styles = StyleSheet.create({
     labelActive: {
         color: '#F97316',
         fontWeight: '600',
+    },
+    badge: {
+        position: 'absolute',
+        top: -6,
+        right: -10,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        borderWidth: 1.5,
+        borderColor: 'white',
+    },
+    badgeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: 'bold',
     },
 });

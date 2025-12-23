@@ -11,9 +11,10 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
-import { getConversations, Conversation, getCurrentUser, pinConversation, muteConversation, deleteConversation } from '../utils/api';
+import { getConversations, Conversation, getCurrentUser, pinConversation, muteConversation, deleteConversation, apiRequest } from '../utils/api';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getAvatarUri } from '../utils/media';
+import GroupAvatar from '../components/GroupAvatar';
 
 // Light Theme Colors
 const DARK_BG = '#FFFFFF';
@@ -70,8 +71,9 @@ export default function ChatListScreen() {
 
     const loadConversations = async () => {
         try {
+            // Load individual conversations
             const data = await getConversations();
-            const mapped = data.map((c: Conversation) => ({
+            const mappedConversations = data.map((c: Conversation) => ({
                 id: c.conversation_id,
                 partnerId: c.partner_id,
                 name: c.name,
@@ -86,9 +88,42 @@ export default function ChatListScreen() {
                 lastSeen: c.last_seen,
                 isPinned: !!c.is_pinned,
                 isMuted: !!c.is_muted,
+                isGroup: false,
             }));
 
-            setConversations(mapped);
+            // Load group conversations
+            let mappedGroups: any[] = [];
+            try {
+                const groups = await apiRequest<any[]>('/api/groups');
+                mappedGroups = (groups || []).map((g: any) => ({
+                    id: g.id,
+                    groupId: g.id,
+                    name: g.name,
+                    lastMessage: g.lastMessage?.text || 'Nhóm mới được tạo',
+                    lastMessageTime: g.lastMessage?.createdAt || g.created_at,
+                    time: formatMessageTime(g.lastMessage?.createdAt || g.created_at),
+                    avatar: g.avatar,
+                    unread: 0,
+                    isOnline: false,
+                    isPinned: false,
+                    isMuted: false,
+                    isGroup: true,
+                    memberCount: g.memberCount || g.members?.length || 0,
+                    members: g.members,
+                }));
+            } catch (e) {
+                console.log('Load groups error (may not exist yet):', e);
+            }
+
+            // Merge and sort by last message time
+            const allConversations = [...mappedConversations, ...mappedGroups];
+            allConversations.sort((a, b) => {
+                const timeA = new Date(a.lastMessageTime || 0).getTime();
+                const timeB = new Date(b.lastMessageTime || 0).getTime();
+                return timeB - timeA;
+            });
+
+            setConversations(allConversations);
         } catch (error) {
             console.log('Load conversations error:', error);
         } finally {
@@ -397,7 +432,15 @@ export default function ChatListScreen() {
             >
                 <TouchableOpacity
                     style={[styles.itemContainer, item.isPinned && styles.pinnedItem]}
-                    onPress={() => navigation.navigate('ChatDetail', {
+                    onPress={() => navigation.navigate('ChatDetail', item.isGroup ? {
+                        conversationId: undefined,
+                        partnerId: undefined,
+                        groupId: item.groupId || item.id,
+                        userName: item.name,
+                        avatar: item.avatar,
+                        isGroup: true,
+                        members: item.members
+                    } : {
                         conversationId: item.id,
                         partnerId: item.partnerId,
                         userName: item.name,
@@ -407,17 +450,35 @@ export default function ChatListScreen() {
                 >
                     {/* Avatar */}
                     <View style={styles.avatarContainer}>
-                        {item.avatar ? (
-                            <Image source={{ uri: getAvatarUri(item.avatar, item.name) }} style={styles.avatar} />
+                        {item.isGroup ? (
+                            // Group avatar with member grid
+                            <GroupAvatar
+                                members={item.members}
+                                groupAvatar={item.avatar}
+                                groupName={item.name}
+                                size={52}
+                            />
                         ) : (
-                            <LinearGradient
-                                colors={['#667eea', '#764ba2']}
-                                style={styles.avatar}
-                            >
-                                <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase()}</Text>
-                            </LinearGradient>
+                            // Individual avatar
+                            item.avatar ? (
+                                <Image source={{ uri: getAvatarUri(item.avatar, item.name) }} style={styles.avatar} />
+                            ) : (
+                                <LinearGradient
+                                    colors={['#667eea', '#764ba2']}
+                                    style={styles.avatar}
+                                >
+                                    <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase()}</Text>
+                                </LinearGradient>
+                            )
                         )}
-                        {item.isOnline && <View style={styles.onlineDot} />}
+                        {!item.isGroup && item.isOnline && <View style={styles.onlineDot} />}
+                        {item.isGroup && item.memberCount > 0 && (
+                            <View style={[styles.onlineDot, { backgroundColor: '#667eea', width: 18, height: 18, borderRadius: 9 }]}>
+                                <Text style={{ fontSize: 9, color: '#fff', fontWeight: 'bold' }}>
+                                    {item.memberCount}
+                                </Text>
+                            </View>
+                        )}
                     </View>
 
                     {/* Content */}
@@ -425,6 +486,9 @@ export default function ChatListScreen() {
                         <View style={styles.headerRow}>
                             {item.isPinned && (
                                 <Ionicons name="pin" size={14} color={ZALO_BLUE} style={{ marginRight: 4 }} />
+                            )}
+                            {item.isGroup && (
+                                <Ionicons name="people" size={14} color={DARK_TEXT_SECONDARY} style={{ marginRight: 4 }} />
                             )}
                             <Text style={[styles.name, item.unread > 0 && styles.nameUnread]} numberOfLines={1}>
                                 {item.name}
@@ -516,8 +580,11 @@ export default function ChatListScreen() {
                         <Text style={styles.headerTitle}>Chats</Text>
                     </View>
                     <View style={styles.headerRight}>
-                        <TouchableOpacity style={styles.headerIcon}>
-                            <Ionicons name="create-outline" size={24} color="#000000" />
+                        <TouchableOpacity
+                            style={styles.headerIcon}
+                            onPress={() => navigation.navigate('CreateGroup')}
+                        >
+                            <Ionicons name="people" size={24} color="#000000" />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.headerIcon}

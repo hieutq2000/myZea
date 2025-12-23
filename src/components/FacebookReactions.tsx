@@ -26,6 +26,7 @@ import {
     Platform,
     LayoutChangeEvent,
 } from 'react-native';
+import { FontAwesome } from '@expo/vector-icons';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -410,16 +411,18 @@ export function ReactionButton({
         const relativeX = x - centerX;
         const barLeftEdge = -totalBarWidth / 2;
 
-        if (y > 20 || y < -200) {
+        // Mở rộng vùng detection - y > 50 (dưới nút) hoặc y < -250 (quá xa phía trên)
+        if (y > 50 || y < -250) {
             return -1;
         }
 
         const xInBar = relativeX - barLeftEdge;
         const contentStart = BAR_PADDING;
 
+        // Mở rộng hitbox cho dễ chọn hơn
         for (let i = 0; i < REACTIONS.length; i++) {
             const emojiCenter = contentStart + i * (EMOJI_SIZE + EMOJI_SPACING) + EMOJI_SIZE / 2;
-            const hitBox = EMOJI_SIZE + EMOJI_SPACING;
+            const hitBox = EMOJI_SIZE + EMOJI_SPACING + 8; // Thêm 8px cho dễ chọn
 
             if (xInBar >= emojiCenter - hitBox / 2 && xInBar <= emojiCenter + hitBox / 2) {
                 return i;
@@ -567,15 +570,7 @@ export function ReactionButton({
                         </>
                     ) : (
                         <>
-                            <View style={{ width: 24, height: 24, overflow: 'hidden' }}>
-                                <LottieView
-                                    source={require('../assets/lottie/like.json')}
-                                    style={{ width: 40, height: 40, marginTop: -8, marginLeft: -8 }}
-                                    autoPlay={false}
-                                    loop={false}
-                                    progress={0}
-                                />
-                            </View>
+                            <FontAwesome name="thumbs-o-up" size={18} color="#65676B" />
                             <Text style={[styles.buttonText, textStyle]}>Thích</Text>
                         </>
                     )}

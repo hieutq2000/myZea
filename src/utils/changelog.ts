@@ -10,6 +10,27 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "1.0.8",
+        date: "21/12/2024",
+        title: "CẬP NHẬT GIAO DIỆN & TÍNH NĂNG",
+        changes: [
+            "📱 Tối ưu Header trên iOS (compact hơn)",
+            "� Thêm tính năng Chỉnh sửa tin nhắn (giống Zalo)",
+            "⌨️ Ô nhập liệu mở rộng khi văn bản dài (giống Telegram)",
+            "✨ Fix lỗi không hiển thị Sticker khi mở Picker",
+            "⚡ Tối ưu hiệu năng hiển thị và Safe Area"
+        ]
+    },
+    {
+        version: "1.0.7",
+        date: "21/12/2024",
+        title: "CẬP NHẬT CẦN THIẾT CHO NGƯỜI DÙNG",
+        changes: [
+            "Cải thiện UI/UX",
+            "⚡Cải thiện, tối ưu hiệu năng cho người dùng"
+        ]
+    },
+    {
         version: "1.0.6",
         date: "17/12/2024",
         title: "CẬP NHẬT CẦN THIẾT CHO NGƯỜI DÙNG",

@@ -7,13 +7,15 @@ import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
 import { Ionicons, Feather, FontAwesome, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
-import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage, getImageUrl } from '../utils/api';
+import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage, getImageUrl, getUserInfo } from '../utils/api';
 import { launchImageLibrary, launchCamera } from '../utils/imagePicker';
 import EmojiPicker from '../components/EmojiPicker';
 import StickerPicker from '../components/StickerPicker';
 import { getAvatarUri } from '../utils/media';
+import ChatMedia from '../components/ChatMedia';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
+import GroupAvatar from '../components/GroupAvatar';
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList, 'ChatDetail'>;
 
@@ -29,19 +31,36 @@ const CALL_MISSED_RED = '#E04B4B'; // Red for missed calls
 export default function ChatDetailScreen() {
     const navigation = useNavigation<any>(); // Using any to avoid complex typing issues temporarily
     const route = useRoute<ChatDetailRouteProp>();
-    const { conversationId, partnerId, userName, avatar } = route.params;
+    const { conversationId, partnerId, userName, avatar, groupId, isGroup, members } = route.params;
+
+    // Header Info State (Fallback if params missing)
+    const [headerName, setHeaderName] = useState(userName || (isGroup ? 'Nhóm chat' : 'Người dùng'));
+    const [headerAvatar, setHeaderAvatar] = useState(avatar);
+
+    useEffect(() => {
+        // Fetch user info if missing from params (only for individual chat)
+        if (!isGroup && (!userName || !avatar) && partnerId) {
+            getUserInfo(partnerId).then(u => {
+                if (u) {
+                    if (!userName) setHeaderName(u.name);
+                    if (!avatar) setHeaderAvatar(u.avatar);
+                }
+            }).catch(err => console.log('Fetch header info failed:', err));
+        }
+    }, [partnerId, isGroup]);
 
     const [messages, setMessages] = useState<any[]>([]);
     const [inputText, setInputText] = useState('');
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [pickerTab, setPickerTab] = useState<'emoji' | 'sticker'>('emoji');
+    const [pickerTab, setPickerTab] = useState<'emoji' | 'sticker'>('sticker');
     const [showMediaPicker, setShowMediaPicker] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [partnerTyping, setPartnerTyping] = useState(false);
     const [replyingTo, setReplyingTo] = useState<any | null>(null);
+    const [editingMessage, setEditingMessage] = useState<any | null>(null);
     const [lastSeenMessageId, setLastSeenMessageId] = useState<string | null>(null);
     const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
     const [isPartnerOnline, setIsPartnerOnline] = useState(false);
@@ -53,6 +72,7 @@ export default function ChatDetailScreen() {
     // Image preview with caption states
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [imageCaption, setImageCaption] = useState('');
+    const [previewMediaType, setPreviewMediaType] = useState<'image' | 'video'>('image');
 
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
@@ -125,6 +145,17 @@ export default function ChatDetailScreen() {
                 }
             });
 
+            // Edit message listener
+            socket.on('messageEdited', (data) => {
+                if (data.conversationId === conversationId) {
+                    setMessages(prev => prev.map(m =>
+                        m.id === data.messageId
+                            ? { ...m, text: data.newText, isEdited: true, editedAt: data.editedAt }
+                            : m
+                    ));
+                }
+            });
+
             // Request partner's online status
             socket.emit('checkUserOnline', { userId: partnerId });
         }
@@ -138,6 +169,19 @@ export default function ChatDetailScreen() {
             }
         };
     }, [conversationId, partnerId, currentUserId, socket]);
+
+    // Group Chat Socket Join
+    useEffect(() => {
+        if (isGroup && groupId && socket) {
+            socket.emit('joinGroup', groupId);
+            // console.log('Joined group room:', groupId);
+
+            return () => {
+                socket.emit('leaveGroup', groupId);
+                // console.log('Left group room:', groupId);
+            };
+        }
+    }, [isGroup, groupId, socket]);
 
     // State for empty screen sticker suggestions
     const [suggestedStickers, setSuggestedStickers] = useState<any[]>([]);
@@ -174,20 +218,44 @@ export default function ChatDetailScreen() {
 
     const loadHistory = async () => {
         try {
-            const history = await getChatHistory(partnerId);
-            const mapped = history.map((m: any) => ({
-                id: m._id,
-                text: m.text,
-                type: m.type || 'text',
-                imageUrl: m.imageUrl,
-                sender: m.user._id === currentUserId ? 'me' : 'other',
-                time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                createdAt: m.createdAt, // Store full date for date separator
-                senderId: m.user._id,
-                replyTo: m.replyTo, // Map reply info
-                isDeleted: m.isDeleted || false,
-                deletedBy: m.deletedBy || []
-            }));
+            let mapped: any[] = [];
+
+            if (isGroup && groupId) {
+                // Load group messages
+                const groupMessages = await apiRequest<any[]>(`/api/groups/${groupId}/messages`);
+                mapped = (groupMessages || []).map((m: any) => ({
+                    id: m.id,
+                    text: m.text,
+                    type: m.type || 'text',
+                    imageUrl: m.imageUrl,
+                    sender: m.senderId === currentUserId ? 'me' : 'other',
+                    time: m.time || new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    createdAt: m.createdAt,
+                    senderId: m.senderId,
+                    senderName: m.senderName,
+                    senderAvatar: m.senderAvatar,
+                    replyTo: m.replyTo,
+                    isDeleted: m.isDeleted || false,
+                    deletedBy: m.deletedBy || []
+                }));
+            } else if (partnerId) {
+                // Load individual chat messages
+                const history = await getChatHistory(partnerId);
+                mapped = history.map((m: any) => ({
+                    id: m._id,
+                    text: m.text,
+                    type: m.type || 'text',
+                    imageUrl: m.imageUrl,
+                    sender: m.user._id === currentUserId ? 'me' : 'other',
+                    time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    createdAt: m.createdAt,
+                    senderId: m.user._id,
+                    replyTo: m.replyTo,
+                    isDeleted: m.isDeleted || false,
+                    deletedBy: m.deletedBy || []
+                }));
+            }
+
             setMessages(mapped);
             scrollToBottom(false);
 
@@ -227,10 +295,14 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const scrollToBottom = (animated: boolean = true) => {
-        setTimeout(() => {
+    const scrollToBottom = (animated: boolean = true, immediate: boolean = false) => {
+        if (immediate) {
             flatListRef.current?.scrollToEnd({ animated: animated });
-        }, 100);
+        } else {
+            setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: animated });
+            }, 50);
+        }
         // Reset new message counter when scrolling to bottom
         setNewMessageCount(0);
         setShowScrollToBottom(false);
@@ -251,7 +323,7 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const sendMessage = async (text?: string, type: string = 'text', imageUrl?: string) => {
+    const sendMessage = async (text?: string, type: string = 'text', imageUrl?: string, imageWidth?: number, imageHeight?: number) => {
         const messageText = text || inputText.trim();
         if (!messageText && type === 'text') return;
         if (!currentUserId) return;
@@ -262,9 +334,12 @@ export default function ChatDetailScreen() {
             text: messageText,
             type: type,
             imageUrl: imageUrl,
+            imageWidth: imageWidth,
+            imageHeight: imageHeight,
             sender: 'me',
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             senderId: currentUserId,
+            groupId: isGroup ? groupId : undefined,
             replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, type: replyingTo.type } : null
         };
 
@@ -273,16 +348,22 @@ export default function ChatDetailScreen() {
 
         if (socket) {
             socket.emit('sendMessage', {
-                conversationId,
+                conversationId: isGroup ? undefined : conversationId,
+                groupId: isGroup ? groupId : undefined,
                 senderId: currentUserId,
-                receiverId: partnerId,
+                receiverId: isGroup ? undefined : partnerId,
                 message: messageText,
                 type: type,
                 imageUrl: imageUrl,
+                imageWidth: imageWidth,
+                imageHeight: imageHeight,
                 tempId: tempId,
                 replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, type: replyingTo.type } : undefined
             });
-            socket.emit('userStoppedTyping', { conversationId, userId: currentUserId });
+
+            if (!isGroup) {
+                socket.emit('userStoppedTyping', { conversationId, userId: currentUserId });
+            }
         }
 
         setInputText('');
@@ -322,7 +403,7 @@ export default function ChatDetailScreen() {
 
     const handlePickImage = async () => {
         setShowMediaPicker(false);
-        const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
+        const result = await launchImageLibrary({ mediaType: 'mixed', quality: 0.8 });
 
         if (result.didCancel || result.error) {
             if (result.error) Alert.alert('Lỗi', result.error);
@@ -330,9 +411,11 @@ export default function ChatDetailScreen() {
         }
 
         if (result.assets && result.assets[0]) {
-            const imageUri = result.assets[0].uri;
-            // Show preview modal instead of sending immediately
-            setPreviewImage(imageUri);
+            const asset = result.assets[0];
+            const mediaUri = asset.uri;
+            const isVideo = asset.type?.startsWith('video') || mediaUri?.includes('.mp4') || mediaUri?.includes('.mov');
+            setPreviewImage(mediaUri);
+            setPreviewMediaType(isVideo ? 'video' : 'image');
             setImageCaption('');
         }
     };
@@ -354,20 +437,47 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const uploadAndSendImage = async (imageUri: string, caption: string = '') => {
+    const uploadAndSendMedia = async (mediaUri: string, caption: string = '', mediaType: 'image' | 'video' = 'image') => {
         setIsUploading(true);
+
+        let imgWidth: number | undefined;
+        let imgHeight: number | undefined;
+
+        // Get local image dimensions first
+        if (mediaType === 'image') {
+            try {
+                const { Image: RNImage } = require('react-native');
+                await new Promise<void>((resolve) => {
+                    RNImage.getSize(
+                        mediaUri,
+                        (w: number, h: number) => {
+                            imgWidth = w;
+                            imgHeight = h;
+                            resolve();
+                        },
+                        () => resolve()
+                    );
+                });
+            } catch (e) {
+                console.log('Get image size error:', e);
+            }
+        }
+
         try {
             // Create FormData for upload
             const formData = new FormData();
-            const fileName = imageUri.split('/').pop() || 'image.jpg';
-            formData.append('image', {
-                uri: imageUri,
-                type: 'image/jpeg',
+            const fileName = mediaUri.split('/').pop() || (mediaType === 'video' ? 'video.mp4' : 'image.jpg');
+            const mimeType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+
+            formData.append(mediaType === 'video' ? 'video' : 'image', {
+                uri: mediaUri,
+                type: mimeType,
                 name: fileName,
             } as any);
 
-            // Upload image to server
-            const response = await fetch(`${API_URL}/api/upload/image`, {
+            // Upload to server
+            const endpoint = mediaType === 'video' ? '/api/upload/video' : '/api/upload/image';
+            const response = await fetch(`${API_URL}${endpoint}`, {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -380,26 +490,28 @@ export default function ChatDetailScreen() {
             }
 
             const data = await response.json();
-            const imageUrl = data.url || imageUri; // Use uploaded URL or local URI as fallback
+            const mediaUrl = data.url || mediaUri;
 
-            // Send message with image and caption
-            sendMessage(caption || '', 'image', imageUrl);
+            // Send message with media, caption, and dimensions
+            sendMessage(caption || '', mediaType, mediaUrl, imgWidth, imgHeight);
         } catch (error) {
             console.error('Upload error:', error);
-            // Fallback: send with local URI
-            sendMessage(caption || '', 'image', imageUri);
+            // Fallback: send with local URI and dimensions
+            sendMessage(caption || '', mediaType, mediaUri, imgWidth, imgHeight);
         } finally {
             setIsUploading(false);
         }
     };
 
-    // Send image with caption
+    // Send media (image or video) with caption
     const handleSendImageWithCaption = async () => {
         if (!previewImage) return;
         const caption = imageCaption.trim();
+        const mediaType = previewMediaType;
         setPreviewImage(null);
         setImageCaption('');
-        await uploadAndSendImage(previewImage, caption);
+        setPreviewMediaType('image');
+        await uploadAndSendMedia(previewImage, caption, mediaType);
     };
 
     // Cancel image preview
@@ -473,25 +585,34 @@ export default function ChatDetailScreen() {
                     <Ionicons name="chevron-back" size={28} color="#000000" />
                 </TouchableOpacity>
                 <View style={styles.headerAvatarContainer}>
-                    {avatar ? (
-                        <Image source={{ uri: getAvatarUri(avatar, userName) }} style={styles.headerAvatar} />
+                    {isGroup ? (
+                        <GroupAvatar
+                            members={members}
+                            groupAvatar={headerAvatar}
+                            groupName={headerName}
+                            size={42}
+                        />
+                    ) : headerAvatar ? (
+                        <Image
+                            source={{ uri: getAvatarUri(headerAvatar, headerName) }}
+                            style={styles.headerAvatar}
+                        />
                     ) : (
-                        <View style={[styles.headerAvatar, { backgroundColor: '#A0AEC0', alignItems: 'center', justifyContent: 'center' }]}>
-                            <Text style={{ color: 'white', fontSize: 14 }}>{userName?.[0]}</Text>
+                        <View style={[styles.headerAvatar, { backgroundColor: '#E4E6EB', alignItems: 'center', justifyContent: 'center' }]}>
+                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#666' }}>
+                                {headerName?.[0]?.toUpperCase()}
+                            </Text>
                         </View>
                     )}
-                    {/* Online indicator dot */}
-                    {isPartnerOnline && (
-                        <View style={styles.onlineIndicator} />
-                    )}
+                    {!isGroup && isPartnerOnline && <View style={styles.onlineIndicator} />}
                 </View>
                 <View style={styles.headerInfo}>
-                    <Text style={styles.headerTitle} numberOfLines={1}>{userName}</Text>
+                    <Text style={styles.headerTitle} numberOfLines={1}>{headerName}</Text>
                     <Text style={[
                         styles.headerSubtitle,
-                        isPartnerOnline && { color: '#31A24C' }
+                        !isGroup && isPartnerOnline && { color: '#31A24C' }
                     ]} numberOfLines={1}>
-                        {formatLastSeen()}
+                        {isGroup ? `${members?.length || 0} thành viên` : formatLastSeen()}
                     </Text>
                 </View>
             </View>
@@ -526,7 +647,7 @@ export default function ChatDetailScreen() {
                     <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
                 </TouchableOpacity>
             </View>
-        </View>
+        </View >
     );
 
 
@@ -564,6 +685,51 @@ export default function ChatDetailScreen() {
             if (socket) socket.emit('revokeMessage', { conversationId, messageId });
         } catch (error) {
             console.error('Delete message error', error);
+        }
+    };
+
+    // Edit message - start editing
+    const handleEditMessage = () => {
+        if (selectedMessage && selectedMessage.senderId === currentUserId) {
+            setEditingMessage(selectedMessage);
+            setInputText(selectedMessage.text || '');
+            setSelectedMessage(null);
+            inputRef.current?.focus();
+        }
+    };
+
+    // Cancel edit
+    const handleCancelEdit = () => {
+        setEditingMessage(null);
+        setInputText('');
+    };
+
+    // Save edited message
+    const handleSaveEdit = async () => {
+        if (!editingMessage || !inputText.trim()) return;
+
+        const messageId = editingMessage.id;
+        const newText = inputText.trim();
+        const editedAt = new Date().toISOString();
+
+        // Update locally first
+        setMessages(prev => prev.map(m =>
+            m.id === messageId
+                ? { ...m, text: newText, isEdited: true, editedAt }
+                : m
+        ));
+
+        setEditingMessage(null);
+        setInputText('');
+
+        // Send to server via socket
+        if (socket) {
+            socket.emit('editMessage', {
+                conversationId,
+                messageId,
+                newText,
+                editedAt
+            });
         }
     };
 
@@ -616,7 +782,7 @@ export default function ChatDetailScreen() {
         const isMe = item.sender === 'me' || (currentUserId && item.senderId === currentUserId);
         const nextMessage = messages[index + 1];
         const isLast = index === messages.length - 1 || (nextMessage && nextMessage.senderId !== item.senderId);
-        const isImage = (item.type === 'image' || item.type === 'sticker') && item.imageUrl;
+        const isImage = (item.type === 'image' || item.type === 'video' || item.type === 'sticker') && item.imageUrl;
 
         // Detect call messages - backward compatibility for 'text' type from DB
         let isCall = item.type === 'call_missed' || item.type === 'call_ended';
@@ -673,117 +839,122 @@ export default function ChatDetailScreen() {
                             </View>
                         )}
 
-                        {item.type === 'sticker' ? (
-                            <TouchableOpacity
-                                style={[styles.stickerContainer, isMe ? styles.alignRight : styles.alignLeft]}
-                                onLongPress={() => handleCheckSelectMessage(item)}
-                                delayLongPress={500}
-                                activeOpacity={0.9}
-                            >
-                                <Image
-                                    source={{ uri: getImageUrl(item.imageUrl) }}
-                                    style={styles.stickerImageMessage}
-                                    contentFit="contain"
-                                />
-                                <Text style={[styles.messageTime, {
-                                    position: 'absolute',
-                                    bottom: 5,
-                                    right: 10,
-                                    color: 'rgba(0,0,0,0.4)',
-                                    fontSize: 10,
-                                    backgroundColor: 'rgba(255,255,255,0.5)',
-                                    borderRadius: 4,
-                                    paddingHorizontal: 2,
-                                    overflow: 'hidden'
-                                }]}>{item.time}</Text>
-                            </TouchableOpacity>
-                        ) : isImage ? (
-                            <TouchableOpacity
-                                style={[styles.imageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
-                                onPress={() => setSelectedImage(item.imageUrl)}
-                                onLongPress={() => handleCheckSelectMessage(item)}
-                                delayLongPress={500}
-                            >
-                                <Image
-                                    source={{ uri: getImageUrl(item.imageUrl) }}
-                                    style={styles.messageImage}
-                                    contentFit="contain"
-                                />
-                                {/* Show caption if exists */}
-                                {item.text && item.text.trim() !== '' && (
-                                    <Text style={[styles.imageCaptionText, { color: isMe ? '#FFFFFF' : '#000000' }]}>
-                                        {item.text}
-                                    </Text>
-                                )}
-                                <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF' }]}>{item.time}</Text>
-                            </TouchableOpacity>
-                        ) : isCall ? (
-                            <TouchableOpacity
-                                style={styles.callBubbleNew}
-                                onPress={() => (navigation as any).navigate('Call', {
-                                    partnerId,
-                                    userName,
-                                    avatar,
-                                    isVideo: false,
-                                    isIncoming: false,
-                                    conversationId
-                                })}
-                            >
-                                <View style={[styles.callIconCircle, callType === 'call_missed' ? styles.callIconMissed : styles.callIconEnded]}>
-                                    {callType === 'call_missed' ? (
-                                        <Ionicons name="call" size={16} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
-                                    ) : (
-                                        <Ionicons name="call" size={16} color="#FFFFFF" />
-                                    )}
-                                </View>
-                                <View style={styles.callTextContainer}>
-                                    <Text style={[styles.callMainText, callType === 'call_missed' && styles.callMissedText]}>
-                                        {callType === 'call_missed'
-                                            ? (isMe ? 'Bạn đã hủy' : 'Cuộc gọi nhỡ')
-                                            : 'Cuộc gọi thoại'
-                                        }
-                                    </Text>
-                                    <Text style={styles.callTimeText}>
-                                        {formatCallTime(item.createdAt, item.time)}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-                        ) : item.isDeleted ? (
-                            <View style={styles.deletedMessageBubble}>
-                                <Ionicons name="ban-outline" size={14} color="#9CA3AF" style={{ marginRight: 6 }} />
-                                <Text style={styles.deletedMessageText}>
-                                    {item.deletedBy?.includes(currentUserId)
-                                        ? 'Bạn đã xóa tin nhắn'
-                                        : 'Tin nhắn đã bị xóa'}
+                        <View style={{ flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                            {isGroup && !isMe && (!prevMessage || prevMessage.senderId !== item.senderId) && (
+                                <Text style={{ fontSize: 11, color: '#666', marginBottom: 2, marginLeft: 4 }}>
+                                    {item.senderName || item.user?.name}
                                 </Text>
-                            </View>
-                        ) : (
-                            <TouchableOpacity
-                                style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
-                                onLongPress={() => handleCheckSelectMessage(item)}
-                                delayLongPress={500}
-                                activeOpacity={0.8}
-                            >
-                                {item.replyTo && (
-                                    <View style={[
-                                        styles.replyPreview,
-                                        !isMe && styles.replyPreviewOther
-                                    ]}>
-                                        <Text style={[
-                                            styles.replyText,
-                                            !isMe && styles.replyTextOther
-                                        ]} numberOfLines={1}>
-                                            ↩ {item.replyTo.text || (item.replyTo.type === 'image' ? '[Hình ảnh]' : '...')}
+                            )}
+
+                            {item.type === 'sticker' ? (
+                                <TouchableOpacity
+                                    style={[styles.stickerContainer, isMe ? styles.alignRight : styles.alignLeft]}
+                                    onLongPress={() => handleCheckSelectMessage(item)}
+                                    delayLongPress={500}
+                                    activeOpacity={0.9}
+                                >
+                                    <Image
+                                        source={{ uri: getImageUrl(item.imageUrl) }}
+                                        style={styles.stickerImageMessage}
+                                        contentFit="contain"
+                                    />
+                                    <Text style={[styles.messageTime, {
+                                        position: 'absolute',
+                                        bottom: 5,
+                                        right: 10,
+                                        color: 'rgba(0,0,0,0.4)',
+                                        fontSize: 10,
+                                        backgroundColor: 'rgba(255,255,255,0.5)',
+                                        borderRadius: 4,
+                                        paddingHorizontal: 2,
+                                        overflow: 'hidden'
+                                    }]}>{item.time}</Text>
+                                </TouchableOpacity>
+                            ) : isImage ? (
+                                <ChatMedia
+                                    source={item.imageUrl}
+                                    type={item.type === 'video' ? 'video' : 'image'}
+                                    caption={item.text}
+                                    time={item.time}
+                                    isMe={!!isMe}
+                                    width={item.imageWidth}
+                                    height={item.imageHeight}
+                                    onPress={() => setSelectedImage(item.imageUrl)}
+                                    onLongPress={() => handleCheckSelectMessage(item)}
+                                />
+                            ) : isCall ? (
+                                <TouchableOpacity
+                                    style={styles.callBubbleNew}
+                                    onPress={() => (navigation as any).navigate('Call', {
+                                        partnerId,
+                                        userName,
+                                        avatar,
+                                        isVideo: false,
+                                        isIncoming: false,
+                                        conversationId
+                                    })}
+                                >
+                                    <View style={[styles.callIconCircle, callType === 'call_missed' ? styles.callIconMissed : styles.callIconEnded]}>
+                                        {callType === 'call_missed' ? (
+                                            <Ionicons name="call" size={16} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
+                                        ) : (
+                                            <Ionicons name="call" size={16} color="#FFFFFF" />
+                                        )}
+                                    </View>
+                                    <View style={styles.callTextContainer}>
+                                        <Text style={[styles.callMainText, callType === 'call_missed' && styles.callMissedText]}>
+                                            {callType === 'call_missed'
+                                                ? (isMe ? 'Bạn đã hủy' : 'Cuộc gọi nhỡ')
+                                                : 'Cuộc gọi thoại'
+                                            }
+                                        </Text>
+                                        <Text style={styles.callTimeText}>
+                                            {formatCallTime(item.createdAt, item.time)}
                                         </Text>
                                     </View>
-                                )}
-                                <Text style={[styles.messageText, { color: isMe ? '#FFFFFF' : '#000000' }]}>{item.text}</Text>
-                                <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF' }]}>{item.time}</Text>
-                                {isMe && isLast && (
-                                    <Text style={[styles.seenText, { color: 'rgba(255,255,255,0.7)' }]}>{lastSeenMessageId === item.id ? 'Đã xem' : 'Đã gửi'}</Text>
-                                )}
-                            </TouchableOpacity>
-                        )}
+                                </TouchableOpacity>
+                            ) : item.isDeleted ? (
+                                <View style={styles.deletedMessageBubble}>
+                                    <Ionicons name="ban-outline" size={14} color="#9CA3AF" style={{ marginRight: 6 }} />
+                                    <Text style={styles.deletedMessageText}>
+                                        {item.deletedBy?.includes(currentUserId)
+                                            ? 'Bạn đã xóa tin nhắn'
+                                            : 'Tin nhắn đã bị xóa'}
+                                    </Text>
+                                </View>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}
+                                    onLongPress={() => handleCheckSelectMessage(item)}
+                                    delayLongPress={500}
+                                    activeOpacity={0.8}
+                                >
+                                    {item.replyTo && (
+                                        <View style={[
+                                            styles.replyPreview,
+                                            !isMe && styles.replyPreviewOther
+                                        ]}>
+                                            <Text style={[
+                                                styles.replyText,
+                                                !isMe && styles.replyTextOther
+                                            ]} numberOfLines={1}>
+                                                ↩ {item.replyTo.text || (item.replyTo.type === 'image' ? '[Hình ảnh]' : '...')}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    <Text style={[styles.messageText, { color: isMe ? '#FFFFFF' : '#000000' }]}>{item.text}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4 }}>
+                                        {item.isEdited && (
+                                            <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF', marginRight: 4 }]}>Đã chỉnh sửa</Text>
+                                        )}
+                                        <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF' }]}>{item.time}</Text>
+                                    </View>
+                                    {isMe && isLast && (
+                                        <Text style={[styles.seenText, { color: 'rgba(255,255,255,0.7)' }]}>{lastSeenMessageId === item.id ? 'Đã xem' : 'Đã gửi'}</Text>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </View>
                 </Swipeable>
             </>
@@ -794,12 +965,14 @@ export default function ChatDetailScreen() {
 
     return (
         <View style={styles.container}>
-            <SafeAreaView style={styles.safeTop}>
-                <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-            </SafeAreaView>
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
             {renderHeader()}
 
-            <View style={styles.keyboardAvoid}>
+            <KeyboardAvoidingView
+                style={styles.keyboardAvoid}
+                behavior={Platform.OS === 'android' ? 'height' : undefined}
+                enabled={Platform.OS === 'android'}
+            >
                 <FlatList
                     ref={flatListRef}
                     data={messages}
@@ -904,6 +1077,19 @@ export default function ChatDetailScreen() {
                         </View>
                     )}
 
+                    {editingMessage && (
+                        <View style={styles.editBarContainer}>
+                            <View style={[styles.replyBarAccent, { backgroundColor: '#F59E0B' }]} />
+                            <View style={styles.replyBarContent}>
+                                <Text style={[styles.replyBarTitle, { color: '#F59E0B' }]}>Chỉnh sửa tin nhắn</Text>
+                                <Text style={styles.replyBarMessage} numberOfLines={1}>{editingMessage.text || ''}</Text>
+                            </View>
+                            <TouchableOpacity onPress={handleCancelEdit} style={styles.replyBarClose}>
+                                <Ionicons name="close" size={20} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
                     <View style={styles.inputRow}>
                         {/* Attachment Button (Left) */}
                         <TouchableOpacity style={styles.leftButton} onPress={() => setShowMediaPicker(true)}>
@@ -939,7 +1125,7 @@ export default function ChatDetailScreen() {
 
                         {/* Mic or Send Button (Right) */}
                         {inputText.trim() ? (
-                            <TouchableOpacity style={styles.rightButton} onPress={() => sendMessage()}>
+                            <TouchableOpacity style={styles.rightButton} onPress={editingMessage ? handleSaveEdit : () => sendMessage()}>
                                 <Ionicons name="send" size={22} color={ZALO_BLUE} />
                             </TouchableOpacity>
                         ) : (
@@ -1001,7 +1187,7 @@ export default function ChatDetailScreen() {
                         <Text style={styles.uploadingText}>Đang tải ảnh...</Text>
                     </View>
                 )}
-            </View>
+            </KeyboardAvoidingView>
 
             {/* Media Picker Modal */}
             <Modal
@@ -1163,8 +1349,8 @@ export default function ChatDetailScreen() {
 
                             {selectedMessage?.sender === 'me' && (
                                 <>
-                                    <TouchableOpacity style={styles.menuItem} onPress={() => { console.log('Edit'); setSelectedMessage(null); }}>
-                                        <Text style={styles.menuItemText}>Sửa</Text>
+                                    <TouchableOpacity style={styles.menuItem} onPress={handleEditMessage}>
+                                        <Text style={styles.menuItemText}>Chỉnh sửa</Text>
                                         <Ionicons name="create-outline" size={20} color="white" />
                                     </TouchableOpacity>
                                     <View style={styles.menuDivider} />
@@ -1198,7 +1384,7 @@ export default function ChatDetailScreen() {
                     </View>
                 </TouchableOpacity>
             </Modal>
-        </View>
+        </View >
     );
 }
 
@@ -1215,8 +1401,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: '#FFFFFF',
-        paddingTop: Platform.OS === 'android' ? 40 : 0,
-        height: Platform.OS === 'android' ? 90 : 50,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 8 : 50,
+        height: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 58 : 100,
         paddingHorizontal: 12,
         paddingBottom: 10,
         borderBottomWidth: 1,
@@ -1344,14 +1530,12 @@ const styles = StyleSheet.create({
     avatarSmall: { width: 28, height: 28, borderRadius: 14 },
 
     messageBubble: {
-        maxWidth: '80%',
         padding: 10,
         paddingHorizontal: 12,
         borderRadius: 12,
     },
     // Deleted message style
     deletedMessageBubble: {
-        maxWidth: '80%',
         paddingVertical: 10,
         paddingHorizontal: 14,
         borderRadius: 16,
@@ -1381,7 +1565,7 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         paddingVertical: 8,
         paddingHorizontal: 12,
-        maxWidth: '65%',
+        maxWidth: '80%', // Increased from 65%
     },
     callIconCircle: {
         width: 32,
@@ -1398,7 +1582,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#E04B4B', // Filled red background
     },
     callTextContainer: {
-        flex: 1,
+        justifyContent: 'center',
+        flexShrink: 1, // Allow container to shrink/wrap properly
+        marginRight: 4,
     },
     callMainText: {
         fontSize: 13,
@@ -1529,6 +1715,15 @@ const styles = StyleSheet.create({
     replyBarClose: {
         padding: 4,
     },
+    editBarContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FEF3C7',
+        padding: 8,
+        paddingHorizontal: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#FCD34D',
+    },
     leftButton: {
         width: 30,
         height: 30,
@@ -1541,11 +1736,12 @@ const styles = StyleSheet.create({
     inputWrapper: {
         flex: 1,
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-end',
         backgroundColor: '#F3F4F6', // Light gray input bg
         borderRadius: 20,
         paddingHorizontal: 16,
-        height: 40,
+        minHeight: 40,
+        maxHeight: 120,
         borderWidth: 0, // No border
     },
     input: {
@@ -1802,6 +1998,7 @@ const styles = StyleSheet.create({
     },
     // Picker Styles
     pickerContainer: {
+        height: 280,
         backgroundColor: '#fff',
         borderTopWidth: 1,
         borderTopColor: '#E5E7EB',

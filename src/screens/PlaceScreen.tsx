@@ -21,7 +21,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getPosts, createPost, toggleLikePost, Post, uploadImage, trackPostView, searchUsers, getUnreadNotificationCount } from '../utils/api';
+import { getPosts, createPost, updatePost, toggleLikePost, Post, uploadImage, trackPostView, searchUsers, getUnreadNotificationCount, getConversations } from '../utils/api';
 import { launchImageLibrary } from '../utils/imagePicker';
 import { useNavigation } from '@react-navigation/native';
 import FacebookImageViewer from '../components/FacebookImageViewer';
@@ -106,22 +106,69 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
     const [hasMore, setHasMore] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+    const [unreadChatCount, setUnreadChatCount] = useState(0);
+
+    // Edit & Options Logic
+    const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+    const [selectedPostActions, setSelectedPostActions] = useState<Post | null>(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingPostId, setEditingPostId] = useState<string | null>(null);
 
     useEffect(() => {
         loadPosts(1);
-        // Fetch notification count
-        const fetchNotifCount = async () => {
+        // Fetch notification and chat unread counts
+        const fetchUnreadCounts = async () => {
             try {
                 const { count } = await getUnreadNotificationCount();
                 setUnreadNotifCount(count);
+
+                // Fetch unread chat count
+                const conversations = await getConversations();
+                const totalUnread = conversations.reduce((sum: number, conv: any) => sum + (conv.unread_count || 0), 0);
+                setUnreadChatCount(totalUnread);
             } catch (e) {
-                console.log('Error fetching notif count:', e);
+                console.log('Error fetching unread counts:', e);
             }
         };
-        fetchNotifCount();
-        const interval = setInterval(fetchNotifCount, 30000);
-        return () => clearInterval(interval);
-    }, []);
+        fetchUnreadCounts();
+
+        // Refresh counts when screen comes into focus (back from chat/notif screen)
+        const unsubscribeFocus = navigation.addListener('focus', fetchUnreadCounts);
+
+        const interval = setInterval(fetchUnreadCounts, 30000);
+
+        // Socket listeners for realtime updates
+        const { getSocket } = require('../utils/socket');
+        const socket = getSocket();
+
+        const handleNewMessage = (message: any) => {
+            // Only increase if message is from someone else
+            if (message.user && message.user._id !== user?.id) {
+                setUnreadChatCount(prev => prev + 1);
+                // Also refetch to be accurate incase of multiple messages
+                fetchUnreadCounts();
+            }
+        };
+
+        const handleNewNotification = () => {
+            setUnreadNotifCount(prev => prev + 1);
+            fetchUnreadCounts(); // Ensure sync
+        };
+
+        if (socket) {
+            socket.on('receiveMessage', handleNewMessage);
+            socket.on('newNotification', handleNewNotification);
+        }
+
+        return () => {
+            clearInterval(interval);
+            unsubscribeFocus();
+            if (socket) {
+                socket.off('receiveMessage', handleNewMessage);
+                socket.off('newNotification', handleNewNotification);
+            }
+        };
+    }, [user?.id]);
 
     const loadPosts = async (pageNum: number = 1) => {
         if (pageNum === 1) setIsLoading(true);
@@ -226,24 +273,46 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
         if (!newPostContent.trim() && newPostImages.length === 0) return;
         setIsPosting(true);
         try {
-            const uploadedImages: any[] = [];
+            const finalImages: any[] = [];
 
-            // Upload all images sequentially (or Promise.all)
+            // Process images: Upload new ones, keep old ones
             for (const imgUri of newPostImages) {
-                const result = await uploadImage(imgUri);
-                // Result is now { url, width, height }
-                uploadedImages.push({
-                    uri: result.url,
-                    width: result.width,
-                    height: result.height
-                });
+                // If it's a remote URL (already uploaded), keep it
+                if (imgUri.startsWith('http') || imgUri.startsWith('https')) {
+                    // If backend expects object, we might need to find original dimensions, 
+                    // but for update usually URL string or partial object is fine.
+                    // Let's try to pass the URL string, or if we need struct:
+                    // We don't have dims here easily unless we stored them.
+                    // Assuming backend handles string URL or we map safely.
+                    finalImages.push(imgUri);
+                } else {
+                    // It's a local file -> Upload
+                    const result = await uploadImage(imgUri);
+                    finalImages.push({
+                        uri: result.url,
+                        width: result.width,
+                        height: result.height
+                    });
+                }
             }
 
-            // Pass the array of image objects directly + tagged users
             const taggedUserIds = taggedUsers.map(u => u.id);
-            const newPost = await createPost(newPostContent, undefined, uploadedImages, undefined, taggedUserIds);
 
-            setPosts([newPost, ...posts]);
+            if (isEditing && editingPostId) {
+                // Call Real Update API
+                const updatedPost = await updatePost(editingPostId, newPostContent, finalImages, taggedUserIds);
+
+                // Update Local State with Server Response
+                setPosts(prev => prev.map(p => p.id === editingPostId ? updatedPost : p));
+
+                // Reset Edit Mode
+                setIsEditing(false);
+                setEditingPostId(null);
+            } else {
+                const newPost = await createPost(newPostContent, undefined, finalImages, undefined, taggedUserIds);
+                setPosts([newPost, ...posts]);
+            }
+
             setNewPostContent('');
             setNewPostImages([]);
             setTaggedUsers([]); // Reset tagged users
@@ -363,22 +432,6 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         >
                             <Ionicons name="search" size={22} color="#333" />
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.circleButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.5)' }]}
-                            onPress={() => {
-                                setUnreadNotifCount(0); // Reset count when opening
-                                setPlaceActiveTab('NOTIFICATIONS');
-                            }}
-                        >
-                            <MaterialIcons name="notifications-none" size={24} color={unreadNotifCount > 0 ? '#FF5722' : '#333'} />
-                            {unreadNotifCount > 0 && (
-                                <View style={styles.notifBadge}>
-                                    <Text style={styles.notifBadgeText}>
-                                        {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
-                                    </Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
                     </View>
                 </View>
 
@@ -404,241 +457,292 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
 
 
 
-    const renderPost = ({ item }: { item: Post }) => (
-        <View
-            style={styles.postCard}
-            onLayout={() => {
-                // Track view when post becomes visible
-                trackPostView(item.id);
-            }}
-        >
-            {/* Post Header */}
-            {/* Post Header */}
-            <View style={styles.postHeader}>
-                {item.group ? (
-                    // GROUP POST HEADER STYLE
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        {/* Avatar Container for Group */}
-                        <View style={{ marginRight: 12 }}>
-                            {/* Group Avatar (Main) */}
-                            <TouchableOpacity onPress={() => {
-                                setSelectedGroupId(item.group!.id);
-                                setPlaceActiveTab('GROUPS');
-                            }}>
-                                <Image
-                                    source={{ uri: getAvatarUri(item.group.avatar, item.group.name) }}
-                                    style={{ width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: '#eee' }}
-                                />
-                            </TouchableOpacity>
-                            {/* User Avatar (Small Overlay) */}
-                            <Image
-                                source={{ uri: getAvatarUri(item.author.avatar, item.author.name) }}
-                                style={{
-                                    width: 20,
-                                    height: 20,
-                                    borderRadius: 10,
-                                    position: 'absolute',
-                                    bottom: -2,
-                                    right: -4,
-                                    borderWidth: 1.5,
-                                    borderColor: 'white'
-                                }}
-                            />
-                        </View>
+    const handlePostOptions = (post: Post) => {
+        setSelectedPostActions(post);
+        setOptionsModalVisible(true);
+    };
 
-                        {/* Info Section */}
-                        <View style={{ flex: 1 }}>
-                            {/* Group Name */}
-                            <TouchableOpacity onPress={() => {
-                                setSelectedGroupId(item.group!.id);
-                                setPlaceActiveTab('GROUPS');
-                            }}>
-                                <Text style={[styles.postAuthor, { fontSize: 16 }]}>{item.group.name}</Text>
-                            </TouchableOpacity>
+    const handleEditPostAction = () => {
+        if (!selectedPostActions) return;
+        setOptionsModalVisible(false);
 
-                            {/* User Name & Time */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 1 }}>
-                                <TouchableOpacity onPress={() => item.author.id !== user.id && handleViewProfile(item.author)}>
-                                    <Text style={{ fontSize: 12, color: '#65676B', fontWeight: '500' }}>
-                                        {item.author.name}
-                                    </Text>
+        setNewPostContent(selectedPostActions.content);
+        // Normalize images
+        const imgs = selectedPostActions.images || (selectedPostActions.image ? [selectedPostActions.image] : []);
+        const imgUris = imgs.map((img: any) => typeof img === 'string' ? img : img.uri);
+        setNewPostImages(imgUris);
+        setTaggedUsers(selectedPostActions.taggedUsers || []);
+
+        setIsEditing(true);
+        setEditingPostId(selectedPostActions.id);
+
+        setPostModalVisible(true);
+    };
+
+    const confirmDeletePost = (postId: string) => {
+        Alert.alert(
+            'Xóa bài viết?',
+            'Bạn có chắc chắn muốn xóa bài viết này không? Hành động này không thể hoàn tác.',
+            [
+                { text: 'Hủy', style: 'cancel' },
+                {
+                    text: 'Xóa',
+                    style: 'destructive',
+                    onPress: async () => {
+                        // Optimistic delete
+                        setPosts(prev => prev.filter(p => p.id !== postId));
+                        // TODO: Call API delete post
+                    }
+                }
+            ]
+        );
+    };
+
+    const renderPost = ({ item }: { item: Post }) => {
+        if (!item || !item.author) return null;
+        return (
+            <View
+                style={styles.postCard}
+                onLayout={() => trackPostView(item.id)}
+            >
+                {/* Post Header */}
+                <View style={styles.postHeader}>
+
+                    {
+                        item.group ? (
+                            // GROUP POST HEADER STYLE
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                {/* Avatar Container for Group */}
+                                <View style={{ marginRight: 12 }}>
+                                    {/* Group Avatar (Main) */}
+                                    <TouchableOpacity onPress={() => {
+                                        setSelectedGroupId(item.group!.id);
+                                        setPlaceActiveTab('GROUPS');
+                                    }}>
+                                        <Image
+                                            source={{ uri: getAvatarUri(item.group.avatar, item.group.name) }}
+                                            style={{ width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: '#eee' }}
+                                        />
+                                    </TouchableOpacity>
+                                    {/* User Avatar (Small Overlay) */}
+                                    <Image
+                                        source={{ uri: getAvatarUri(item.author.avatar, item.author.name) }}
+                                        style={{
+                                            width: 20,
+                                            height: 20,
+                                            borderRadius: 10,
+                                            position: 'absolute',
+                                            bottom: -2,
+                                            right: -4,
+                                            borderWidth: 1.5,
+                                            borderColor: 'white'
+                                        }}
+                                    />
+                                </View>
+
+                                {/* Info Section */}
+                                <View style={{ flex: 1 }}>
+                                    {/* Group Name */}
+                                    <TouchableOpacity onPress={() => {
+                                        setSelectedGroupId(item.group!.id);
+                                        setPlaceActiveTab('GROUPS');
+                                    }}>
+                                        <Text style={[styles.postAuthor, { fontSize: 16 }]}>{item.group.name}</Text>
+                                    </TouchableOpacity>
+
+                                    {/* User Name & Time */}
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 1 }}>
+                                        <TouchableOpacity onPress={() => item.author.id !== user.id && handleViewProfile(item.author)}>
+                                            <Text style={{ fontSize: 12, color: '#65676B', fontWeight: '500' }}>
+                                                {item.author.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <Text style={styles.dot}>•</Text>
+                                        <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
+                                        <Text style={styles.dot}>•</Text>
+                                        <Ionicons name="earth" size={12} color="#65676B" />
+                                    </View>
+                                </View>
+
+                                <TouchableOpacity style={styles.moreButton} onPress={() => handlePostOptions(item)}>
+                                    <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
                                 </TouchableOpacity>
-                                <Text style={styles.dot}>•</Text>
-                                <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
-                                <Text style={styles.dot}>•</Text>
-                                <Ionicons name="earth" size={12} color="#65676B" />
                             </View>
-                        </View>
-
-                        <TouchableOpacity style={styles.moreButton}>
-                            <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
-                        </TouchableOpacity>
-                    </View>
-                ) : (
-                    // NORMAL POST HEADER STYLE
-                    <>
-                        <TouchableOpacity onPress={() => item.author.id !== user.id && handleViewProfile(item.author)}>
-                            <Image
-                                source={{ uri: getAvatarUri(item.author.avatar, item.author.name) }}
-                                style={styles.postAvatar}
-                            />
-                        </TouchableOpacity>
-                        <View style={styles.postInfo}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                        ) : (
+                            // NORMAL POST HEADER STYLE
+                            <>
                                 <TouchableOpacity onPress={() => item.author.id !== user.id && handleViewProfile(item.author)}>
-                                    <Text style={styles.postAuthor}>{item.author.name}</Text>
+                                    <Image
+                                        source={{ uri: getAvatarUri(item.author.avatar, item.author.name) }}
+                                        style={styles.postAvatar}
+                                    />
                                 </TouchableOpacity>
-                                {item.taggedUsers && item.taggedUsers.length > 0 && (
-                                    <Text style={{ fontWeight: '400', color: '#333' }}>
-                                        {' cùng với '}
-                                        <Text
-                                            style={{ fontWeight: 'bold' }}
-                                            onPress={() => {
-                                                const taggedUser = item.taggedUsers![0];
-                                                if (taggedUser.id !== user.id) handleViewProfile(taggedUser);
-                                            }}
-                                        >
-                                            {item.taggedUsers[0].name}
-                                        </Text>
-                                        {item.taggedUsers.length > 1 && (
-                                            <Text style={{ fontWeight: '400' }}>
-                                                {' và '}
-                                                <Text style={{ fontWeight: 'bold' }}>{item.taggedUsers.length - 1} người khác</Text>
+                                <View style={styles.postInfo}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <TouchableOpacity onPress={() => item.author.id !== user.id && handleViewProfile(item.author)}>
+                                            <Text style={styles.postAuthor}>{item.author.name}</Text>
+                                        </TouchableOpacity>
+                                        {item.taggedUsers && item.taggedUsers.length > 0 && (
+                                            <Text style={{ fontWeight: '400', color: '#333' }}>
+                                                {' cùng với '}
+                                                <Text
+                                                    style={{ fontWeight: 'bold' }}
+                                                    onPress={() => {
+                                                        const taggedUser = item.taggedUsers![0];
+                                                        if (taggedUser.id !== user.id) handleViewProfile(taggedUser);
+                                                    }}
+                                                >
+                                                    {item.taggedUsers[0].name}
+                                                </Text>
+                                                {item.taggedUsers.length > 1 && (
+                                                    <Text style={{ fontWeight: '400' }}>
+                                                        {' và '}
+                                                        <Text style={{ fontWeight: 'bold' }}>{item.taggedUsers.length - 1} người khác</Text>
+                                                    </Text>
+                                                )}
                                             </Text>
                                         )}
-                                    </Text>
-                                )}
-                            </View>
-                            <View style={styles.postMeta}>
-                                <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
-                                <Text style={styles.dot}>•</Text>
-                                <Ionicons name="earth" size={12} color="#666" />
-                            </View>
-                        </View>
-                        <TouchableOpacity style={styles.moreButton}>
-                            <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
-                        </TouchableOpacity>
-                    </>
-                )}
-            </View>
+                                    </View>
+                                    <View style={styles.postMeta}>
+                                        <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
+                                        <Text style={styles.dot}>•</Text>
+                                        <Ionicons name="earth" size={12} color="#666" />
+                                    </View>
+                                </View>
+                                <TouchableOpacity style={styles.moreButton} onPress={() => handlePostOptions(item)}>
+                                    <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
+                                </TouchableOpacity>
+                            </>
+                        )
+                    }
+                </View >
 
 
-            {/* Post Content */}
-            <View style={styles.postContent}>
-                <TextWithSeeMore text={item.content} onLinkPress={openLink} />
-            </View>
+                {/* Post Content */}
+                < View style={styles.postContent} >
+                    <TextWithSeeMore text={item.content} onLinkPress={openLink} />
+                </View >
 
-            {/* Post Image/Video */}
-            {/* Post Images Grid OR Shared Post Content */}
-            {
-                item.originalPost ? (
-                    // SHARED POST VIEW
-                    <View style={styles.sharedContainer}>
-                        <View style={styles.sharedHeader}>
-                            <Image
-                                source={{ uri: getAvatarUri(item.originalPost.author.avatar, item.originalPost.author.name) }}
-                                style={styles.sharedAvatar}
-                            />
-                            <View>
-                                <Text style={styles.sharedAuthor}>{item.originalPost.author.name}</Text>
-                                <Text style={styles.sharedTime}>{formatTime(item.originalPost.createdAt)}</Text>
+                {/* Post Image/Video */}
+                {/* Post Images Grid OR Shared Post Content */}
+                {
+                    item.originalPost ? (
+                        // SHARED POST VIEW
+                        <View style={styles.sharedContainer}>
+                            <View style={styles.sharedHeader}>
+                                <Image
+                                    source={{ uri: getAvatarUri(item.originalPost.author.avatar, item.originalPost.author.name) }}
+                                    style={styles.sharedAvatar}
+                                />
+                                <View>
+                                    <Text style={styles.sharedAuthor}>{item.originalPost.author.name}</Text>
+                                    <Text style={styles.sharedTime}>{formatTime(item.originalPost.createdAt)}</Text>
+                                </View>
                             </View>
-                        </View>
-                        {item.originalPost.content ? <Text style={styles.sharedContent}>{item.originalPost.content}</Text> : null}
-                        {/* Reuse Grid for shared images */}
-                        <PhotoGrid
-                            images={item.originalPost.images && item.originalPost.images.length > 0 ? item.originalPost.images : (item.originalPost.image ? [item.originalPost.image] : [])}
-                            onPressImage={(index) => openImageViewer(item.originalPost!, index)}
-                        />
-                    </View>
-                ) : (
-                    // NORMAL POST VIEW
-                    <View style={styles.postImagesContainer}>
-                        {/* Check if single video */}
-                        {(item.images?.length === 1 || (!item.images?.length && item.image)) && isVideo(item.images?.[0] || item.image || '') ? (
-                            (() => {
-                                // Get video source with dimensions if available
-                                const videoSource = item.images?.[0] || item.image;
-                                const videoUri = getUri(videoSource);
-                                const videoDimensions = typeof videoSource === 'object' ? videoSource : null;
-                                return (
-                                    <VideoPlayer
-                                        source={videoUri}
-                                        style={{ width: '100%' }}
-                                        videoWidth={videoDimensions?.width}
-                                        videoHeight={videoDimensions?.height}
+                            {item.originalPost.content ? (
+                                <View style={{ paddingBottom: 8 }}>
+                                    <TextWithSeeMore
+                                        text={item.originalPost.content}
+                                        onLinkPress={openLink}
+                                        style={styles.sharedContent}
                                     />
-                                );
-                            })()
-                        ) : (
+                                </View>
+                            ) : null}
+                            {/* Reuse Grid for shared images */}
                             <PhotoGrid
-                                images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
-                                onPressImage={(index) => openImageViewer(item, index)}
+                                images={item.originalPost.images && item.originalPost.images.length > 0 ? item.originalPost.images : (item.originalPost.image ? [item.originalPost.image] : [])}
+                                onPressImage={(index) => openImageViewer(item.originalPost!, index)}
                             />
+                        </View>
+                    ) : (
+                        // NORMAL POST VIEW
+                        <View style={styles.postImagesContainer}>
+                            {/* Check if single video */}
+                            {(item.images?.length === 1 || (!item.images?.length && item.image)) && isVideo(item.images?.[0] || item.image || '') ? (
+                                (() => {
+                                    // Get video source with dimensions if available
+                                    const videoSource = item.images?.[0] || item.image;
+                                    const videoUri = getUri(videoSource);
+                                    const videoDimensions = typeof videoSource === 'object' ? videoSource : null;
+                                    return (
+                                        <VideoPlayer
+                                            source={videoUri}
+                                            style={{ width: '100%' }}
+                                            videoWidth={videoDimensions?.width}
+                                            videoHeight={videoDimensions?.height}
+                                        />
+                                    );
+                                })()
+                            ) : (
+                                <PhotoGrid
+                                    images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
+                                    onPressImage={(index) => openImageViewer(item, index)}
+                                />
+                            )}
+                        </View>
+                    )
+                }
+
+                {/* Post Stats */}
+                <View style={styles.postStats}>
+                    {/* Left Side: Reaction Icons + Count */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        {item.likes > 0 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                {/* Show reaction icons - Facebook style with stacked icons */}
+                                <View style={{ flexDirection: 'row', marginRight: 6 }}>
+                                    {/* Like icon */}
+                                    <View style={{ backgroundColor: '#1877F2', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'white' }}>
+                                        <FontAwesome name="thumbs-up" size={9} color="white" />
+                                    </View>
+                                    {/* Heart icon - show if post has love reactions (simulated if likes > 1) */}
+                                    {item.likes > 1 && (
+                                        <View style={{ backgroundColor: '#F33E58', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginLeft: -6, borderWidth: 1.5, borderColor: 'white' }}>
+                                            <FontAwesome name="heart" size={9} color="white" />
+                                        </View>
+                                    )}
+                                </View>
+                                <Text style={styles.reactionCount}>{item.likes}</Text>
+                            </View>
                         )}
                     </View>
-                )
-            }
 
-            {/* Post Stats */}
-            <View style={styles.postStats}>
-                {/* Left Side: Reaction Icons + Count */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    {item.likes > 0 && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            {/* Show reaction icons - Facebook style with stacked icons */}
-                            <View style={{ flexDirection: 'row', marginRight: 6 }}>
-                                {/* Like icon */}
-                                <View style={{ backgroundColor: '#1877F2', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'white' }}>
-                                    <FontAwesome name="thumbs-up" size={9} color="white" />
-                                </View>
-                                {/* Heart icon - show if post has love reactions (simulated if likes > 1) */}
-                                {item.likes > 1 && (
-                                    <View style={{ backgroundColor: '#F33E58', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginLeft: -6, borderWidth: 1.5, borderColor: 'white' }}>
-                                        <FontAwesome name="heart" size={9} color="white" />
-                                    </View>
-                                )}
-                            </View>
-                            <Text style={styles.reactionCount}>{item.likes}</Text>
-                        </View>
-                    )}
+
+                    {/* Right Side: Comments + Views */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {item.comments > 0 && (
+                            <Text style={styles.statsText}>{item.comments} bình luận</Text>
+                        )}
+                        {item.comments > 0 && item.views > 0 && <Text style={styles.statsText}> • </Text>}
+                        {item.views > 0 && (
+                            <Text style={styles.statsText}>{item.views} người đã xem</Text>
+                        )}
+                    </View>
                 </View>
 
-
-                {/* Right Side: Comments + Views */}
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    {item.comments > 0 && (
-                        <Text style={styles.statsText}>{item.comments} bình luận</Text>
-                    )}
-                    {item.comments > 0 && item.views > 0 && <Text style={styles.statsText}> • </Text>}
-                    {item.views > 0 && (
-                        <Text style={styles.statsText}>{item.views} người đã xem</Text>
-                    )}
+                {/* Post Actions */}
+                <View style={styles.actionContainer}>
+                    {/* Facebook-style Reaction Button */}
+                    <ReactionButton
+                        selectedReaction={localReactions[item.id] ? getReactionById(localReactions[item.id]) || null : null}
+                        onReactionSelect={(reaction) => handleReaction(item.id, reaction?.id || 'like')}
+                        buttonStyle={styles.actionButton}
+                    />
+                    <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => navigation.navigate('PostDetail', { postId: item.id, post: item, autoFocus: true })}
+                    >
+                        <FontAwesome name="comment-o" size={18} color="#666" />
+                        <Text style={styles.actionText}>Bình luận</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionButton} onPress={() => handleShare(item)}>
+                        <FontAwesome name="share-square-o" size={18} color="#666" />
+                        <Text style={styles.actionText}>Chia sẻ</Text>
+                    </TouchableOpacity>
                 </View>
-            </View>
-
-            {/* Post Actions */}
-            <View style={styles.actionContainer}>
-                {/* Facebook-style Reaction Button */}
-                <ReactionButton
-                    selectedReaction={localReactions[item.id] ? getReactionById(localReactions[item.id]) || null : null}
-                    onReactionSelect={(reaction) => handleReaction(item.id, reaction?.id || 'like')}
-                    buttonStyle={styles.actionButton}
-                />
-                <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => navigation.navigate('PostDetail', { postId: item.id, post: item })}
-                >
-                    <FontAwesome name="comment-o" size={18} color="#666" />
-                    <Text style={styles.actionText}>Bình luận</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton} onPress={() => handleShare(item)}>
-                    <FontAwesome name="share-square-o" size={18} color="#666" />
-                    <Text style={styles.actionText}>Chia sẻ</Text>
-                </TouchableOpacity>
-            </View>
-        </View >
-    );
+            </View >
+        );
+    };
 
     const mainContent = (
         <View style={styles.container}>
@@ -742,13 +846,13 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                             }}>
                                 <Ionicons name="arrow-back" size={24} color="#333" />
                             </TouchableOpacity>
-                            <Text style={styles.modalTitle}>Tạo bài viết</Text>
+                            <Text style={styles.modalTitle}>{isEditing ? 'Chỉnh sửa bài viết' : 'Tạo bài viết'}</Text>
                             <TouchableOpacity
                                 onPress={handleCreatePost}
                                 disabled={isPosting || (!newPostContent.trim() && newPostImages.length === 0)}
                                 style={[styles.postButton, (!newPostContent.trim() && newPostImages.length === 0 || isPosting) && styles.postButtonDisabled]}
                             >
-                                {isPosting ? <ActivityIndicator color="white" size="small" /> : <Text style={styles.postButtonText}>Đăng</Text>}
+                                {isPosting ? <ActivityIndicator color="white" size="small" /> : <Text style={styles.postButtonText}>{isEditing ? 'Lưu' : 'Đăng'}</Text>}
                             </TouchableOpacity>
                         </View>
 
@@ -983,6 +1087,135 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 />
             )}
 
+            {/* Post Options Modal (Action Sheet Style) */}
+            <Modal
+                visible={optionsModalVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setOptionsModalVisible(false)}
+            >
+                <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+                    activeOpacity={1}
+                    onPress={() => setOptionsModalVisible(false)}
+                >
+                    <View style={{ backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 30 }}>
+                        <View style={{ alignItems: 'center', marginBottom: 15 }}>
+                            <View style={{ width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2 }} />
+                        </View>
+
+                        {selectedPostActions && (selectedPostActions.author.id === user?.id ? (
+                            // Owner Options
+                            <>
+                                <TouchableOpacity style={styles.optionItem} onPress={handleEditPostAction}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#E4E6EB' }]}>
+                                        <Ionicons name="create-outline" size={24} color="#333" />
+                                    </View>
+                                    <Text style={styles.optionText}>Chỉnh sửa bài viết</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.optionItem} onPress={() => { setOptionsModalVisible(false); confirmDeletePost(selectedPostActions!.id); }}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#E4E6EB' }]}>
+                                        <Ionicons name="trash-outline" size={24} color="#E4605E" />
+                                    </View>
+                                    <Text style={[styles.optionText, { color: '#E4605E' }]}>Xóa bài viết</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.optionItem} onPress={() => setOptionsModalVisible(false)}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#E4E6EB' }]}>
+                                        <Ionicons name="lock-closed-outline" size={24} color="#333" />
+                                    </View>
+                                    <Text style={styles.optionText}>Chỉnh sửa quyền riêng tư</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.optionItem} onPress={() => setOptionsModalVisible(false)}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#E4E6EB' }]}>
+                                        <Ionicons name="chatbox-ellipses-outline" size={24} color="#333" />
+                                    </View>
+                                    <Text style={styles.optionText}>Tắt tính năng bình luận</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            // Viewer Options
+                            <>
+                                <TouchableOpacity style={styles.optionItem} onPress={() => { setOptionsModalVisible(false); handleShare(selectedPostActions); }}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#E4E6EB' }]}>
+                                        <Ionicons name="arrow-redo-outline" size={24} color="#333" />
+                                    </View>
+                                    <Text style={styles.optionText}>Chia sẻ bài viết này ngay</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.optionItem} onPress={() => setOptionsModalVisible(false)}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#E4E6EB' }]}>
+                                        <Ionicons name="link-outline" size={24} color="#333" />
+                                    </View>
+                                    <Text style={styles.optionText}>Sao chép liên kết</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.optionItem} onPress={() => setOptionsModalVisible(false)}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#E4E6EB' }]}>
+                                        <Ionicons name="bookmark-outline" size={24} color="#333" />
+                                    </View>
+                                    <Text style={styles.optionText}>Lưu bài viết</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.optionItem} onPress={() => setOptionsModalVisible(false)}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#E4E6EB' }]}>
+                                        <Ionicons name="alert-circle-outline" size={24} color="#333" />
+                                    </View>
+                                    <Text style={styles.optionText}>Báo cáo bài viết</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.optionItem} onPress={() => setOptionsModalVisible(false)}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#E4E6EB' }]}>
+                                        <Ionicons name="time-outline" size={24} color="#333" />
+                                    </View>
+                                    <Text style={styles.optionText}>Tạm ẩn 30 ngày</Text>
+                                </TouchableOpacity>
+                            </>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* Share Modal */}
+            <Modal
+                visible={isShareModalVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShareModalVisible(false)}
+            >
+                <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+                    activeOpacity={1}
+                    onPress={() => setShareModalVisible(false)}
+                >
+                    <View style={{ backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' }}>Chia sẻ bài viết</Text>
+
+                        <TouchableOpacity
+                            style={{ paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#eee' }}
+                            onPress={onShareNow}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Ionicons name="share-social-outline" size={24} color="#0068FF" />
+                                <Text style={{ marginLeft: 15, fontSize: 16 }}>Chia sẻ ngay lên Feed</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={{ paddingVertical: 15 }}
+                            onPress={onShareExternal}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Ionicons name="link-outline" size={24} color="#333" />
+                                <Text style={{ marginLeft: 15, fontSize: 16 }}>Gửi qua ứng dụng khác / Sao chép link</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={{ marginTop: 20, alignItems: 'center', padding: 10, backgroundColor: '#f0f0f0', borderRadius: 8 }}
+                            onPress={() => setShareModalVisible(false)}
+                        >
+                            <Text style={{ fontWeight: '600' }}>Hủy</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
             <InAppBrowser
                 visible={isBrowserVisible}
                 url={browserUrl}
@@ -1007,6 +1240,8 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         setPlaceActiveTab(tab);
                     }
                 }}
+                unreadChatCount={unreadChatCount}
+                unreadNotifCount={unreadNotifCount}
             />
         </View >
     );
@@ -1033,6 +1268,8 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 <PlaceBottomBar
                     activeTab={placeActiveTab}
                     onTabChange={setPlaceActiveTab}
+                    unreadChatCount={unreadChatCount}
+                    unreadNotifCount={unreadNotifCount}
                 />
             </View>
         );
@@ -1078,6 +1315,8 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                 <PlaceBottomBar
                     activeTab={placeActiveTab}
                     onTabChange={setPlaceActiveTab}
+                    unreadChatCount={unreadChatCount}
+                    unreadNotifCount={unreadNotifCount}
                 />
             </View>
         );
@@ -1158,6 +1397,8 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                         setSelectedGroupId(null); // Clear selected group when changing tabs
                         setPlaceActiveTab(tab);
                     }}
+                    unreadChatCount={unreadChatCount}
+                    unreadNotifCount={unreadNotifCount}
                 />
             </View>
         );
@@ -1174,14 +1415,14 @@ const styles = StyleSheet.create({
     headerGradient: {
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(0,0,0,0.05)',
-        paddingBottom: 8,
+        paddingBottom: 4,
     },
     headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingVertical: 8,
     },
     headerLogoContainer: {
         flexDirection: 'row',
@@ -1260,7 +1501,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingVertical: 8,
         // backgroundColor: '#fff', // Removed since it's on gradient now
         // marginTop: 8, // Removed
     },
@@ -1365,11 +1606,9 @@ const styles = StyleSheet.create({
     },
     postStats: {
         flexDirection: 'row',
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
         paddingHorizontal: 12,
         paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
     },
     viewCount: {
         fontSize: 12,
@@ -1383,10 +1622,31 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#666',
     },
+    // Options Modal Styles
+    optionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+    },
+    optionIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+    },
+    optionText: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#333',
+    },
     actionContainer: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        paddingVertical: 10,
+        paddingVertical: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#E4E6EB',
         position: 'relative', // Required for absolute positioned ReactionDock
         overflow: 'visible', // Allow popup to overflow
         zIndex: 10, // Ensure popup appears above other elements
@@ -1394,14 +1654,16 @@ const styles = StyleSheet.create({
     actionButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 4,
-        paddingHorizontal: 12,
+        justifyContent: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        flex: 1,
     },
     actionText: {
         marginLeft: 6,
-        color: '#666',
-        fontSize: 14,
-        fontWeight: '500',
+        color: '#65676B',
+        fontSize: 13,
+        fontWeight: '600',
     },
     modalOverlay: {
         flex: 1,

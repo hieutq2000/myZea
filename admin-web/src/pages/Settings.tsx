@@ -67,7 +67,7 @@ const Settings: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <div style={{ fontWeight: 'bold' }}>Phiên bản Server</div>
-                        <Tag color="green">v1.0.0</Tag>
+                        <Tag color="green">v1.2.0</Tag>
                     </div>
                     <Button icon={<SafetyCertificateOutlined />}>Kiểm tra cập nhật</Button>
                 </div>
