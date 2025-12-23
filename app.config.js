@@ -3,9 +3,9 @@ module.exports = {
         name: "myZyea",
         slug: "vinalive-ai-mobile",
         scheme: "zyea", // URL scheme for deep linking
-        version: "1.0.5",
+        version: "1.0.6",
         orientation: "portrait",
-        icon: "./assets/icon.png",
+        icon: "./assets/icon-christmas.png",
         userInterfaceStyle: "automatic",
         newArchEnabled: true,
         splash: {
@@ -15,9 +15,9 @@ module.exports = {
         },
         ios: {
             icon: {
-                light: "./assets/icon.png",
-                dark: "./assets/icon-dark.png",
-                tinted: "./assets/icon-tinted.png"
+                light: "./assets/icon-christmas.png",
+                dark: "./assets/icon-christmas-dark.png",
+                tinted: "./assets/icon-christmas-dark.png"
             },
             supportsTablet: true,
             bundleIdentifier: "com.zyea.mobile",
@@ -46,7 +46,7 @@ module.exports = {
         },
         android: {
             adaptiveIcon: {
-                foregroundImage: "./assets/adaptive-icon.png",
+                foregroundImage: "./assets/icon-christmas.png",
                 monochromeImage: "./assets/monochrome-icon.png",
                 backgroundColor: "#f97316"
             },
