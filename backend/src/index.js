@@ -4557,7 +4557,14 @@ function writeRepoSource(data) {
 }
 
 // Helper function to sync IPA upload to source.json repo
+}
+
+// Make available globally
+global.syncIpaToRepo = syncIpaToRepo;
+
+// Helper function to sync IPA upload to source.json repo
 function syncIpaToRepo(metadata) {
+    // ... function body remains same ...
     try {
         const repo = readRepoSource();
         if (!repo) return false;
@@ -4569,11 +4576,11 @@ function syncIpaToRepo(metadata) {
         let appIndex = repo.apps.findIndex(app => app.bundleIdentifier === bundleId);
 
         const newVersion = {
-            version: metadata.version,
+            version: metadata.version || '1.0.0',
             date: new Date().toISOString().split('T')[0],
             size: metadata.size || 0,
             downloadURL: `${baseUrl}/uploads/ipa/${metadata.ipaFileName}`,
-            localizedDescription: metadata.changelog || `Phiên bản ${metadata.version}`,
+            localizedDescription: metadata.changelog || `Phiên bản ${metadata.version || 'mới'}`,
             minOSVersion: "14.0"
         };
 
@@ -4582,10 +4589,10 @@ function syncIpaToRepo(metadata) {
             const app = repo.apps[appIndex];
 
             // Check if version already exists
-            const versionIndex = app.versions.findIndex(v => v.version === metadata.version);
+            const versionIndex = app.versions.findIndex(v => v.version === (metadata.version || '1.0.0'));
             if (versionIndex >= 0) {
                 // Update existing version
-                app.versions[versionIndex] = newVersion;
+                app.versions[versionIndex] = { ...app.versions[versionIndex], ...newVersion };
             } else {
                 // Add new version at the beginning
                 app.versions.unshift(newVersion);
@@ -4633,7 +4640,7 @@ function syncIpaToRepo(metadata) {
         const newsId = `release-${metadata.version}-${Date.now()}`;
         const newsEntry = {
             identifier: newsId,
-            title: `🎉 ${metadata.appName || 'App'} v${metadata.version} đã ra mắt!`,
+            title: `🎉 ${metadata.appName || 'App'} v${metadata.version || 'mới'} đã ra mắt!`,
             caption: metadata.changelog || "Phiên bản mới với nhiều cải tiến",
             date: new Date().toISOString().split('T')[0],
             tintColor: "#f97316",
@@ -4654,6 +4661,35 @@ function syncIpaToRepo(metadata) {
         return false;
     }
 }
+
+// Manual Sync Endpoint (for Admin Dashboard)
+app.post('/api/admin/repo/sync-ipa/:timestamp', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const timestamp = req.params.timestamp;
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+        const metadataPath = path.join(uploadDir, `metadata_${timestamp}.json`);
+
+        if (!fs.existsSync(metadataPath)) {
+            return res.status(404).json({ error: 'Metadata not found' });
+        }
+
+        const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+        const success = syncIpaToRepo(metadata);
+
+        if (success) {
+            res.json({ success: true, message: 'Synced to repo successfully' });
+        } else {
+            res.status(500).json({ error: 'Failed to sync to repo' });
+        }
+    } catch (error) {
+        console.error('Manual sync error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
 
 // GET Repo source.json (Public - for AltStore/SideStore)
 app.get('/api/repo', (req, res) => {
