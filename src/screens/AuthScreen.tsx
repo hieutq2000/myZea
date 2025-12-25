@@ -14,6 +14,7 @@ import {
     Dimensions,
     StatusBar,
     FlatList,
+    Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,6 +38,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [name, setName] = useState('');
+    const [birthDate, setBirthDate] = useState<Date | null>(null);
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [tempDay, setTempDay] = useState(1);
+    const [tempMonth, setTempMonth] = useState(1);
+    const [tempYear, setTempYear] = useState(2000);
     const [agreeToTerms, setAgreeToTerms] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -117,7 +123,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     // Check server connection
                     const isServerOnline = await checkServerHealth();
                     if (!isServerOnline) {
-                        throw new Error('Không thể kết nối đến server, hoặc kiểm tra lại internet của bạn ');
+                        throw new Error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.');
                     }
 
                     // Retrieve saved credentials directly
@@ -183,6 +189,54 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 setError('Vui lòng nhập họ và tên');
                 return;
             }
+
+            // Validate real name format (at least 2 words)
+            const nameParts = name.trim().split(/\s+/);
+            if (nameParts.length < 2) {
+                setError('Vui lòng nhập đầy đủ họ và tên thật của bạn (ví dụ: Nguyễn Văn A)');
+                return;
+            }
+
+            // Check for prohibited names
+            const prohibitedNames = ['admin', 'administrator', 'bot', 'moderator', 'mod', 'system', 'support', 'root', 'user', 'guest', 'test', 'demo', 'anonymous'];
+            const nameLower = name.toLowerCase().trim();
+            const hasProhibitedName = prohibitedNames.some(prohibited =>
+                nameLower === prohibited ||
+                nameLower.includes(prohibited) ||
+                nameParts.some(part => part.toLowerCase() === prohibited)
+            );
+
+            if (hasProhibitedName) {
+                setError('Vui lòng sử dụng họ và tên thật. Không được dùng các tên như: admin, bot, moderator...');
+                return;
+            }
+
+            // Check if name contains numbers or special characters (not a real name)
+            const nameRegex = /^[a-zA-ZÀ-ỹ\s]+$/;
+            if (!nameRegex.test(name.trim())) {
+                setError('Họ và tên chỉ được chứa chữ cái, không được có số hoặc ký tự đặc biệt');
+                return;
+            }
+
+            // Validate birth date
+            if (!birthDate) {
+                setError('Vui lòng chọn ngày sinh');
+                return;
+            }
+
+            // Check minimum age (13 years old)
+            const today = new Date();
+            const age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())
+                ? age - 1
+                : age;
+
+            if (actualAge < 13) {
+                setError('Bạn phải đủ 13 tuổi trở lên để đăng ký');
+                return;
+            }
+
             if (password !== confirmPassword) {
                 setError('Mật khẩu nhập lại không khớp');
                 return;
@@ -201,10 +255,10 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             const isServerOnline = await checkServerHealth();
 
             if (!isServerOnline) {
-                setError('Không thể kết nối đến server. Vui lòng kiểm tra:\n• Server đang chạy\n• Kết nối mạng WiFi');
+                setError('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng của bạn.');
                 Alert.alert(
                     '❌ Lỗi kết nối',
-                    'Không thể kết nối đến server.\n\nVui lòng đảm bảo:\n• Server backend đang chạy\n• Điện thoại và máy chủ cùng mạng WiFi',
+                    'Không thể kết nối đến server.\n\nVui lòng kiểm tra:\n• Kết nối Internet của bạn\n• Thử lại sau ít phút',
                     [{ text: 'Đóng' }]
                 );
                 return;
@@ -386,11 +440,37 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
                             {view === AuthView.REGISTER && (
                                 <FloatingLabelInput
-                                    label="Họ và tên"
+                                    label="Họ và tên thật"
                                     value={name}
                                     onChangeText={setName}
                                     icon="user"
+                                    placeholder="Ví dụ: Nguyễn Văn A"
                                 />
+                            )}
+
+                            {/* Birth Date Picker - Only for Register */}
+                            {view === AuthView.REGISTER && (
+                                <TouchableOpacity
+                                    style={styles.datePickerButton}
+                                    onPress={() => {
+                                        if (birthDate) {
+                                            setTempDay(birthDate.getDate());
+                                            setTempMonth(birthDate.getMonth() + 1);
+                                            setTempYear(birthDate.getFullYear());
+                                        }
+                                        setShowDatePicker(true);
+                                    }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Feather name="calendar" size={20} color="#666" style={{ marginRight: 12 }} />
+                                    <Text style={[styles.datePickerText, !birthDate && { color: '#999' }]}>
+                                        {birthDate
+                                            ? `${birthDate.getDate().toString().padStart(2, '0')}/${(birthDate.getMonth() + 1).toString().padStart(2, '0')}/${birthDate.getFullYear()}`
+                                            : 'Chọn ngày sinh'
+                                        }
+                                    </Text>
+                                    <Feather name="chevron-down" size={20} color="#666" />
+                                </TouchableOpacity>
                             )}
 
                             <FloatingLabelInput
@@ -416,23 +496,47 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                                     value={confirmPassword}
                                     onChangeText={setConfirmPassword}
                                     isPassword={true}
+                                    icon="lock"
                                 />
                             )}
 
                             {/* Terms & Conditions Checkbox - Only for Register */}
                             {view === AuthView.REGISTER && (
-                                <TouchableOpacity
-                                    style={styles.termsContainer}
-                                    onPress={() => setAgreeToTerms(!agreeToTerms)}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={[styles.checkbox, agreeToTerms && styles.checkboxChecked]}>
-                                        {agreeToTerms && <Feather name="check" size={14} color="#fff" />}
-                                    </View>
+                                <View style={styles.termsContainer}>
+                                    <TouchableOpacity
+                                        style={{ flexDirection: 'row', alignItems: 'flex-start' }}
+                                        onPress={() => setAgreeToTerms(!agreeToTerms)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={[styles.checkbox, agreeToTerms && styles.checkboxChecked]}>
+                                            {agreeToTerms && <Feather name="check" size={14} color="#fff" />}
+                                        </View>
+                                    </TouchableOpacity>
                                     <Text style={styles.termsText}>
-                                        Tôi đồng ý với <Text style={styles.linkText}>Điều khoản sử dụng</Text> và <Text style={styles.linkText}>Chính sách bảo mật</Text>
+                                        Tôi đồng ý với{' '}
+                                        <Text
+                                            style={styles.linkText}
+                                            onPress={() => Alert.alert(
+                                                'Điều khoản sử dụng',
+                                                'Khi sử dụng ứng dụng myZyea Chat, bạn đồng ý:\n\n• Không chia sẻ thông tin cá nhân của người khác\n• Không đăng nội dung vi phạm pháp luật\n• Không spam hoặc quấy rối người dùng khác\n• Tuân thủ quy định của công ty\n• Chịu trách nhiệm về nội dung bạn đăng tải\n\nChúng tôi có quyền khóa tài khoản nếu vi phạm điều khoản.',
+                                                [{ text: 'Đã hiểu' }]
+                                            )}
+                                        >
+                                            Điều khoản sử dụng
+                                        </Text>
+                                        {' '}và{' '}
+                                        <Text
+                                            style={styles.linkText}
+                                            onPress={() => Alert.alert(
+                                                'Chính sách bảo mật',
+                                                'Chúng tôi cam kết bảo vệ thông tin của bạn:\n\n• Thông tin cá nhân được mã hóa và bảo mật\n• Không chia sẻ dữ liệu với bên thứ ba\n• Bạn có quyền yêu cầu xóa dữ liệu\n• Tin nhắn được lưu trữ an toàn\n• Chỉ thu thập thông tin cần thiết\n\nLiên hệ: support@myzyea.com để biết thêm chi tiết.',
+                                                [{ text: 'Đã hiểu' }]
+                                            )}
+                                        >
+                                            Chính sách bảo mật
+                                        </Text>
                                     </Text>
-                                </TouchableOpacity>
+                                </View>
                             )}
 
                             {/* Action Buttons Row */}
@@ -487,10 +591,50 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                                 );
                             })()}
 
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-                                <TouchableOpacity onPress={() => { }}>
-                                    <Text style={{ color: '#666' }}>Quên mật khẩu?</Text>
-                                </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', justifyContent: view === AuthView.LOGIN ? 'space-between' : 'flex-end', marginTop: 16 }}>
+                                {view === AuthView.LOGIN && (
+                                    <TouchableOpacity onPress={() => {
+                                        if (!email.trim()) {
+                                            Alert.alert(
+                                                'Quên mật khẩu',
+                                                'Vui lòng nhập email của bạn vào ô Email phía trên, sau đó nhấn lại "Quên mật khẩu?"',
+                                                [{ text: 'Đã hiểu' }]
+                                            );
+                                            return;
+                                        }
+
+                                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                                        if (!emailRegex.test(email.trim())) {
+                                            Alert.alert(
+                                                'Email không hợp lệ',
+                                                'Vui lòng nhập đúng định dạng email (ví dụ: email@domain.com)',
+                                                [{ text: 'Đóng' }]
+                                            );
+                                            return;
+                                        }
+
+                                        Alert.alert(
+                                            '📧 Đặt lại mật khẩu',
+                                            `Chúng tôi sẽ gửi hướng dẫn đặt lại mật khẩu đến:\n\n${email.trim()}\n\nVui lòng kiểm tra hộp thư (bao gồm cả thư mục Spam).`,
+                                            [
+                                                { text: 'Hủy', style: 'cancel' },
+                                                {
+                                                    text: 'Gửi email',
+                                                    onPress: async () => {
+                                                        // TODO: Call API to send reset password email
+                                                        Alert.alert(
+                                                            'Đã gửi!',
+                                                            'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu trong vài phút.\n\nNếu không nhận được email, vui lòng liên hệ: support@myzyea.com',
+                                                            [{ text: 'Đóng' }]
+                                                        );
+                                                    }
+                                                }
+                                            ]
+                                        );
+                                    }}>
+                                        <Text style={{ color: '#666' }}>Quên mật khẩu?</Text>
+                                    </TouchableOpacity>
+                                )}
 
                                 <TouchableOpacity onPress={() => {
                                     // Clear all form data when switching views
@@ -499,6 +643,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                                     setPassword('');
                                     setName('');
                                     setConfirmPassword('');
+                                    setBirthDate(null);
                                     setAgreeToTerms(false);
                                     setView(view === AuthView.LOGIN ? AuthView.REGISTER : AuthView.LOGIN);
                                 }}>
@@ -510,6 +655,88 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
+
+                {/* Date Picker Modal */}
+                <Modal
+                    visible={showDatePicker}
+                    transparent
+                    animationType="slide"
+                    onRequestClose={() => setShowDatePicker(false)}
+                >
+                    <View style={styles.datePickerModalOverlay}>
+                        <View style={styles.datePickerModalContent}>
+                            <View style={styles.datePickerModalHeader}>
+                                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                    <Text style={{ color: '#666', fontSize: 16 }}>Hủy</Text>
+                                </TouchableOpacity>
+                                <Text style={styles.datePickerModalTitle}>Chọn ngày sinh</Text>
+                                <TouchableOpacity onPress={() => {
+                                    const newDate = new Date(tempYear, tempMonth - 1, tempDay);
+                                    setBirthDate(newDate);
+                                    setShowDatePicker(false);
+                                }}>
+                                    <Text style={{ color: '#FF7E21', fontSize: 16, fontWeight: '600' }}>Xong</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.datePickerRow}>
+                                {/* Day */}
+                                <View style={styles.datePickerColumn}>
+                                    <Text style={styles.datePickerLabel}>Ngày</Text>
+                                    <ScrollView style={styles.datePickerScroll} showsVerticalScrollIndicator={false}>
+                                        {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                                            <TouchableOpacity
+                                                key={day}
+                                                style={[styles.datePickerItem, tempDay === day && styles.datePickerItemSelected]}
+                                                onPress={() => setTempDay(day)}
+                                            >
+                                                <Text style={[styles.datePickerItemText, tempDay === day && styles.datePickerItemTextSelected]}>
+                                                    {day.toString().padStart(2, '0')}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                </View>
+
+                                {/* Month */}
+                                <View style={styles.datePickerColumn}>
+                                    <Text style={styles.datePickerLabel}>Tháng</Text>
+                                    <ScrollView style={styles.datePickerScroll} showsVerticalScrollIndicator={false}>
+                                        {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                                            <TouchableOpacity
+                                                key={month}
+                                                style={[styles.datePickerItem, tempMonth === month && styles.datePickerItemSelected]}
+                                                onPress={() => setTempMonth(month)}
+                                            >
+                                                <Text style={[styles.datePickerItemText, tempMonth === month && styles.datePickerItemTextSelected]}>
+                                                    {month.toString().padStart(2, '0')}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                </View>
+
+                                {/* Year */}
+                                <View style={styles.datePickerColumn}>
+                                    <Text style={styles.datePickerLabel}>Năm</Text>
+                                    <ScrollView style={styles.datePickerScroll} showsVerticalScrollIndicator={false}>
+                                        {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                                            <TouchableOpacity
+                                                key={year}
+                                                style={[styles.datePickerItem, tempYear === year && styles.datePickerItemSelected]}
+                                                onPress={() => setTempYear(year)}
+                                            >
+                                                <Text style={[styles.datePickerItemText, tempYear === year && styles.datePickerItemTextSelected]}>
+                                                    {year}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
             </View>
         );
     }
@@ -813,6 +1040,93 @@ const styles = StyleSheet.create({
     },
     sheetButtonText: {
         color: '#666',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    // Date Picker Styles
+    datePickerButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#eee',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        backgroundColor: '#FCFCFC',
+        marginBottom: 12,
+    },
+    datePickerText: {
+        flex: 1,
+        fontSize: 16,
+        color: '#333',
+    },
+    datePickerModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    datePickerModalContent: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        paddingBottom: 40,
+    },
+    datePickerModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    datePickerModalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    datePickerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 20,
+    },
+    datePickerColumn: {
+        flex: 1,
+        marginHorizontal: 5,
+    },
+    datePickerLabel: {
+        fontSize: 13,
+        color: '#666',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    datePickerScroll: {
+        height: 150,
+        borderWidth: 1,
+        borderColor: '#eee',
+        borderRadius: 10,
+    },
+    datePickerItem: {
+        paddingVertical: 12,
+        alignItems: 'center',
+    },
+    datePickerItemText: {
+        fontSize: 16,
+        color: '#333',
+    },
+    datePickerItemSelected: {
+        backgroundColor: '#FF7E21',
+    },
+    datePickerItemTextSelected: {
+        color: '#fff',
+        fontWeight: 'bold',
+    },
+    datePickerConfirmButton: {
+        backgroundColor: '#FF7E21',
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    datePickerConfirmText: {
+        color: '#fff',
         fontSize: 16,
         fontWeight: '600',
     },

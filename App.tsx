@@ -55,6 +55,7 @@ import WalletsScreen from './src/screens/Finance/WalletsScreen';
 import FeedbackScreen from './src/screens/FeedbackScreen';
 import PlaceNotificationsScreen from './src/screens/PlaceNotificationsScreen';
 import CreateGroupScreen from './src/screens/CreateGroupScreen';
+import GroupInfoScreen from './src/screens/GroupInfoScreen';
 
 // Configure Notifications to show alert when app is in foreground
 Notifications.setNotificationHandler({
@@ -622,6 +623,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
         <Stack.Screen name="NewChat" component={NewChatScreen} />
         <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
+        <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
 
         {/* Call Screen */}
         <Stack.Screen

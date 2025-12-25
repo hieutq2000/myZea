@@ -1,6 +1,6 @@
 {
   "name": "vinalive-ai-mobile",
-  "version": "2.7.3",
+  "version": "1.0.7",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",

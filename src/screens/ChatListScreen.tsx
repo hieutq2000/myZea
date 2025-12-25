@@ -99,9 +99,12 @@ export default function ChatListScreen() {
                     id: g.id,
                     groupId: g.id,
                     name: g.name,
-                    lastMessage: g.lastMessage?.text || 'Nhóm mới được tạo',
-                    lastMessageTime: g.lastMessage?.createdAt || g.created_at,
-                    time: formatMessageTime(g.lastMessage?.createdAt || g.created_at),
+                    // Backend returns 'content' not 'text', and 'created_at' not 'createdAt'
+                    lastMessage: g.lastMessage?.content || g.lastMessage?.text || 'Nhóm mới được tạo',
+                    lastMessageTime: g.lastMessage?.created_at || g.lastMessage?.createdAt || g.created_at,
+                    lastMessageSenderId: g.lastMessage?.sender_id,
+                    lastMessageSenderName: g.lastMessage?.sender_name,
+                    time: formatMessageTime(g.lastMessage?.created_at || g.lastMessage?.createdAt || g.created_at),
                     avatar: g.avatar,
                     unread: 0,
                     isOnline: false,
@@ -269,10 +272,25 @@ export default function ChatListScreen() {
     // Format last message
     const formatLastMessage = (item: any): string => {
         if (!item.lastMessage) return 'Bắt đầu cuộc trò chuyện';
+        if (item.lastMessage === 'Nhóm mới được tạo') return 'Nhóm mới được tạo';
 
         const msg = item.lastMessage;
         const isFromMe = item.lastMessageSenderId === currentUserId;
-        const prefix = isFromMe ? 'Bạn: ' : '';
+
+        // Determine prefix based on sender
+        let prefix = '';
+        if (item.isGroup) {
+            // Group chat: Show "Bạn:" or sender full name
+            if (isFromMe) {
+                prefix = 'Bạn: ';
+            } else if (item.lastMessageSenderName) {
+                // Use full name
+                prefix = `${item.lastMessageSenderName}: `;
+            }
+        } else {
+            // Individual chat: Only show "Bạn:" for messages from me
+            prefix = isFromMe ? 'Bạn: ' : '';
+        }
 
         // Check for deleted message (from backend or local check)
         const deletedBy = item.lastMessageDeletedBy;

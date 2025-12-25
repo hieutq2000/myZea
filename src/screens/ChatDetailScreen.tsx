@@ -7,7 +7,7 @@ import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
 import { Ionicons, Feather, FontAwesome, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getSocket } from '../utils/socket';
-import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage, getImageUrl, getUserInfo } from '../utils/api';
+import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage, getImageUrl, getUserInfo, apiRequest } from '../utils/api';
 import { launchImageLibrary, launchCamera } from '../utils/imagePicker';
 import EmojiPicker from '../components/EmojiPicker';
 import StickerPicker from '../components/StickerPicker';
@@ -73,6 +73,8 @@ export default function ChatDetailScreen() {
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [imageCaption, setImageCaption] = useState('');
     const [previewMediaType, setPreviewMediaType] = useState<'image' | 'video'>('image');
+    // Read receipts for group chat - maps messageId to array of readers
+    const [readReceipts, setReadReceipts] = useState<{ [messageId: string]: Array<{ id: string, name: string, avatar?: string }> }>({});
 
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
@@ -80,9 +82,14 @@ export default function ChatDetailScreen() {
     const isFirstLoad = useRef(true);
 
     useEffect(() => {
-        isFirstLoad.current = true;
-        loadHistory();
-        fetchCurrentUser();
+        const initChat = async () => {
+            isFirstLoad.current = true;
+            // Fetch current user FIRST to ensure currentUserId is set before loading messages
+            const userId = await fetchCurrentUser();
+            // Then load history with the userId
+            await loadHistory(userId);
+        };
+        initChat();
 
         const unsubscribeFocus = navigation.addListener('focus', () => {
             loadHistory();
@@ -211,14 +218,20 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const fetchCurrentUser = async () => {
+    const fetchCurrentUser = async (): Promise<string | null> => {
         const user = await getCurrentUser();
-        if (user) setCurrentUserId(user.id);
+        if (user) {
+            setCurrentUserId(user.id);
+            return user.id;
+        }
+        return null;
     };
 
-    const loadHistory = async () => {
+    const loadHistory = async (userId?: string | null) => {
         try {
             let mapped: any[] = [];
+            // Use passed userId or fall back to state
+            const myUserId = userId || currentUserId;
 
             if (isGroup && groupId) {
                 // Load group messages
@@ -228,7 +241,7 @@ export default function ChatDetailScreen() {
                     text: m.text,
                     type: m.type || 'text',
                     imageUrl: m.imageUrl,
-                    sender: m.senderId === currentUserId ? 'me' : 'other',
+                    sender: m.senderId === myUserId ? 'me' : 'other',
                     time: m.time || new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     createdAt: m.createdAt,
                     senderId: m.senderId,
@@ -246,7 +259,7 @@ export default function ChatDetailScreen() {
                     text: m.text,
                     type: m.type || 'text',
                     imageUrl: m.imageUrl,
-                    sender: m.user._id === currentUserId ? 'me' : 'other',
+                    sender: m.user._id === myUserId ? 'me' : 'other',
                     time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     createdAt: m.createdAt,
                     senderId: m.user._id,
@@ -259,6 +272,15 @@ export default function ChatDetailScreen() {
             setMessages(mapped);
             scrollToBottom(false);
 
+            // Mark messages as read
+            markMessagesAsRead();
+
+            // Load read receipts for group messages
+            if (isGroup && mapped.length > 0) {
+                const msgIds = mapped.filter(m => m.sender === 'me').map(m => m.id);
+                loadReadReceipts(msgIds);
+            }
+
             if (conversationId) {
                 markConversationAsRead(conversationId).catch(err =>
                     console.log('Mark as read error:', err)
@@ -270,20 +292,30 @@ export default function ChatDetailScreen() {
     };
 
     const appendMessage = (msg: any) => {
-        const isFromPartner = msg.user._id !== currentUserId;
+        // Support both individual chat (user._id) and group chat (senderId)
+        const messageSenderId = msg.user?._id || msg.senderId;
+        const isFromPartner = messageSenderId !== currentUserId;
+
+        // For group chat, check if this message belongs to current group
+        if (isGroup && msg.groupId && msg.groupId !== groupId) {
+            return; // Skip messages from other groups
+        }
 
         setMessages(prev => {
-            if (prev.find(m => m.id === msg._id)) return prev;
+            if (prev.find(m => m.id === msg._id || m.id === msg.id)) return prev;
             return [...prev, {
-                id: msg._id,
+                id: msg._id || msg.id,
                 text: msg.text,
                 type: msg.type || 'text',
                 imageUrl: msg.imageUrl,
                 createdAt: msg.createdAt,
-                sender: msg.user._id === currentUserId ? 'me' : 'other',
+                sender: messageSenderId === currentUserId ? 'me' : 'other',
                 time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                senderId: msg.user._id,
-                replyTo: msg.replyTo
+                senderId: messageSenderId,
+                senderName: msg.senderName || msg.user?.name,
+                senderAvatar: msg.senderAvatar || msg.user?.avatar,
+                replyTo: msg.replyTo,
+                groupId: msg.groupId
             }];
         });
 
@@ -292,6 +324,43 @@ export default function ChatDetailScreen() {
             setNewMessageCount(prev => prev + 1);
         } else {
             scrollToBottom();
+        }
+    };
+
+    // Load read receipts for messages (group chat only)
+    const loadReadReceipts = async (messageIds: string[]) => {
+        if (!isGroup || messageIds.length === 0) return;
+
+        try {
+            const receipts = await apiRequest<{ [messageId: string]: Array<{ id: string, name: string, avatar?: string }> }>('/api/messages/readers', {
+                method: 'POST',
+                body: JSON.stringify({ messageIds })
+            });
+
+            if (receipts) {
+                setReadReceipts(prev => ({ ...prev, ...receipts }));
+            }
+        } catch (error) {
+            console.log('Load read receipts error:', error);
+        }
+    };
+
+    // Mark messages as read when opening chat
+    const markMessagesAsRead = async () => {
+        try {
+            if (isGroup && groupId) {
+                await apiRequest('/api/messages/read', {
+                    method: 'POST',
+                    body: JSON.stringify({ groupId })
+                });
+            } else if (conversationId) {
+                await apiRequest('/api/messages/read', {
+                    method: 'POST',
+                    body: JSON.stringify({ conversationId })
+                });
+            }
+        } catch (error) {
+            console.log('Mark read error:', error);
         }
     };
 
@@ -584,37 +653,53 @@ export default function ChatDetailScreen() {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name="chevron-back" size={28} color="#000000" />
                 </TouchableOpacity>
-                <View style={styles.headerAvatarContainer}>
-                    {isGroup ? (
-                        <GroupAvatar
-                            members={members}
-                            groupAvatar={headerAvatar}
-                            groupName={headerName}
-                            size={42}
-                        />
-                    ) : headerAvatar ? (
-                        <Image
-                            source={{ uri: getAvatarUri(headerAvatar, headerName) }}
-                            style={styles.headerAvatar}
-                        />
-                    ) : (
-                        <View style={[styles.headerAvatar, { backgroundColor: '#E4E6EB', alignItems: 'center', justifyContent: 'center' }]}>
-                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#666' }}>
-                                {headerName?.[0]?.toUpperCase()}
-                            </Text>
-                        </View>
-                    )}
-                    {!isGroup && isPartnerOnline && <View style={styles.onlineIndicator} />}
-                </View>
-                <View style={styles.headerInfo}>
-                    <Text style={styles.headerTitle} numberOfLines={1}>{headerName}</Text>
-                    <Text style={[
-                        styles.headerSubtitle,
-                        !isGroup && isPartnerOnline && { color: '#31A24C' }
-                    ]} numberOfLines={1}>
-                        {isGroup ? `${members?.length || 0} thành viên` : formatLastSeen()}
-                    </Text>
-                </View>
+                <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center' }}
+                    onPress={() => {
+                        if (isGroup && groupId) {
+                            (navigation as any).navigate('GroupInfo', {
+                                groupId,
+                                groupName: headerName,
+                                groupAvatar: headerAvatar,
+                                members,
+                                creatorId: undefined // Will be loaded in GroupInfoScreen
+                            });
+                        }
+                    }}
+                    disabled={!isGroup}
+                >
+                    <View style={styles.headerAvatarContainer}>
+                        {isGroup ? (
+                            <GroupAvatar
+                                members={members}
+                                groupAvatar={headerAvatar}
+                                groupName={headerName}
+                                size={42}
+                            />
+                        ) : headerAvatar ? (
+                            <Image
+                                source={{ uri: getAvatarUri(headerAvatar, headerName) }}
+                                style={styles.headerAvatar}
+                            />
+                        ) : (
+                            <View style={[styles.headerAvatar, { backgroundColor: '#E4E6EB', alignItems: 'center', justifyContent: 'center' }]}>
+                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#666' }}>
+                                    {headerName?.[0]?.toUpperCase()}
+                                </Text>
+                            </View>
+                        )}
+                        {!isGroup && isPartnerOnline && <View style={styles.onlineIndicator} />}
+                    </View>
+                    <View style={styles.headerInfo}>
+                        <Text style={styles.headerTitle} numberOfLines={1}>{headerName}</Text>
+                        <Text style={[
+                            styles.headerSubtitle,
+                            !isGroup && isPartnerOnline && { color: '#31A24C' }
+                        ]} numberOfLines={1}>
+                            {isGroup ? `${members?.length || 0} thành viên` : formatLastSeen()}
+                        </Text>
+                    </View>
+                </TouchableOpacity>
             </View>
             <View style={styles.headerRight}>
                 <TouchableOpacity
@@ -829,11 +914,17 @@ export default function ChatDetailScreen() {
                     ]}>
                         {!isMe && (
                             <View style={styles.avatarContainer}>
-                                {avatar ? (
-                                    <Image source={{ uri: getAvatarUri(avatar, userName) }} style={styles.avatarSmall} />
+                                {/* Use sender avatar for group chat, partner avatar for 1-1 chat */}
+                                {(isGroup ? item.senderAvatar : avatar) ? (
+                                    <Image
+                                        source={{ uri: getAvatarUri(isGroup ? item.senderAvatar : avatar, isGroup ? item.senderName : userName) }}
+                                        style={styles.avatarSmall}
+                                    />
                                 ) : (
                                     <View style={[styles.avatarSmall, { backgroundColor: '#A0AEC0', alignItems: 'center', justifyContent: 'center' }]}>
-                                        <Text style={{ color: 'white', fontSize: 10 }}>{userName?.[0]?.toUpperCase()}</Text>
+                                        <Text style={{ color: 'white', fontSize: 10 }}>
+                                            {(isGroup ? item.senderName : userName)?.[0]?.toUpperCase()}
+                                        </Text>
                                     </View>
                                 )}
                             </View>
@@ -949,9 +1040,28 @@ export default function ChatDetailScreen() {
                                         )}
                                         <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF' }]}>{item.time}</Text>
                                     </View>
-                                    {isMe && isLast && (
+                                    {/* Read receipts for group chat or seen status for 1-1 */}
+                                    {isMe && isGroup && readReceipts[item.id] && readReceipts[item.id].length > 0 ? (
+                                        <View style={styles.readReceiptsContainer}>
+                                            {readReceipts[item.id].slice(0, 5).map((reader, idx) => (
+                                                <Image
+                                                    key={reader.id}
+                                                    source={{ uri: getAvatarUri(reader.avatar, reader.name) }}
+                                                    style={[
+                                                        styles.readReceiptAvatar,
+                                                        { marginLeft: idx > 0 ? -6 : 0 }
+                                                    ]}
+                                                />
+                                            ))}
+                                            {readReceipts[item.id].length > 5 && (
+                                                <View style={[styles.readReceiptAvatar, styles.readReceiptMore, { marginLeft: -6 }]}>
+                                                    <Text style={styles.readReceiptMoreText}>+{readReceipts[item.id].length - 5}</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    ) : isMe && isLast && !isGroup ? (
                                         <Text style={[styles.seenText, { color: 'rgba(255,255,255,0.7)' }]}>{lastSeenMessageId === item.id ? 'Đã xem' : 'Đã gửi'}</Text>
-                                    )}
+                                    ) : null}
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -959,7 +1069,7 @@ export default function ChatDetailScreen() {
                 </Swipeable>
             </>
         );
-    }, [messages, currentUserId, avatar, userName, navigation, partnerId, conversationId, lastSeenMessageId]);
+    }, [messages, currentUserId, avatar, userName, navigation, partnerId, conversationId, lastSeenMessageId, readReceipts, isGroup]);
 
 
 
@@ -2203,5 +2313,30 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginLeft: 10,
+    },
+    // Read receipts styles
+    readReceiptsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-end',
+        marginTop: 4,
+    },
+    readReceiptAvatar: {
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#0068FF',
+        backgroundColor: '#e1e1e1',
+    },
+    readReceiptMore: {
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    readReceiptMoreText: {
+        fontSize: 8,
+        color: '#0068FF',
+        fontWeight: 'bold',
     },
 });

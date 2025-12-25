@@ -52,10 +52,16 @@ function createSlug(text) {
 app.use(cors());
 app.use(express.json({ limit: '500mb' })); // Increase for large IPA
 app.use(express.urlencoded({ extended: true, limit: '500mb' }));
-app.use(fileUpload({
-    createParentPath: true,
-    limits: { fileSize: 500 * 1024 * 1024 } // 500MB max
-}));
+app.use((req, res, next) => {
+    // Skip fileUpload for routes handled by multer to avoid conflicts
+    if (req.path === '/api/upload/image' || req.path === '/api/admin/ipa/upload') {
+        return next();
+    }
+    fileUpload({
+        createParentPath: true,
+        limits: { fileSize: 500 * 1024 * 1024 }
+    })(req, res, next);
+});
 
 // Serve static files from public directory (landing page)
 app.use(express.static(path.join(__dirname, '../public')));
@@ -146,9 +152,26 @@ async function initDatabase() {
             password: process.env.DB_PASSWORD || 'vinalive123',
             database: process.env.DB_NAME || 'vinalive_db',
             waitForConnections: true,
-            connectionLimit: 10,
+            connectionLimit: 25, // Increased from 10 for better concurrency
+            queueLimit: 0, // Unlimited queue
             timezone: 'Z', // Use UTC to avoid timezone conversion issues
+            enableKeepAlive: true, // Keep connections alive
+            keepAliveInitialDelay: 10000, // 10 seconds
         });
+
+        // Automatically increase max_allowed_packet for this session/global
+        try {
+            await pool.execute('SET GLOBAL max_allowed_packet=67108864');
+            console.log('🚀 Increased GLOBAL max_allowed_packet to 64MB');
+        } catch (e) {
+            console.log('⚠️ Could not set GLOBAL packet size, attempting session level...');
+            try {
+                await pool.execute('SET session max_allowed_packet=67108864');
+                console.log('✅ Set session max_allowed_packet to 64MB');
+            } catch (e2) {
+                console.log('❌ Failed to set packet size:', e2.message);
+            }
+        }
 
         // Create tables if not exist
         await pool.execute(`
@@ -190,6 +213,24 @@ async function initDatabase() {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+
+        // Ensure critical columns exist (Compatible with older MySQL versions)
+        const ensureColumn = async (table, column, definition) => {
+            try {
+                const [cols] = await pool.query(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? AND COLUMN_NAME = ? AND TABLE_SCHEMA = DATABASE()`, [table, column]);
+                if (cols.length === 0) {
+                    console.log(`🛠 Adding missing column ${column} to ${table}...`);
+                    await pool.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+                }
+            } catch (err) {
+                console.log(`⚠️ Failed to check/add column ${column}:`, err.message);
+            }
+        };
+
+        await ensureColumn('posts', 'original_post_id', 'VARCHAR(36) NULL');
+        await ensureColumn('posts', 'group_id', 'VARCHAR(36) NULL');
+        await ensureColumn('posts', 'views', 'INT DEFAULT 0');
+        await ensureColumn('posts', 'shares', 'INT DEFAULT 0');
 
         await pool.execute(`
       CREATE TABLE IF NOT EXISTS post_likes (
@@ -260,6 +301,55 @@ async function initDatabase() {
       )
     `);
 
+        // Create post_views table
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS post_views (
+                id VARCHAR(36) PRIMARY KEY,
+                post_id VARCHAR(36) NOT NULL,
+                user_id VARCHAR(36) NOT NULL,
+                viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_view (post_id, user_id),
+                INDEX idx_post_views_post_id (post_id)
+            )
+        `);
+
+        // Create post_tags table
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS post_tags (
+                id VARCHAR(36) PRIMARY KEY,
+                post_id VARCHAR(36) NOT NULL,
+                user_id VARCHAR(36) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_tag (post_id, user_id),
+                INDEX idx_post_tags_post_id (post_id),
+                INDEX idx_post_tags_user_id (user_id)
+            )
+        `);
+
+        // Create place_notifications table
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS place_notifications (
+                id VARCHAR(36) PRIMARY KEY,
+                recipient_id VARCHAR(36) NOT NULL,
+                actor_id VARCHAR(36) NOT NULL,
+                type ENUM('like', 'comment', 'share', 'mention', 'follow', 'tag') NOT NULL,
+                post_id VARCHAR(36) NULL,
+                comment_id VARCHAR(36) NULL,
+                message TEXT,
+                post_preview VARCHAR(255) NULL,
+                is_read BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_notifications_recipient (recipient_id),
+                INDEX idx_notifications_created_at (created_at DESC),
+                INDEX idx_notifications_recipient_unread (recipient_id, is_read)
+            )
+        `);
+
+        // Ensure indexes
+        try { await pool.execute('CREATE INDEX idx_posts_created_at ON posts(created_at DESC)'); } catch (e) { }
+        try { await pool.execute('CREATE INDEX idx_posts_group_id ON posts(group_id)'); } catch (e) { }
+        try { await pool.execute('CREATE INDEX idx_post_likes_post_id ON post_likes(post_id)'); } catch (e) { }
+
         // Initialize default links
         try {
             const [rows] = await pool.execute('SELECT setting_key FROM app_settings WHERE setting_key IN ("google_play_link", "app_store_link")');
@@ -328,6 +418,34 @@ async function initDatabase() {
             try { await pool.execute("SET FOREIGN_KEY_CHECKS=1"); } catch (e2) { }
         }
 
+        // --- NEW PLACE TABLES & COLUMNS (Ensuring they exist) ---
+        console.log("🛠 Checking Place related tables/columns...");
+
+        // Ensure posts has sharing/group columns
+        const ensurePostsCols = async () => {
+            const cols = [
+                { name: 'original_post_id', def: 'VARCHAR(36) NULL' },
+                { name: 'group_id', def: 'VARCHAR(36) NULL' },
+                { name: 'views', def: 'INT DEFAULT 0' },
+                { name: 'shares', def: 'INT DEFAULT 0' }
+            ];
+            for (const col of cols) {
+                try {
+                    const [res] = await pool.query(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'posts' AND COLUMN_NAME = ? AND TABLE_SCHEMA = DATABASE()`, [col.name]);
+                    if (res.length === 0) {
+                        console.log(`🛠 Adding missing column ${col.name} to posts`);
+                        await pool.execute(`ALTER TABLE posts ADD COLUMN ${col.name} ${col.def}`);
+                    }
+                } catch (err) { /* ignore */ }
+            }
+        };
+        await ensurePostsCols();
+
+        // Create secondary Place tables
+        await pool.execute(`CREATE TABLE IF NOT EXISTS post_views (id VARCHAR(36) PRIMARY KEY, post_id VARCHAR(36) NOT NULL, user_id VARCHAR(36) NOT NULL, viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_view (post_id, user_id))`);
+        await pool.execute(`CREATE TABLE IF NOT EXISTS post_tags (id VARCHAR(36) PRIMARY KEY, post_id VARCHAR(36) NOT NULL, user_id VARCHAR(36) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_tag (post_id, user_id))`);
+        await pool.execute(`CREATE TABLE IF NOT EXISTS place_notifications (id VARCHAR(36) PRIMARY KEY, recipient_id VARCHAR(36) NOT NULL, actor_id VARCHAR(36) NOT NULL, type VARCHAR(20) NOT NULL, post_id VARCHAR(36) NULL, comment_id VARCHAR(36) NULL, message TEXT, post_preview VARCHAR(255) NULL, is_read BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+
         console.log('✅ Database connected and tables created');
     } catch (error) {
         console.error('❌ Database connection failed:', error.message);
@@ -374,7 +492,12 @@ app.get('/api/changelog/latest', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date() });
+    res.json({
+        status: 'ok',
+        timestamp: new Date(),
+        version: '2.7.4-stable',
+        node: process.version
+    });
 });
 
 // ============ AUTH ROUTES ============
@@ -837,6 +960,17 @@ app.post('/api/admin/upload-ipa', authenticateToken, async (req, res) => {
         const plistUrl = `${baseUrl}/uploads/ipa/${plistName}`;
         const itmsLink = `itms-services://?action=download-manifest&url=${plistUrl}`;
 
+        // Auto sync to AltStore/SideStore repo (source.json)
+        try {
+            if (typeof global.syncIpaToRepo === 'function') {
+                global.syncIpaToRepo(metadata);
+                console.log('✅ Auto-synced IPA to source.json repo');
+            }
+        } catch (syncErr) {
+            console.error('Warning: Failed to auto-sync to repo:', syncErr);
+            // Don't fail the upload if sync fails
+        }
+
         res.json({
             success: true,
             ipaUrl,
@@ -845,7 +979,8 @@ app.post('/api/admin/upload-ipa', authenticateToken, async (req, res) => {
             timestamp,
             appName,
             version,
-            bundleId
+            bundleId,
+            repoSynced: true
         });
     } catch (error) {
         console.error('IPA Upload error:', error);
@@ -973,7 +1108,18 @@ app.put('/api/admin/ipas/:timestamp', authenticateToken, async (req, res) => {
 </plist>`;
         fs.writeFileSync(plistPath, plistContent);
 
-        res.json({ success: true, metadata });
+        // Auto sync to AltStore/SideStore repo (source.json) after metadata update
+        try {
+            if (typeof global.syncIpaToRepo === 'function') {
+                global.syncIpaToRepo(metadata);
+                console.log('✅ Auto-synced updated IPA to source.json repo');
+            }
+        } catch (syncErr) {
+            console.error('Warning: Failed to auto-sync to repo after update:', syncErr);
+            // Don't fail the update if sync fails
+        }
+
+        res.json({ success: true, metadata, repoSynced: true });
     } catch (error) {
         console.error('Update IPA error:', error);
         res.status(500).json({ error: 'Lỗi server khi cập nhật' });
@@ -1181,19 +1327,61 @@ app.get('/app/:appSlug/:timestamp', (req, res) => {
 
         // Check if app exists
         if (fs.existsSync(metadataPath)) {
+            // Read metadata for SEO/OG injection
+            let metadata = {};
+            try {
+                metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+            } catch (e) {
+                console.error('Error reading metadata for SEO:', e);
+            }
+
             // Serve the app-install.html with the timestamp
             const htmlPath = path.join(__dirname, '../public/app-install.html');
             let html = fs.readFileSync(htmlPath, 'utf8');
 
-            // Inject timestamp into the page so JS can use it
+            // 1. Inject timestamp for JS logic
             html = html.replace(
                 "const urlParams = new URLSearchParams(window.location.search);",
                 `const urlParams = { get: (key) => key === 'id' ? '${timestamp}' : null };`
             );
 
+            // 2. Inject Open Graph Meta Tags (For rich preview on Telegram, Zalo, FB)
+            const baseUrl = 'https://data5g.site';
+            const iconUrl = metadata.iconFileName ? `${baseUrl}/uploads/ipa/${metadata.iconFileName}` : '';
+            // Use screenshot as preview image if available, otherwise use icon
+            const previewImage = (metadata.screenshots && metadata.screenshots.length > 0)
+                ? `${baseUrl}/uploads/ipa/${metadata.screenshots[0]}`
+                : iconUrl;
+
+            const metaTags = `
+    <title>${metadata.appName || 'Download App'} - iOS Install</title>
+    <meta name="description" content="${metadata.description ? metadata.description.substring(0, 150) : 'Download and install app for iOS'}">
+    
+    <!-- Open Graph / Facebook / Zalo -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="${baseUrl}/app/${appSlug}/${timestamp}">
+    <meta property="og:title" content="${metadata.appName || 'Download App'} - Download for iOS">
+    <meta property="og:description" content="${metadata.description ? metadata.description.substring(0, 200) + '...' : 'Tap to install this application on your iOS device.'}">
+    <meta property="og:image" content="${previewImage}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:title" content="${metadata.appName || 'Download App'}">
+    <meta property="twitter:description" content="${metadata.description ? metadata.description.substring(0, 150) : 'Download app for iOS'}">
+    <meta property="twitter:image" content="${previewImage}">
+            `;
+
+            // Replace existing title or insert into head
+            if (html.includes('<title>Download App</title>')) {
+                html = html.replace('<title>Download App</title>', metaTags);
+            } else if (html.includes('</head>')) {
+                html = html.replace('</head>', `${metaTags}</head>`);
+            }
+
             res.send(html);
         } else {
-            // res.status(404).send('App not found');
             const notFoundPath = path.join(__dirname, '../public/404.html');
             if (fs.existsSync(notFoundPath)) {
                 res.status(404).sendFile(notFoundPath);
@@ -1866,16 +2054,8 @@ app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Ensure deleted_at column exists
-        try {
-            await pool.execute('SELECT deleted_at FROM conversation_participants LIMIT 1');
-        } catch (e) {
-            try {
-                await pool.execute('ALTER TABLE conversation_participants ADD COLUMN deleted_at DATETIME NULL');
-            } catch (alterErr) { }
-        }
-
         // Get private conversations with partner info, pin/mute status
+        // Using simpler query without message_reads table dependency
         const [rows] = await pool.execute(`
             SELECT 
                 c.id as conversation_id,
@@ -1884,42 +2064,32 @@ app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
                 u.cover_image,
                 u.id as partner_id,
                 CASE 
-                    WHEN m.created_at > IFNULL(cp_me.deleted_at, '1970-01-01') OR m.created_at IS NULL THEN 
-                        CASE 
-                            WHEN m.deleted_by IS NOT NULL AND JSON_LENGTH(m.deleted_by) > 0 THEN '[Tin nhắn đã bị xóa]'
-                            WHEN m.type = 'sticker' THEN '[Sticker]'
-                            WHEN m.type = 'image' AND (m.content IS NULL OR m.content = '' OR m.content = '[Hình ảnh]') THEN '[Hình ảnh]'
-                            WHEN m.type = 'image' AND m.content IS NOT NULL AND m.content != '' AND m.content != '[Hình ảnh]' THEN m.content
-                            ELSE IFNULL(m.content, '')
-                        END
-                    ELSE '' 
+                    WHEN m.deleted_by IS NOT NULL AND JSON_LENGTH(m.deleted_by) > 0 THEN '[Tin nhắn đã bị xóa]'
+                    WHEN m.type = 'sticker' THEN '[Sticker]'
+                    WHEN m.type = 'image' AND (m.content IS NULL OR m.content = '' OR m.content = '[Hình ảnh]') THEN '[Hình ảnh]'
+                    WHEN m.type = 'video' THEN '[Video]'
+                    WHEN m.type = 'image' AND m.content IS NOT NULL AND m.content != '' AND m.content != '[Hình ảnh]' THEN m.content
+                    ELSE IFNULL(m.content, 'Bắt đầu trò chuyện')
                 END as last_message,
                 m.type as last_message_type,
                 m.deleted_by as last_message_deleted_by,
-                m.created_at as last_message_time,
+                COALESCE(m.created_at, c.updated_at) as last_message_time,
                 m.sender_id as last_message_sender_id,
                 u.last_seen,
                 u.status,
-                cp_me.is_pinned,
-                cp_me.is_muted,
-                cp_me.deleted_at,
-                (SELECT COUNT(*) FROM messages msg 
-                 WHERE msg.conversation_id = c.id 
-                 AND msg.sender_id != ? 
-                 AND msg.id NOT IN (SELECT message_id FROM message_reads WHERE user_id = ?)
-                 AND msg.created_at > IFNULL(cp_me.deleted_at, '1970-01-01')
-                ) as unread_count
+                IFNULL(cp_me.is_pinned, 0) as is_pinned,
+                IFNULL(cp_me.is_muted, 0) as is_muted,
+                0 as unread_count
             FROM conversations c
-            JOIN conversation_participants cp_me ON cp_me.conversation_id = c.id
-            JOIN conversation_participants cp_other ON cp_other.conversation_id = c.id
-            JOIN users u ON cp_other.user_id = u.id
+            INNER JOIN conversation_participants cp_me ON cp_me.conversation_id = c.id AND cp_me.user_id = ?
+            INNER JOIN conversation_participants cp_other ON cp_other.conversation_id = c.id AND cp_other.user_id != ?
+            INNER JOIN users u ON cp_other.user_id = u.id
             LEFT JOIN messages m ON c.last_message_id = m.id
-            WHERE c.type = 'private' 
-            AND cp_me.user_id = ? 
-            AND cp_other.user_id != ?
+            WHERE c.type = 'private'
             AND (cp_me.is_hidden IS NULL OR cp_me.is_hidden = 0)
-            ORDER BY cp_me.is_pinned DESC, m.created_at DESC
-        `, [userId, userId, userId, userId]);
+            ORDER BY IFNULL(cp_me.is_pinned, 0) DESC, COALESCE(m.created_at, c.updated_at) DESC
+            LIMIT 100
+        `, [userId, userId]);
 
         res.json(rows);
     } catch (error) {
@@ -2211,8 +2381,11 @@ async function getVideoDimensions(filePath) {
 app.post('/api/upload/image', upload.single('image'), async (req, res) => {
     try {
         if (!req.file) {
+            console.log('❌ Upload failed: No file in request');
             return res.status(400).json({ error: 'Không có file được upload' });
         }
+
+        console.log(`📂 Incoming file: ${req.file.originalname}, Size: ${req.file.size}, Mimetype: ${req.file.mimetype}`);
 
         // NEW: Return relative path instead of full URL
         // This makes URLs work regardless of IP changes
@@ -2676,30 +2849,30 @@ app.post('/api/place/posts', authenticateToken, async (req, res) => {
     try {
         let { content, imageUrl, images, originalPostId, taggedUserIds } = req.body;
 
-        // Auto-fetch Link Preview if no images provided
-        if ((!images || images.length === 0) && !imageUrl && content) {
+        // Auto-fetch Link Preview ONLY if NO images are provided
+        const hasStaticImages = (images && Array.isArray(images) && images.length > 0) || (imageUrl && imageUrl.trim() !== '');
+
+        if (!hasStaticImages && content) {
             try {
                 // Regex to find URL
                 const urlMatch = content.match(/(https?:\/\/[^\s]+)/);
                 if (urlMatch) {
                     const url = urlMatch[0];
-                    console.log('🔍 Detecting URL:', url);
+                    console.log('🔍 Detecting URL for preview:', url);
 
-                    // Fetch HTML
-                    const response = await fetch(url, {
-                        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }
+                    // Fetch HTML using axios
+                    const response = await axios.get(url, {
+                        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' },
+                        timeout: 5000
                     });
-                    const html = await response.text();
+                    const html = response.data;
 
-                    // Extract og:image
                     const ogImageMatch = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i);
                     const twitterImageMatch = html.match(/<meta\s+(?:property|name)=["']twitter:image["']\s+content=["']([^"']+)["']/i);
-
                     const foundImage = (ogImageMatch && ogImageMatch[1]) || (twitterImageMatch && twitterImageMatch[1]);
 
                     if (foundImage) {
-                        console.log('✅ Found OG Image:', foundImage);
-                        // Fix relative URLs if necessary (basic)
+                        console.log('✅ Found OG Image for preview:', foundImage);
                         if (foundImage.startsWith('http')) {
                             imageUrl = foundImage;
                             images = [foundImage];
@@ -2723,12 +2896,17 @@ app.post('/api/place/posts', authenticateToken, async (req, res) => {
         const postId = uuidv4();
         const userId = req.user.id;
 
+        // Ensure we handle both single imageUrl and multiple images array
         let imageToSave = null;
-        if (images && Array.isArray(images) && images.length > 0) {
-            imageToSave = JSON.stringify(images);
-        } else if (imageUrl) {
-            imageToSave = imageUrl;
+        const finalImages = (images && Array.isArray(images) && images.length > 0) ? images : (imageUrl ? [imageUrl] : []);
+
+        if (finalImages.length > 0) {
+            // Store as JSON string in the database
+            imageToSave = JSON.stringify(finalImages.map(img => typeof img === 'object' ? img.uri : img));
         }
+
+        console.log(`📝 Creating post ${postId} for user ${userId}`);
+        console.log(`🖼 Final image data to save:`, imageToSave ? (imageToSave.length > 100 ? imageToSave.substring(0, 100) + '...' : imageToSave) : 'none');
 
         await pool.execute(
             'INSERT INTO posts (id, user_id, content, image_url, original_post_id) VALUES (?, ?, ?, ?, ?)',
@@ -3085,87 +3263,8 @@ app.patch('/api/place/notifications/read-all', authenticateToken, async (req, re
 
 // Function to optimize database indexes
 const optimizeDatabase = async () => {
-    if (!pool) {
-        console.log('⚠️ Pool not initialized, skipping optimization');
-        return;
-    }
-    try {
-        // Index for sorting posts by date (Critical for Feed speed)
-        try { await pool.execute('CREATE INDEX idx_posts_created_at ON posts(created_at DESC)'); } catch (e) { }
-
-        // Index for filtering posts by group
-        try { await pool.execute('CREATE INDEX idx_posts_group_id ON posts(group_id)'); } catch (e) { }
-
-        // Index for counting likes and comments faster
-        try { await pool.execute('CREATE INDEX idx_post_likes_post_id ON post_likes(post_id)'); } catch (e) { }
-        try { await pool.execute('CREATE INDEX idx_post_comments_post_id ON post_comments(post_id)'); } catch (e) { }
-
-        // Add views column to posts if not exists
-        try { await pool.execute('ALTER TABLE posts ADD COLUMN views INT DEFAULT 0'); } catch (e) { }
-
-        // Create post_views table for tracking unique views
-        try {
-            await pool.execute(`
-                CREATE TABLE IF NOT EXISTS post_views (
-                    id VARCHAR(36) PRIMARY KEY,
-                    post_id VARCHAR(36) NOT NULL,
-                    user_id VARCHAR(36) NOT NULL,
-                    viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE KEY unique_view (post_id, user_id),
-                    INDEX idx_post_views_post_id (post_id)
-                )
-            `);
-            console.log('✅ post_views table created/exists');
-        } catch (e) {
-            console.error('❌ Failed to create post_views table:', e.message);
-        }
-
-        // Create post_tags table for tagging users in posts
-        try {
-            await pool.execute(`
-                CREATE TABLE IF NOT EXISTS post_tags (
-                    id VARCHAR(36) PRIMARY KEY,
-                    post_id VARCHAR(36) NOT NULL,
-                    user_id VARCHAR(36) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE KEY unique_tag (post_id, user_id),
-                    INDEX idx_post_tags_post_id (post_id),
-                    INDEX idx_post_tags_user_id (user_id)
-                )
-            `);
-            console.log('✅ post_tags table created/exists');
-        } catch (e) {
-            console.error('❌ Failed to create post_tags table:', e.message);
-        }
-
-        // Create place_notifications table for Place notifications
-        try {
-            await pool.execute(`
-                CREATE TABLE IF NOT EXISTS place_notifications (
-                    id VARCHAR(36) PRIMARY KEY,
-                    recipient_id VARCHAR(36) NOT NULL,
-                    actor_id VARCHAR(36) NOT NULL,
-                    type ENUM('like', 'comment', 'share', 'mention', 'follow', 'tag') NOT NULL,
-                    post_id VARCHAR(36) NULL,
-                    comment_id VARCHAR(36) NULL,
-                    message TEXT,
-                    post_preview VARCHAR(255) NULL,
-                    is_read BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_notifications_recipient (recipient_id),
-                    INDEX idx_notifications_created_at (created_at DESC),
-                    INDEX idx_notifications_recipient_unread (recipient_id, is_read)
-                )
-            `);
-            console.log('✅ place_notifications table created/exists');
-        } catch (e) {
-            console.error('❌ Failed to create place_notifications table:', e.message);
-        }
-
-        console.log('✅ Database indexes optimized for performance');
-    } catch (error) {
-        console.error('DB Optimization warning:', error.message);
-    }
+    // Moved to initDatabase
+    return;
 };
 
 // ============ NOTIFICATION HELPER ============
@@ -3947,99 +4046,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// ============ CHAT API ROUTES ============
-
-// Get Conversations List
-app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        console.log(`📋 Getting conversations for user: ${userId}`);
-
-        // Step 1: Get all conversations user is part of
-        const [myConvs] = await pool.execute(
-            'SELECT conversation_id FROM conversation_participants WHERE user_id = ?',
-            [userId]
-        );
-
-        console.log(`Found ${myConvs.length} conversations`);
-
-        if (myConvs.length === 0) {
-            return res.json([]);
-        }
-
-        const convIds = myConvs.map(c => c.conversation_id);
-
-        // Step 2: For each conversation, get partner info
-        const conversations = [];
-        for (const convId of convIds) {
-            // Get conversation details
-            const [convDetails] = await pool.execute(
-                'SELECT id, updated_at, last_message_id FROM conversations WHERE id = ?',
-                [convId]
-            );
-
-            if (convDetails.length === 0) continue;
-            const conv = convDetails[0];
-
-            // Get partner (the other user in this conversation)
-            const [partners] = await pool.execute(
-                'SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?',
-                [convId, userId]
-            );
-
-            if (partners.length === 0) continue;
-            const partnerId = partners[0].user_id;
-
-            // Get partner user info
-            const [partnerInfo] = await pool.execute(
-                'SELECT id, name, avatar FROM users WHERE id = ?',
-                [partnerId]
-            );
-
-            if (partnerInfo.length === 0) continue;
-            const partner = partnerInfo[0];
-
-            // Get last message
-            let lastMessage = 'Bắt đầu trò chuyện';
-            let lastMessageTime = conv.updated_at;
-
-            if (conv.last_message_id) {
-                const [msgs] = await pool.execute(
-                    'SELECT content, created_at FROM messages WHERE id = ?',
-                    [conv.last_message_id]
-                );
-                if (msgs.length > 0) {
-                    lastMessage = msgs[0].content;
-                    lastMessageTime = msgs[0].created_at;
-                }
-            }
-
-            conversations.push({
-                id: conv.id,
-                partner: {
-                    id: partner.id,
-                    name: partner.name,
-                    avatar: partner.avatar
-                },
-                lastMessage: lastMessage,
-                updatedAt: formatDateForClient(lastMessageTime)
-            });
-        }
-
-        // Sort by updated time
-        conversations.sort((a, b) => {
-            // This is naive sort by string, ideally use timestamp
-            return b.updatedAt.localeCompare(a.updatedAt);
-        });
-
-        console.log(`✅ Returning ${conversations.length} conversations`);
-        console.log('Sample:', JSON.stringify(conversations[0], null, 2));
-        res.json(conversations);
-    } catch (error) {
-        console.error('❌ Get conversations error:', error);
-        res.status(500).json({ error: 'Lỗi server' });
-    }
-});
+// Note: /api/chat/conversations is already defined earlier in the file (line ~2030) with full optimization
 
 // Get Messages with a Partner
 app.get('/api/chat/messages/:partnerId', authenticateToken, async (req, res) => {
@@ -4493,19 +4500,454 @@ app.delete('/api/admin/feedback/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// ============ REPO MANAGEMENT (source.json for AltStore/SideStore) ============
+
+// Path to source.json file (will be served as static file)
+const REPO_SOURCE_PATH = path.join(__dirname, '../../source.json');
+const REPO_PUBLIC_PATH = path.join(__dirname, '../public/source.json');
+
+// Helper function to read source.json
+function readRepoSource() {
+    try {
+        // Try main path first
+        if (fs.existsSync(REPO_SOURCE_PATH)) {
+            return JSON.parse(fs.readFileSync(REPO_SOURCE_PATH, 'utf8'));
+        }
+        // Fallback to public path
+        if (fs.existsSync(REPO_PUBLIC_PATH)) {
+            return JSON.parse(fs.readFileSync(REPO_PUBLIC_PATH, 'utf8'));
+        }
+        // Return default structure if not exists
+        return {
+            name: "myZyea Official Store",
+            identifier: "com.zyea.source",
+            subtitle: "Kho ứng dụng myZyea",
+            description: "Kho lưu trữ IPA chính thức của myZyea",
+            iconURL: "https://data5g.site/assets/myzyea-icon.png",
+            headerURL: "https://data5g.site/assets/myzyea-header.png",
+            website: "https://data5g.site",
+            tintColor: "#f97316",
+            featuredApps: [],
+            apps: [],
+            news: []
+        };
+    } catch (error) {
+        console.error('Error reading source.json:', error);
+        return null;
+    }
+}
+
+// Helper function to write source.json
+function writeRepoSource(data) {
+    try {
+        const jsonContent = JSON.stringify(data, null, 4);
+        // Write to both locations for compatibility
+        fs.writeFileSync(REPO_SOURCE_PATH, jsonContent, 'utf8');
+        // Also write to public folder for direct access
+        if (!fs.existsSync(path.dirname(REPO_PUBLIC_PATH))) {
+            fs.mkdirSync(path.dirname(REPO_PUBLIC_PATH), { recursive: true });
+        }
+        fs.writeFileSync(REPO_PUBLIC_PATH, jsonContent, 'utf8');
+        console.log('✅ source.json updated successfully');
+        return true;
+    } catch (error) {
+        console.error('Error writing source.json:', error);
+        return false;
+    }
+}
+
+// Helper function to sync IPA upload to source.json repo
+function syncIpaToRepo(metadata) {
+    try {
+        const repo = readRepoSource();
+        if (!repo) return false;
+
+        const baseUrl = 'https://data5g.site';
+        const bundleId = metadata.bundleId || 'com.zyea.mobile';
+
+        // Find existing app or create new
+        let appIndex = repo.apps.findIndex(app => app.bundleIdentifier === bundleId);
+
+        const newVersion = {
+            version: metadata.version,
+            date: new Date().toISOString().split('T')[0],
+            size: metadata.size || 0,
+            downloadURL: `${baseUrl}/uploads/ipa/${metadata.ipaFileName}`,
+            localizedDescription: metadata.changelog || `Phiên bản ${metadata.version}`,
+            minOSVersion: "14.0"
+        };
+
+        if (appIndex >= 0) {
+            // Update existing app
+            const app = repo.apps[appIndex];
+
+            // Check if version already exists
+            const versionIndex = app.versions.findIndex(v => v.version === metadata.version);
+            if (versionIndex >= 0) {
+                // Update existing version
+                app.versions[versionIndex] = newVersion;
+            } else {
+                // Add new version at the beginning
+                app.versions.unshift(newVersion);
+            }
+
+            // Update app info from metadata
+            if (metadata.appName) app.name = metadata.appName;
+            if (metadata.description) app.subtitle = metadata.description;
+            if (metadata.description) app.localizedDescription = metadata.description;
+            if (metadata.developer) app.developerName = metadata.developer;
+            if (metadata.iconFileName) {
+                app.iconURL = `${baseUrl}/uploads/ipa/${metadata.iconFileName}`;
+            }
+            if (metadata.screenshots && metadata.screenshots.length > 0) {
+                app.screenshotURLs = metadata.screenshots.map(s => `${baseUrl}/uploads/ipa/${s}`);
+            }
+
+            repo.apps[appIndex] = app;
+        } else {
+            // Create new app entry
+            const newApp = {
+                name: metadata.appName || "myZyea",
+                bundleIdentifier: bundleId,
+                developerName: metadata.developer || "myZyea Team",
+                subtitle: metadata.description || "Ứng dụng từ myZyea",
+                localizedDescription: metadata.description || "Ứng dụng được phát triển bởi myZyea Team",
+                iconURL: metadata.iconFileName ? `${baseUrl}/uploads/ipa/${metadata.iconFileName}` : `${baseUrl}/assets/myzyea-icon.png`,
+                tintColor: "#f97316",
+                screenshotURLs: metadata.screenshots ? metadata.screenshots.map(s => `${baseUrl}/uploads/ipa/${s}`) : [],
+                versions: [newVersion],
+                appPermissions: {
+                    entitlements: [],
+                    privacy: {}
+                }
+            };
+            repo.apps.push(newApp);
+
+            // Add to featured if first app
+            if (!repo.featuredApps.includes(bundleId)) {
+                repo.featuredApps.push(bundleId);
+            }
+        }
+
+        // Add news entry for new version
+        const newsId = `release-${metadata.version}-${Date.now()}`;
+        const newsEntry = {
+            identifier: newsId,
+            title: `🎉 ${metadata.appName || 'App'} v${metadata.version} đã ra mắt!`,
+            caption: metadata.changelog || "Phiên bản mới với nhiều cải tiến",
+            date: new Date().toISOString().split('T')[0],
+            tintColor: "#f97316",
+            imageURL: `${baseUrl}/assets/news/release-banner.png`,
+            notify: true,
+            appID: bundleId
+        };
+
+        // Keep only last 10 news items
+        repo.news.unshift(newsEntry);
+        if (repo.news.length > 10) {
+            repo.news = repo.news.slice(0, 10);
+        }
+
+        return writeRepoSource(repo);
+    } catch (error) {
+        console.error('Error syncing IPA to repo:', error);
+        return false;
+    }
+}
+
+// GET Repo source.json (Public - for AltStore/SideStore)
+app.get('/api/repo', (req, res) => {
+    try {
+        const repo = readRepoSource();
+        if (repo) {
+            res.json(repo);
+        } else {
+            res.status(500).json({ error: 'Could not read repository' });
+        }
+    } catch (error) {
+        console.error('Get repo error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Serve source.json directly (for AltStore compatibility)
+app.get('/source.json', (req, res) => {
+    try {
+        const repo = readRepoSource();
+        if (repo) {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.json(repo);
+        } else {
+            res.status(500).json({ error: 'Could not read repository' });
+        }
+    } catch (error) {
+        console.error('Get source.json error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// GET Repo for Admin (with edit capability info)
+app.get('/api/admin/repo', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const repo = readRepoSource();
+        if (repo) {
+            res.json({
+                success: true,
+                data: repo,
+                paths: {
+                    main: REPO_SOURCE_PATH,
+                    public: REPO_PUBLIC_PATH
+                }
+            });
+        } else {
+            res.status(500).json({ error: 'Could not read repository' });
+        }
+    } catch (error) {
+        console.error('Get admin repo error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// PUT Update entire Repo (Admin)
+app.put('/api/admin/repo', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { data } = req.body;
+        if (!data) {
+            return res.status(400).json({ error: 'Missing repo data' });
+        }
+
+        if (writeRepoSource(data)) {
+            res.json({ success: true, message: 'Repository updated successfully' });
+        } else {
+            res.status(500).json({ error: 'Failed to update repository' });
+        }
+    } catch (error) {
+        console.error('Update repo error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// PATCH Update store info only (Admin)
+app.patch('/api/admin/repo/store', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { name, subtitle, description, iconURL, headerURL, website, tintColor } = req.body;
+        const repo = readRepoSource();
+
+        if (!repo) {
+            return res.status(500).json({ error: 'Could not read repository' });
+        }
+
+        // Update only provided fields
+        if (name) repo.name = name;
+        if (subtitle) repo.subtitle = subtitle;
+        if (description) repo.description = description;
+        if (iconURL) repo.iconURL = iconURL;
+        if (headerURL) repo.headerURL = headerURL;
+        if (website) repo.website = website;
+        if (tintColor) repo.tintColor = tintColor;
+
+        if (writeRepoSource(repo)) {
+            res.json({ success: true, message: 'Store info updated', data: repo });
+        } else {
+            res.status(500).json({ error: 'Failed to update repository' });
+        }
+    } catch (error) {
+        console.error('Update store info error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST Add/Update app in repo (Admin)
+app.post('/api/admin/repo/apps', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const appData = req.body;
+        if (!appData || !appData.bundleIdentifier) {
+            return res.status(400).json({ error: 'Bundle identifier is required' });
+        }
+
+        const repo = readRepoSource();
+        if (!repo) {
+            return res.status(500).json({ error: 'Could not read repository' });
+        }
+
+        const appIndex = repo.apps.findIndex(app => app.bundleIdentifier === appData.bundleIdentifier);
+
+        if (appIndex >= 0) {
+            // Update existing app (merge)
+            repo.apps[appIndex] = { ...repo.apps[appIndex], ...appData };
+        } else {
+            // Add new app
+            repo.apps.push(appData);
+        }
+
+        if (writeRepoSource(repo)) {
+            res.json({ success: true, message: 'App updated in repository', data: repo });
+        } else {
+            res.status(500).json({ error: 'Failed to update repository' });
+        }
+    } catch (error) {
+        console.error('Update app error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// DELETE Remove app from repo (Admin)
+app.delete('/api/admin/repo/apps/:bundleId', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const bundleId = req.params.bundleId;
+        const repo = readRepoSource();
+
+        if (!repo) {
+            return res.status(500).json({ error: 'Could not read repository' });
+        }
+
+        repo.apps = repo.apps.filter(app => app.bundleIdentifier !== bundleId);
+        repo.featuredApps = repo.featuredApps.filter(id => id !== bundleId);
+
+        if (writeRepoSource(repo)) {
+            res.json({ success: true, message: 'App removed from repository' });
+        } else {
+            res.status(500).json({ error: 'Failed to update repository' });
+        }
+    } catch (error) {
+        console.error('Delete app error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST Add news to repo (Admin)
+app.post('/api/admin/repo/news', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const newsData = req.body;
+        if (!newsData || !newsData.title) {
+            return res.status(400).json({ error: 'News title is required' });
+        }
+
+        const repo = readRepoSource();
+        if (!repo) {
+            return res.status(500).json({ error: 'Could not read repository' });
+        }
+
+        // Generate identifier if not provided
+        if (!newsData.identifier) {
+            newsData.identifier = `news-${Date.now()}`;
+        }
+        if (!newsData.date) {
+            newsData.date = new Date().toISOString().split('T')[0];
+        }
+
+        repo.news.unshift(newsData);
+
+        // Keep only last 20 news
+        if (repo.news.length > 20) {
+            repo.news = repo.news.slice(0, 20);
+        }
+
+        if (writeRepoSource(repo)) {
+            res.json({ success: true, message: 'News added to repository', data: repo });
+        } else {
+            res.status(500).json({ error: 'Failed to update repository' });
+        }
+    } catch (error) {
+        console.error('Add news error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// DELETE Remove news from repo (Admin)
+app.delete('/api/admin/repo/news/:newsId', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const newsId = req.params.newsId;
+        const repo = readRepoSource();
+
+        if (!repo) {
+            return res.status(500).json({ error: 'Could not read repository' });
+        }
+
+        repo.news = repo.news.filter(news => news.identifier !== newsId);
+
+        if (writeRepoSource(repo)) {
+            res.json({ success: true, message: 'News removed from repository' });
+        } else {
+            res.status(500).json({ error: 'Failed to update repository' });
+        }
+    } catch (error) {
+        console.error('Delete news error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST Sync current IPA to repo manually (Admin)
+app.post('/api/admin/repo/sync-ipa/:timestamp', authenticateToken, (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const timestamp = req.params.timestamp;
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+        const metadataPath = path.join(uploadDir, `metadata_${timestamp}.json`);
+
+        if (!fs.existsSync(metadataPath)) {
+            return res.status(404).json({ error: 'IPA metadata not found' });
+        }
+
+        const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+
+        if (syncIpaToRepo(metadata)) {
+            res.json({ success: true, message: 'IPA synced to repository' });
+        } else {
+            res.status(500).json({ error: 'Failed to sync IPA to repository' });
+        }
+    } catch (error) {
+        console.error('Sync IPA to repo error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Export sync function for use in upload-ipa endpoint
+global.syncIpaToRepo = syncIpaToRepo;
+
 // ============ GROUP CHAT ROUTES ============
 // Import group routes (will be initialized after database is ready)
 const initGroupRoutes = require('./groupRoutes');
 
 initDatabase().then(async () => {
-    // Create additional tables and optimize indexes
-    await optimizeDatabase();
-
     // Initialize group routes AFTER database is ready
     initGroupRoutes(app, pool, authenticateToken, uuidv4, formatDateForClient);
 
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Server running on port ${PORT}`);
         console.log(`Socket.IO initialized`);
+        console.log(`✅ Group Chat routes initialized`);
     });
 });

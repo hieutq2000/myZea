@@ -44,6 +44,7 @@ const IpaManager: React.FC = () => {
     const [screenshotFiles, setScreenshotFiles] = useState<any[]>([]);
     const [editingRecord, setEditingRecord] = useState<IpaFile | null>(null);
     const [storageInfo, setStorageInfo] = useState({ used: 0, total: 1024 });
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     const fetchIpas = async () => {
         setLoading(true);
@@ -410,10 +411,15 @@ const IpaManager: React.FC = () => {
 
         try {
             const token = localStorage.getItem('admin_token');
+            setUploadProgress(0);
             const response = await axios.post('/api/admin/upload-ipa', formData, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'multipart/form-data'
+                },
+                onUploadProgress: (progressEvent) => {
+                    const percent = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+                    setUploadProgress(percent);
                 }
             });
 
@@ -431,6 +437,7 @@ const IpaManager: React.FC = () => {
             message.error('Tải lên thất bại');
         } finally {
             setUploading(false);
+            setUploadProgress(0);
         }
     };
 
@@ -576,9 +583,30 @@ const IpaManager: React.FC = () => {
                 </Card>
 
                 <Form form={uploadForm} layout="vertical">
+                    {/* Upload Progress */}
+                    {uploading && (
+                        <Card size="small" style={{ marginBottom: 16, background: '#e6f7ff', border: '1px solid #91d5ff' }}>
+                            <div style={{ marginBottom: 8 }}>
+                                <Text strong style={{ color: '#1890ff' }}>
+                                    📤 Đang tải lên... {uploadProgress}%
+                                </Text>
+                            </div>
+                            <Progress
+                                percent={uploadProgress}
+                                status={uploadProgress < 100 ? 'active' : 'success'}
+                                strokeColor={{ '0%': '#108ee9', '100%': '#87d068' }}
+                            />
+                            {uploadProgress === 100 && (
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                    Đang xử lý file trên server...
+                                </Text>
+                            )}
+                        </Card>
+                    )}
+
                     {/* File Upload */}
                     <Form.Item label="1. Select IPA File *" required>
-                        <Dragger {...draggerProps} style={{ padding: '20px 0' }}>
+                        <Dragger {...draggerProps} style={{ padding: '20px 0' }} disabled={uploading}>
                             <p className="ant-upload-drag-icon">
                                 <InboxOutlined style={{ fontSize: 48, color: '#1890ff' }} />
                             </p>

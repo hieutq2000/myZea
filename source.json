@@ -1,0 +1,59 @@
+{
+    "name": "myZyea Official Store",
+    "identifier": "com.zyea.source",
+    "subtitle": "Kho ứng dụng myZyea",
+    "description": "Kho lưu trữ IPA chính thức của myZyea - Ứng dụng chat AI thông minh",
+    "iconURL": "https://data5g.site/assets/myzyea-icon.png",
+    "headerURL": "https://data5g.site/assets/myzyea-header.png",
+    "website": "https://data5g.site",
+    "tintColor": "#f97316",
+    "featuredApps": [
+        "com.zyea.mobile"
+    ],
+    "apps": [
+        {
+            "name": "myZyea",
+            "bundleIdentifier": "com.zyea.mobile",
+            "developerName": "myZyea Team",
+            "subtitle": "Mạng xã hội chia sẻ, chat nội bộ, tích hợp AI",
+            "localizedDescription": "myZyea - Hệ sinh thái Mạng xã hội & Chat AI thông minh:\n\n• 🌐 Mạng xã hội chia sẻ: Kết nối, đăng bài và chia sẻ khoảnh khắc\n• 💬 Chat nội bộ bảo mật: Nhắn tin, gọi video/audio chất lượng cao\n• 🤖 Trợ lý AI tích hợp: Hỗ trợ thông minh ngay trong cuộc trò chuyện\n• 📱 Giao diện hiện đại: Trải nghiệm mượt mà, thân thiện\n\nDung lượng tối ưu: 55.6 MB\nTải ngay để trải nghiệm!",
+            "iconURL": "https://data5g.site/assets/myzyea-icon.png",
+            "tintColor": "#f97316",
+            "screenshotURLs": [
+                "https://data5g.site/assets/screenshots/screen1.png",
+                "https://data5g.site/assets/screenshots/screen2.png",
+                "https://data5g.site/assets/screenshots/screen3.png"
+            ],
+            "versions": [
+                {
+                    "version": "1.0.6",
+                    "date": "2024-12-25",
+                    "size": 58297570,
+                    "downloadURL": "https://data5g.site/downloads/myzyea-1.0.6.ipa",
+                    "localizedDescription": "Phiên bản 1.0.6:\n• Cập nhật giao diện Mạng xã hội mới\n• Tối ưu hóa Chat AI Gemini\n• Cải thiện hiệu năng gọi video\n• Sửa lỗi và nâng cấp trải nghiệm người dùng",
+                    "minOSVersion": "14.0"
+                }
+            ],
+            "appPermissions": {
+                "entitlements": [],
+                "privacy": {
+                    "NSCameraUsageDescription": "Cần camera để gọi video và chụp ảnh",
+                    "NSMicrophoneUsageDescription": "Cần microphone để gọi điện và ghi âm",
+                    "NSPhotoLibraryUsageDescription": "Cần truy cập thư viện ảnh để chia sẻ media"
+                }
+            }
+        }
+    ],
+    "news": [
+        {
+            "identifier": "release-1.0.6",
+            "title": "🎉 myZyea v1.0.6 đã ra mắt!",
+            "caption": "Phiên bản mới với nhiều cải tiến",
+            "date": "2024-12-25",
+            "tintColor": "#f97316",
+            "imageURL": "https://data5g.site/assets/news/release-banner.png",
+            "notify": true,
+            "appID": "com.zyea.mobile"
+        }
+    ]
+}

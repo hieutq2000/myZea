@@ -27,6 +27,13 @@ export type RootStackParamList = {
     };
     NewChat: undefined;
     CreateGroup: undefined;
+    GroupInfo: {
+        groupId: string;
+        groupName: string;
+        groupAvatar?: string;
+        members?: any[];
+        creatorId?: string;
+    };
 
     // Call Screen
     Call: {
