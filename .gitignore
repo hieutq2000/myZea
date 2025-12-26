@@ -60,8 +60,9 @@ tsc_output.txt
 *.bak
 *.old
 
-# Uploads folder (user generated content)
-backend/uploads/
+# Uploads folder (user generated content - exclude stickers)
+backend/uploads/*
+!backend/uploads/stickers/
 
 # IDE specific
 .idea/
