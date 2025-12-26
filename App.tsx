@@ -25,7 +25,9 @@ import { getCurrentUser, logout as apiLogout, updateProfile, saveExamResult, get
 import { getLatestChangelog } from './src/utils/changelog';
 import { COLORS } from './src/utils/theme';
 import { useAppUpdates } from './src/hooks/useAppUpdates';
+import { useVersionCheck } from './src/hooks/useVersionCheck';
 import MaintenanceScreen from './src/screens/MaintenanceScreen';
+import ForceUpdateModal from './src/components/ForceUpdateModal';
 import { getSystemSettings } from './src/utils/api';
 
 type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'PROFILE' | 'SESSION' | 'PLACE' | 'ONBOARDING' | 'STORE';
@@ -72,6 +74,7 @@ const Stack = createStackNavigator<RootStackParamList>();
 
 function AppContent({ navigationRef }: { navigationRef: any }) {
   const { isUpdateAvailable, isDownloading, downloadAndApply, dismissUpdate } = useAppUpdates();
+  const { needsUpdate, config: versionConfig, updateNow, setNeedsUpdate } = useVersionCheck();
 
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<ViewType>('AUTH');
@@ -701,6 +704,13 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         isDownloading={isDownloading}
         onUpdate={downloadAndApply}
         onClose={dismissUpdate}
+      />
+
+      <ForceUpdateModal
+        visible={needsUpdate}
+        config={versionConfig}
+        onUpdate={updateNow}
+        onClose={() => setNeedsUpdate(false)}
       />
 
       <IncomingCallModal

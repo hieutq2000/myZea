@@ -16,6 +16,7 @@ import ChatMedia from '../components/ChatMedia';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import GroupAvatar from '../components/GroupAvatar';
+import * as Clipboard from 'expo-clipboard';
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList, 'ChatDetail'>;
 
@@ -1630,7 +1631,12 @@ export default function ChatDetailScreen() {
                             </TouchableOpacity>
                             <View style={styles.menuDivider} />
 
-                            <TouchableOpacity style={styles.menuItem} onPress={() => { console.log('Copy'); setSelectedMessage(null); }}>
+                            <TouchableOpacity style={styles.menuItem} onPress={async () => {
+                                if (selectedMessage?.text) {
+                                    await Clipboard.setStringAsync(selectedMessage.text);
+                                }
+                                setSelectedMessage(null);
+                            }}>
                                 <Text style={styles.menuItemText}>Sao chép</Text>
                                 <Ionicons name="copy-outline" size={20} color="white" />
                             </TouchableOpacity>

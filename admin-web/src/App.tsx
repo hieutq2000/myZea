@@ -13,6 +13,7 @@ import {
   AppleFilled,
   CloudSyncOutlined,
   DownOutlined,
+  CloudUploadOutlined,
 } from '@ant-design/icons';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import Login from './pages/Login';
@@ -23,6 +24,7 @@ import Stickers from './pages/Stickers';
 import FeedbackPage from './pages/Feedback';
 import IpaManager from './pages/IpaManager';
 import RepoManager from './pages/RepoManager';
+import VersionManager from './pages/VersionManager';
 
 const { Header, Sider, Content } = Layout;
 
@@ -39,6 +41,7 @@ const MenuWrapper: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
     if (path === '/feedback') return 'feedback';
     if (path === '/ipa-manager') return 'ipa-manager';
     if (path === '/repo-manager') return 'repo-manager';
+    if (path === '/version-manager') return 'version-manager';
     if (path === '/settings') return 'settings';
     return 'dashboard';
   };
@@ -105,6 +108,11 @@ const MenuWrapper: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
               key: 'repo-manager',
               icon: <CloudSyncOutlined style={{ fontSize: 18 }} />,
               label: <Link to="/repo-manager" style={{ fontWeight: 500 }}>AltStore Repo</Link>,
+            },
+            {
+              key: 'version-manager',
+              icon: <CloudUploadOutlined style={{ fontSize: 18 }} />,
+              label: <Link to="/version-manager" style={{ fontWeight: 500 }}>Version Control</Link>,
             },
           ]
         },
@@ -323,6 +331,7 @@ const App: React.FC = () => {
               <Route path="/feedback" element={<FeedbackPage />} />
               <Route path="/ipa-manager" element={<IpaManager />} />
               <Route path="/repo-manager" element={<RepoManager />} />
+              <Route path="/version-manager" element={<VersionManager />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </Content>

@@ -4803,6 +4803,53 @@ app.get('/api/repo', (req, res) => {
     }
 });
 
+
+// ============ APP VERSION CONTROL API ============
+
+const VERSION_CONFIG_PATH = path.join(__dirname, 'version_config.json');
+
+// Get latest version info (Public)
+app.get('/api/app-version/latest', (req, res) => {
+    try {
+        if (fs.existsSync(VERSION_CONFIG_PATH)) {
+            const config = JSON.parse(fs.readFileSync(VERSION_CONFIG_PATH, 'utf8'));
+            res.json(config);
+        } else {
+            // Default config
+            res.json({
+                version: '1.0.0',
+                downloadUrl: 'https://data5g.site',
+                forceUpdate: false,
+                title: 'Cập nhật ứng dụng',
+                message: 'Phiên bản mới đã sẵn sàng.'
+            });
+        }
+    } catch (error) {
+        console.error('Get app version error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Update version info (Admin)
+app.post('/api/admin/app-version', authenticateToken, (req, res) => {
+    try {
+        const { version, downloadUrl, forceUpdate, title, message } = req.body;
+        const config = {
+            version: version || '1.0.0',
+            downloadUrl: downloadUrl || '',
+            forceUpdate: !!forceUpdate,
+            title: title || 'Cập nhật',
+            message: message || '',
+            updatedAt: new Date().toISOString()
+        };
+        fs.writeFileSync(VERSION_CONFIG_PATH, JSON.stringify(config, null, 4));
+        res.json({ success: true, config });
+    } catch (error) {
+        console.error('Update app version error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // Serve source.json directly (for AltStore compatibility)
 app.get('/source.json', (req, res) => {
     try {
