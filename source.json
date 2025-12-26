@@ -1,5 +1,5 @@
 {
-    "name": "myZyea Official Store",
+    "name": "Zyea Official Store",
     "identifier": "com.zyea.source",
     "subtitle": "Kho ứng dụng myZyea",
     "description": "Kho lưu trữ IPA chính thức của myZyea - Ứng dụng chat AI thông minh",
@@ -8,7 +8,8 @@
     "website": "https://data5g.site",
     "tintColor": "#f97316",
     "featuredApps": [
-        "com.zyea.mobile"
+        "com.zyea.mobile",
+        "com.youtube.com"
     ],
     "apps": [
         {
@@ -26,10 +27,10 @@
             ],
             "versions": [
                 {
-                    "version": "1.0.6",
+                    "version": "1.0.7",
                     "date": "2024-12-25",
                     "size": 58297570,
-                    "downloadURL": "https://data5g.site/downloads/myzyea-1.0.6.ipa",
+                    "downloadURL": "https://data5g.site/uploads/ipa/zyea_1766516936299.ipa",
                     "localizedDescription": "Phiên bản 1.0.6:\n• Cập nhật giao diện Mạng xã hội mới\n• Tối ưu hóa Chat AI Gemini\n• Cải thiện hiệu năng gọi video\n• Sửa lỗi và nâng cấp trải nghiệm người dùng",
                     "minOSVersion": "14.0"
                 }
@@ -41,6 +42,29 @@
                     "NSMicrophoneUsageDescription": "Cần microphone để gọi điện và ghi âm",
                     "NSPhotoLibraryUsageDescription": "Cần truy cập thư viện ảnh để chia sẻ media"
                 }
+            }
+        },
+        {
+            "name": "Yotubobe",
+            "bundleIdentifier": "com.youtube.com",
+            "developerName": "myZyea Team",
+            "subtitle": "Xem video không quảng cáo",
+            "localizedDescription": "Ứng dụng xem video YouTube không quảng cáo, chạy nền, tắt màn hình vẫn nghe nhạc.",
+            "iconURL": "https://data5g.site/assets/yotubobe-icon.png",
+            "tintColor": "#ff0000",
+            "versions": [
+                {
+                    "version": "1.0.1",
+                    "date": "2024-12-25",
+                    "size": 58301568,
+                    "downloadURL": "https://data5g.site/uploads/ipa/yotubobe_1.0.1.ipa",
+                    "localizedDescription": "Phiên bản ổn định: \n• Chặn quảng cáo\n• Chạy nền\n• Picture in Picture",
+                    "minOSVersion": "15.0"
+                }
+            ],
+            "appPermissions": {
+                "entitlements": [],
+                "privacy": {}
             }
         }
     ],

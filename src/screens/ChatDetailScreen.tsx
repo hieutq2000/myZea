@@ -76,6 +76,40 @@ export default function ChatDetailScreen() {
     // Read receipts for group chat - maps messageId to array of readers
     const [readReceipts, setReadReceipts] = useState<{ [messageId: string]: Array<{ id: string, name: string, avatar?: string }> }>({});
 
+    // MENTION FEATURE STATES
+    const [showMention, setShowMention] = useState(false);
+    const [mentionKeyword, setMentionKeyword] = useState('');
+    const [groupMembers, setGroupMembers] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (isGroup && groupId) {
+            // Fetch full members for mention list
+            apiRequest<{ members: any[] }>(`/api/groups/${groupId}`)
+                .then(res => {
+                    if (res && res.members) setGroupMembers(res.members);
+                })
+                .catch(e => console.log('Fetch mention members err:', e));
+        } else if (members) {
+            setGroupMembers(members);
+        }
+    }, [isGroup, groupId]);
+
+    const handleMentionSelect = (item: any) => {
+        const lastAt = inputText.lastIndexOf('@');
+        if (lastAt !== -1) {
+            const prefix = inputText.substring(0, lastAt);
+            const nameToInsert = item.id === 'all' ? '@All ' : `@${item.name} `;
+            // We replace from the last @ until the end (assuming user is typing at the end)
+            // A better way is to splice only the keyword, but appending is safer for simple usage
+            // setInputText(prefix + nameToInsert);
+
+            // Correct logic: Replace "@key" with "@Name "
+            const newInput = prefix + nameToInsert;
+            setInputText(newInput);
+            setShowMention(false);
+        }
+    };
+
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
     const socket = getSocket();
@@ -136,6 +170,20 @@ export default function ChatDetailScreen() {
             socket.on('messagesRead', (data) => {
                 if (data.conversationId === conversationId) {
                     setLastSeenMessageId(data.lastMessageId); // Update seen status
+                }
+            });
+
+            socket.on('groupMessageRead', (data) => {
+                if (data.conversationId === conversationId && isGroup && data.messageIds && data.messageIds.length > 0) {
+                    // Reload receipts for these messages
+                    apiRequest('/api/messages/readers', {
+                        method: 'POST',
+                        body: JSON.stringify({ messageIds: data.messageIds })
+                    })
+                        .then((receipts: any) => {
+                            if (receipts) setReadReceipts(prev => ({ ...prev, ...receipts }));
+                        })
+                        .catch(e => console.log('Group read update error:', e));
                 }
             });
 
@@ -441,6 +489,24 @@ export default function ChatDetailScreen() {
 
     const handleTextChange = (text: string) => {
         setInputText(text);
+
+        // MENTION LOGIC: Check for @ symbol
+        if (isGroup) {
+            const lastAt = text.lastIndexOf('@');
+            if (lastAt !== -1 && lastAt >= text.length - 20) { // Check if @ is recent
+                const keyword = text.substring(lastAt + 1);
+                // Only show if no spaces in keyword (simple name search)
+                if (!keyword.includes(' ')) {
+                    setMentionKeyword(keyword);
+                    setShowMention(true);
+                } else {
+                    setShowMention(false);
+                }
+            } else {
+                setShowMention(false);
+            }
+        }
+
         if (socket) {
             if (text.length > 0) {
                 socket.emit('userTyping', { conversationId, userId: currentUserId });
@@ -863,8 +929,84 @@ export default function ChatDetailScreen() {
     };
 
 
+    const handleViewProfile = (userId: string) => {
+        if (userId) {
+            (navigation as any).navigate('Profile', { userId });
+        }
+    };
+
+    const renderMessageText = (text: string, isMe: boolean) => {
+        if (!text) return null;
+
+        let segments: { text: string, type: 'text' | 'mention_all' | 'mention_user', data?: any }[] = [{ text, type: 'text' }];
+
+        // 1. Match @All
+        const allRegex = /(@all|@tất cả|@everyone)/gi;
+        let tempSegments: typeof segments = [];
+        segments.forEach(seg => {
+            if (seg.type !== 'text') { tempSegments.push(seg); return; }
+            const parts = seg.text.split(allRegex);
+            parts.forEach(part => {
+                if (allRegex.test(part)) tempSegments.push({ text: part, type: 'mention_all' });
+                else if (part) tempSegments.push({ text: part, type: 'text' });
+            });
+        });
+        segments = tempSegments;
+
+        // 2. Match Users (only if groupMembers available)
+        if (groupMembers.length > 0) {
+            const sortedMembers = [...groupMembers].sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0));
+
+            for (const member of sortedMembers) {
+                if (!member.name) continue;
+                const mentionStr = `@${member.name}`;
+
+                const nextSegments: typeof segments = [];
+                segments.forEach(seg => {
+                    if (seg.type !== 'text') { nextSegments.push(seg); return; }
+
+                    if (seg.text.includes(mentionStr)) {
+                        const parts = seg.text.split(mentionStr);
+                        parts.forEach((part, idx) => {
+                            if (part) nextSegments.push({ text: part, type: 'text' });
+                            if (idx < parts.length - 1) {
+                                nextSegments.push({ text: mentionStr, type: 'mention_user', data: member });
+                            }
+                        });
+                    } else {
+                        nextSegments.push(seg);
+                    }
+                });
+                segments = nextSegments;
+            }
+        }
+
+        return (
+            <Text style={[styles.messageText, { color: isMe ? '#FFFFFF' : '#000000' }]}>
+                {segments.map((seg, index) => {
+                    if (seg.type === 'mention_all') {
+                        return <Text key={index} style={{ fontWeight: 'bold', color: isMe ? '#FFD700' : '#0068FF' }}>{seg.text}</Text>;
+                    }
+                    if (seg.type === 'mention_user' && seg.data) {
+                        return (
+                            <Text
+                                key={index}
+                                style={{ fontWeight: 'bold', color: isMe ? '#FFD700' : '#0068FF' }}
+                                onPress={() => handleViewProfile(seg.data.id || seg.data.user_id)}
+                                suppressHighlighting={true}
+                            >
+                                {seg.text}
+                            </Text>
+                        );
+                    }
+                    return <Text key={index}>{seg.text}</Text>;
+                })}
+            </Text>
+        );
+    };
+
     const renderMessageItem = useCallback(({ item, index }: { item: any, index: number }) => {
-        const isMe = item.sender === 'me' || (currentUserId && item.senderId === currentUserId);
+        const isMe = item.sender === 'me' || (!!currentUserId && item.senderId === currentUserId);
         const nextMessage = messages[index + 1];
         const isLast = index === messages.length - 1 || (nextMessage && nextMessage.senderId !== item.senderId);
         const isImage = (item.type === 'image' || item.type === 'video' || item.type === 'sticker') && item.imageUrl;
@@ -1033,7 +1175,7 @@ export default function ChatDetailScreen() {
                                             </Text>
                                         </View>
                                     )}
-                                    <Text style={[styles.messageText, { color: isMe ? '#FFFFFF' : '#000000' }]}>{item.text}</Text>
+                                    {renderMessageText(item.text, isMe)}
                                     <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4 }}>
                                         {item.isEdited && (
                                             <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF', marginRight: 4 }]}>Đã chỉnh sửa</Text>
@@ -1167,6 +1309,8 @@ export default function ChatDetailScreen() {
                     </TouchableOpacity>
                 )}
 
+
+
                 {/* Input Container */}
                 <View style={[
                     styles.footer,
@@ -1174,6 +1318,41 @@ export default function ChatDetailScreen() {
                         ? { marginBottom: showEmojiPicker ? 0 : (keyboardHeight > 0 ? keyboardHeight : 20) }
                         : {}
                 ]}>
+                    {/* Mention Popup List (Moved inside footer to float above input) */}
+                    {showMention && (
+                        <View style={styles.mentionPopup}>
+                            <FlatList
+                                data={[
+                                    { id: 'all', name: 'All', avatar: null, isAll: true },
+                                    ...groupMembers.filter(m => m.name.toLowerCase().includes(mentionKeyword.toLowerCase()))
+                                ]}
+                                keyExtractor={(item, index) => item.id || String(index)}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity style={styles.mentionItem} onPress={() => handleMentionSelect(item)}>
+                                        <View style={styles.mentionAvatarContainer}>
+                                            {item.isAll ? (
+                                                <View style={[styles.mentionAvatar, { backgroundColor: '#F3F4F6' }]}>
+                                                    <Ionicons name="people" size={20} color="#333" />
+                                                </View>
+                                            ) : (
+                                                <Image source={{ uri: getAvatarUri(item.avatar, item.name) }} style={styles.mentionAvatar} />
+                                            )}
+                                        </View>
+                                        <View>
+                                            <Text style={styles.mentionName}>{item.name}</Text>
+                                            {item.isAll ? (
+                                                <Text style={styles.mentionSubtitle}>Nhắc tất cả mọi người</Text>
+                                            ) : (
+                                                <Text style={styles.mentionSubtitle}>{item.role === 'admin' ? 'Quản trị viên' : (item.role === 'moderator' ? 'Phó nhóm' : 'Thành viên')}</Text>
+                                            )}
+                                        </View>
+                                    </TouchableOpacity>
+                                )}
+                                keyboardShouldPersistTaps='handled'
+                                style={{ maxHeight: 200 }}
+                            />
+                        </View>
+                    )}
                     {replyingTo && (
                         <View style={styles.replyBarContainer}>
                             <View style={styles.replyBarAccent} />
@@ -2338,5 +2517,53 @@ const styles = StyleSheet.create({
         fontSize: 8,
         color: '#0068FF',
         fontWeight: 'bold',
+    },
+    // MENTION STYLES
+    mentionPopup: {
+        position: 'absolute',
+        bottom: '100%', // Position right above the footer input
+        marginBottom: 10,
+        left: 10,
+        right: 10,
+        backgroundColor: '#FFFFFF', // Changed to White
+        borderRadius: 12,
+        maxHeight: 220,
+        zIndex: 1000,
+        elevation: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15, // Lighter shadow
+        shadowRadius: 5,
+        borderWidth: 1,
+        borderColor: '#E5E7EB', // Light gray border
+        overflow: 'hidden'
+    },
+    mentionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6' // Very light gray separator
+    },
+    mentionAvatarContainer: {
+        marginRight: 12,
+    },
+    mentionAvatar: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#E5E7EB' // Light gray placeholder
+    },
+    mentionName: {
+        color: '#1F2937', // Dark text
+        fontWeight: 'bold',
+        fontSize: 14,
+        marginBottom: 2
+    },
+    mentionSubtitle: {
+        color: '#6B7280', // Gray text
+        fontSize: 12
     },
 });

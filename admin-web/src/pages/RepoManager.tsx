@@ -8,7 +8,7 @@ import {
     CloudSyncOutlined, EditOutlined, DeleteOutlined,
     PlusOutlined, CopyOutlined, ReloadOutlined,
     AppstoreOutlined, NotificationOutlined, SettingOutlined,
-    CheckCircleOutlined, EyeOutlined,
+    CheckCircleOutlined,
     SyncOutlined, CloudUploadOutlined, AppleFilled
 } from '@ant-design/icons';
 import axios from 'axios';
@@ -92,7 +92,8 @@ const RepoManager: React.FC = () => {
     // Modals
     const [appModalVisible, setAppModalVisible] = useState(false);
     const [newsModalVisible, setNewsModalVisible] = useState(false);
-    const [previewModalVisible, setPreviewModalVisible] = useState(false);
+    const [jsonModalVisible, setJsonModalVisible] = useState(false);
+    const [rawJson, setRawJson] = useState('');
     const [editingApp, setEditingApp] = useState<RepoApp | null>(null);
 
     // IPA Files
@@ -319,6 +320,30 @@ const RepoManager: React.FC = () => {
         const link = 'https://data5g.site/source.json';
         navigator.clipboard.writeText(link);
         message.success('Đã sao chép link Repository!');
+    };
+
+    const handleOpenJsonEditor = () => {
+        setRawJson(JSON.stringify(repo, null, 4));
+        setJsonModalVisible(true);
+    };
+
+    const handleSaveJson = async () => {
+        try {
+            const parsed = JSON.parse(rawJson);
+            setSaving(true);
+            const token = localStorage.getItem('admin_token');
+            await axios.put('/api/admin/repo', { data: parsed }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            message.success('Đã cập nhật source.json thành công!');
+            setJsonModalVisible(false);
+            fetchRepo();
+        } catch (e: any) {
+            console.error('Save JSON error:', e);
+            message.error('Lỗi: ' + (e.message || 'JSON không hợp lệ'));
+        } finally {
+            setSaving(false);
+        }
     };
 
     const openEditApp = (app: RepoApp) => {
@@ -741,8 +766,8 @@ const RepoManager: React.FC = () => {
                     <Button icon={<ReloadOutlined />} onClick={fetchRepo} loading={loading}>
                         Làm mới
                     </Button>
-                    <Button icon={<EyeOutlined />} onClick={() => setPreviewModalVisible(true)}>
-                        Xem JSON
+                    <Button icon={<EditOutlined />} onClick={handleOpenJsonEditor}>
+                        Sửa Source JSON
                     </Button>
                     <Button type="primary" icon={<CopyOutlined />} onClick={copyRepoLink}>
                         Copy Link Repo
@@ -879,39 +904,59 @@ const RepoManager: React.FC = () => {
                 </Form>
             </Modal>
 
-            {/* JSON Preview Modal */}
+            {/* JSON Editor Modal */}
             <Modal
-                title="Preview source.json"
-                open={previewModalVisible}
-                onCancel={() => setPreviewModalVisible(false)}
+                title="Chỉnh sửa trực tiếp source.json"
+                open={jsonModalVisible}
+                onCancel={() => setJsonModalVisible(false)}
+                width={800}
                 footer={[
                     <Button key="copy" icon={<CopyOutlined />} onClick={() => {
-                        navigator.clipboard.writeText(JSON.stringify(repo, null, 2));
+                        navigator.clipboard.writeText(rawJson);
                         message.success('Đã sao chép JSON!');
                     }}>
-                        Copy JSON
+                        Copy
                     </Button>,
-                    <Button key="close" type="primary" onClick={() => setPreviewModalVisible(false)}>
-                        Đóng
+                    <Button key="cancel" onClick={() => setJsonModalVisible(false)}>
+                        Hủy
+                    </Button>,
+                    <Button
+                        key="save"
+                        type="primary"
+                        icon={<CloudUploadOutlined />}
+                        onClick={handleSaveJson}
+                        loading={saving}
+                    >
+                        Lưu & Đẩy lên VPS
                     </Button>
                 ]}
-                width={800}
             >
+                <Alert
+                    message="Cẩn thận: Chỉnh sửa trực tiếp file này có thể làm lỗi Store nếu sai cú pháp JSON."
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                />
                 <div style={{
-                    background: '#1e1e1e',
-                    padding: 16,
+                    border: '1px solid #d9d9d9',
                     borderRadius: 8,
-                    maxHeight: 500,
-                    overflow: 'auto'
                 }}>
-                    <pre style={{
-                        color: '#d4d4d4',
-                        margin: 0,
-                        fontSize: 12,
-                        fontFamily: 'Consolas, Monaco, monospace'
-                    }}>
-                        {JSON.stringify(repo, null, 2)}
-                    </pre>
+                    <TextArea
+                        value={rawJson}
+                        onChange={(e) => setRawJson(e.target.value)}
+                        rows={20}
+                        style={{
+                            border: 'none',
+                            fontFamily: 'Consolas, Monaco, monospace',
+                            fontSize: 13,
+                            whiteSpace: 'pre',
+                            resize: 'none',
+                            background: '#1e1e1e',
+                            color: '#d4d4d4',
+                            padding: 16
+                        }}
+                        spellCheck={false}
+                    />
                 </div>
             </Modal>
 

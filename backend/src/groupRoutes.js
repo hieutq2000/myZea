@@ -129,12 +129,14 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
     app.get('/api/groups', authenticateToken, async (req, res) => {
         try {
             const userId = req.user.id;
+            console.log('📦 GET /api/groups - userId:', userId);
 
             // Check if tables exist
             try {
                 await pool.execute('SELECT 1 FROM chat_groups LIMIT 1');
             } catch (e) {
                 // Tables don't exist yet
+                console.log('📦 Tables do not exist yet');
                 return res.json([]);
             }
 
@@ -146,6 +148,9 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                 WHERE gm.user_id = ?
                 ORDER BY g.updated_at DESC
             `, [userId]);
+
+            console.log('📦 Found groups count:', groups.length);
+            console.log('📦 Groups:', JSON.stringify(groups.map(g => ({ id: g.id, name: g.name }))));
 
             // Get members for each group
             const groupsWithMembers = await Promise.all(groups.map(async (group) => {

@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "1.1.7",
+        date: "27/12/2025",
+        title: "CẬP NHẬT TRẠNG THÁI ĐÃ XEM",
+        changes: [
+            "👤 Chạm vào tên thành viên để xem Hồ sơ",
+            "⚙️ Bấm nút 3 chấm để mở Menu quản lý",
+            "📢 Gõ @all để thông báo cho toàn bộ nhóm",
+            "🛠️ Tối ưu khu vực chạm cảm ứng",
+        ]
+    },
+    {
         version: "1.0.8",
         date: "21/12/2024",
         title: "CẬP NHẬT GIAO DIỆN & TÍNH NĂNG",

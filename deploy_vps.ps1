@@ -22,6 +22,11 @@ scp backend/public/app-install.html root@103.195.5.146:/root/vinalive-backend/pu
 scp backend/public/404.html root@103.195.5.146:/root/vinalive-backend/public/
 # Upload source.json for AltStore repo
 scp source.json root@103.195.5.146:/root/vinalive-backend/
+# Upload source.json to Web Root (Public access)
+scp source.json root@103.195.5.146:/var/www/
+# Upload stickers folder
+Write-Host "Uploading stickers folder..."
+scp -r backend/uploads/stickers root@103.195.5.146:/root/vinalive-backend/uploads/
 
 # 3. Reload Backend
 Write-Host "[3/3] Installing dependencies and Restarting PM2 services..."

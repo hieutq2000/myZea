@@ -2292,17 +2292,79 @@ app.post('/api/chat/conversations/:id/read', authenticateToken, async (req, res)
             AND id NOT IN (SELECT message_id FROM message_reads WHERE user_id = ?)
         `, [conversationId, userId, userId]);
 
-        // Mark them all as read
-        for (const msg of unreadMessages) {
-            await pool.execute(
-                'INSERT IGNORE INTO message_reads (message_id, user_id, read_at) VALUES (?, ?, NOW())',
-                [msg.id, userId]
-            );
+        if (unreadMessages.length > 0) {
+            // Mark them all as read
+            for (const msg of unreadMessages) {
+                await pool.execute(
+                    'INSERT IGNORE INTO message_reads (message_id, user_id, read_at) VALUES (?, ?, NOW())',
+                    [msg.id, userId]
+                );
+            }
+
+            // Emit Socket Update
+            if (io) {
+                io.to(conversationId).emit('messagesRead', {
+                    conversationId,
+                    userId,
+                    lastMessageId: unreadMessages[unreadMessages.length - 1].id
+                });
+
+                // Also emit specialized event for group details
+                io.to(conversationId).emit('groupMessageRead', {
+                    conversationId,
+                    userId,
+                    messageIds: unreadMessages.map(m => m.id)
+                });
+            }
         }
 
         res.json({ success: true, markedCount: unreadMessages.length });
     } catch (error) {
         console.error('Mark read error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Compatible route for Frontend calls (/api/messages/read)
+app.post('/api/messages/read', authenticateToken, async (req, res) => {
+    try {
+        const { conversationId } = req.body;
+        if (!conversationId) return res.status(400).json({ error: 'Missing conversationId' });
+
+        const userId = req.user.id;
+
+        // Reuse logic: Mark all unread messages as read
+        const [unreadMessages] = await pool.execute(`
+            SELECT id FROM messages 
+            WHERE conversation_id = ? 
+            AND sender_id != ?
+            AND id NOT IN (SELECT message_id FROM message_reads WHERE user_id = ?)
+        `, [conversationId, userId, userId]);
+
+        if (unreadMessages.length > 0) {
+            for (const msg of unreadMessages) {
+                await pool.execute(
+                    'INSERT IGNORE INTO message_reads (message_id, user_id, read_at) VALUES (?, ?, NOW())',
+                    [msg.id, userId]
+                );
+            }
+
+            if (io) {
+                io.to(conversationId).emit('messagesRead', {
+                    conversationId,
+                    userId,
+                    lastMessageId: unreadMessages[unreadMessages.length - 1].id
+                });
+                io.to(conversationId).emit('groupMessageRead', {
+                    conversationId,
+                    userId,
+                    messageIds: unreadMessages.map(m => m.id)
+                });
+            }
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Legacy mark read error:', error);
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
@@ -3834,6 +3896,48 @@ io.on('connection', (socket) => {
                         [messageId, null, data.groupId, data.senderId, data.message, dbType, data.imageUrl || null]
                     );
                     console.log(`✅ Group message ${messageId} saved successfully for group ${data.groupId}`);
+
+                    // --- HANDLE @ALL MENTION ---
+                    if (data.message && (data.message.includes('@all') || data.message.includes('@tất cả') || data.message.includes('@everyone'))) {
+                        try {
+                            console.log('🔔 Detect @all mention, processing notifications...');
+                            const { Expo } = require('expo-server-sdk');
+                            const expo = new Expo();
+
+                            // Get all members tokens except sender
+                            const [members] = await pool.execute(`
+                                SELECT u.push_token 
+                                FROM group_members gm
+                                JOIN users u ON gm.user_id = u.id
+                                WHERE gm.group_id = ? AND gm.user_id != ? AND u.push_token IS NOT NULL AND u.push_token != ''
+                            `, [data.groupId, data.senderId]);
+
+                            const messages = [];
+                            for (const member of members) {
+                                if (Expo.isExpoPushToken(member.push_token)) {
+                                    messages.push({
+                                        to: member.push_token,
+                                        sound: 'default',
+                                        title: `${senderInfo.name || 'Thành viên'} đã nhắc mọi người`,
+                                        body: `${senderInfo.name}: ${data.message}`,
+                                        data: { groupId: data.groupId, conversationId: null }
+                                    });
+                                }
+                            }
+
+                            if (messages.length > 0) {
+                                let chunks = expo.chunkPushNotifications(messages);
+                                for (let chunk of chunks) {
+                                    await expo.sendPushNotificationsAsync(chunk);
+                                }
+                                console.log(`✅ Sent @all notification to ${messages.length} members`);
+                            }
+                        } catch (e) {
+                            console.error('❌ Error sending @all notification:', e);
+                        }
+                    }
+                    // --- END @ALL ---
+
                 } catch (saveErr) {
                     console.error(`❌ ERROR saving group message: ${saveErr.message}`);
                     console.log("Data check:", { messageId, groupId: data.groupId, senderId: data.senderId });
@@ -4557,14 +4661,7 @@ function writeRepoSource(data) {
 }
 
 // Helper function to sync IPA upload to source.json repo
-}
-
-// Make available globally
-global.syncIpaToRepo = syncIpaToRepo;
-
-// Helper function to sync IPA upload to source.json repo
 function syncIpaToRepo(metadata) {
-    // ... function body remains same ...
     try {
         const repo = readRepoSource();
         if (!repo) return false;

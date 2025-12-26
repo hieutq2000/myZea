@@ -4,6 +4,17 @@
 
 const CHANGELOG = [
     {
+        version: "1.1.5",
+        date: "27/12/2025",
+        title: "NÂNG CẤP NHẮC TÊN",
+        changes: [
+            "👤 Chạm vào tên thành viên để xem Hồ sơ",
+            "⚙️ Bấm nút 3 chấm để mở Menu quản lý",
+            "� Gõ @all để thông báo cho toàn bộ nhóm",
+            "�🛠️ Tối ưu khu vực chạm cảm ứng",
+        ]
+    },
+    {
         version: "1.0.8",
         date: "21/12/2024",
         title: "SỬA LỖI HIỂN THỊ TRÊN iOS",

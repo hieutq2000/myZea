@@ -95,6 +95,8 @@ export default function ChatListScreen() {
             let mappedGroups: any[] = [];
             try {
                 const groups = await apiRequest<any[]>('/api/groups');
+                console.log('📦 Groups API response:', JSON.stringify(groups, null, 2));
+                console.log('📦 Groups count:', groups?.length || 0);
                 mappedGroups = (groups || []).map((g: any) => ({
                     id: g.id,
                     groupId: g.id,
@@ -114,8 +116,9 @@ export default function ChatListScreen() {
                     memberCount: g.memberCount || g.members?.length || 0,
                     members: g.members,
                 }));
+                console.log('📦 Mapped groups:', mappedGroups.length);
             } catch (e) {
-                console.log('Load groups error (may not exist yet):', e);
+                console.log('❌ Load groups error:', e);
             }
 
             // Merge and sort by last message time
