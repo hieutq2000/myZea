@@ -13,6 +13,8 @@ on:
       - 'yarn.lock'
       - 'package-lock.json'
       - '.github/workflows/build.yml'
+      - 'src/**'
+      - 'App.tsx'
   workflow_dispatch:
 
 jobs:
