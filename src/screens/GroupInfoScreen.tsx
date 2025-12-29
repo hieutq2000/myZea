@@ -836,7 +836,7 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#666',
         marginLeft: 6
-    }
+    },
     modalTitle: { fontSize: 17, fontWeight: '600', color: '#000' },
     modalSave: { color: '#0084FF', fontSize: 16, fontWeight: '600' },
     // Edit avatar section
