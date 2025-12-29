@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Table, message, Modal, Input, Upload, Dropdown, Typography, Tag, Empty, Form, Divider, Row, Col, Progress } from 'antd';
-import { UploadOutlined, MoreOutlined, DownloadOutlined, DeleteOutlined, AppleFilled, SearchOutlined, AndroidOutlined, AppleOutlined, SaveOutlined, InboxOutlined, PictureOutlined, EditOutlined, BarChartOutlined, RocketOutlined, GlobalOutlined, ShareAltOutlined } from '@ant-design/icons';
+import { Card, Button, Table, message, Modal, Input, Upload, Dropdown, Typography, Tag, Empty, Form, Divider, Row, Col, Progress, Select, Space } from 'antd';
+import { UploadOutlined, MoreOutlined, DownloadOutlined, DeleteOutlined, AppleFilled, SearchOutlined, AndroidOutlined, AppleOutlined, SaveOutlined, InboxOutlined, PictureOutlined, EditOutlined, BarChartOutlined, RocketOutlined, GlobalOutlined, ShareAltOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import type { MenuProps, UploadProps } from 'antd';
 import axios from 'axios';
 
@@ -32,6 +32,7 @@ const IpaManager: React.FC = () => {
     const [uploading, setUploading] = useState(false);
     const [ipaFiles, setIpaFiles] = useState<IpaFile[]>([]);
     const [searchText, setSearchText] = useState('');
+    const [selectedAppFilter, setSelectedAppFilter] = useState<string>('all');
     const [form] = Form.useForm();
     const [uploadForm] = Form.useForm();
     const [editForm] = Form.useForm();
@@ -45,6 +46,11 @@ const IpaManager: React.FC = () => {
     const [editingRecord, setEditingRecord] = useState<IpaFile | null>(null);
     const [storageInfo, setStorageInfo] = useState({ used: 0, total: 1024 });
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [signModalVisible, setSignModalVisible] = useState(false);
+    const [selectedIpaForSign, setSelectedIpaForSign] = useState<IpaFile | null>(null);
+    const [certificates, setCertificates] = useState<any[]>([]);
+    const [selectedCertId, setSelectedCertId] = useState<number | null>(null);
+    const [signing, setSigning] = useState(false);
 
     const fetchIpas = async () => {
         setLoading(true);
@@ -249,6 +255,56 @@ const IpaManager: React.FC = () => {
         }
     };
 
+    const handleOpenSignModal = async (record: IpaFile) => {
+        setSelectedIpaForSign(record);
+        setSignModalVisible(true);
+        // Load certificates
+        try {
+            const token = localStorage.getItem('admin_token');
+            const response = await axios.get('/api/admin/certificates', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const activeCerts = response.data.filter((c: any) => c.is_active);
+            setCertificates(activeCerts);
+            if (activeCerts.length > 0) {
+                setSelectedCertId(activeCerts[0].id);
+            }
+        } catch (error) {
+            message.error('Không thể tải danh sách chứng chỉ');
+        }
+    };
+
+    const handleSignIpa = async () => {
+        if (!selectedIpaForSign || !selectedCertId) {
+            message.error('Vui lòng chọn chứng chỉ');
+            return;
+        }
+
+        setSigning(true);
+        try {
+            const token = localStorage.getItem('admin_token');
+            const timestamp = selectedIpaForSign.name.replace('zyea_', '').replace('.ipa', '');
+
+            const response = await axios.post('/api/admin/sign-ipa', {
+                ipaTimestamp: timestamp,
+                certificateId: selectedCertId
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (response.data.success) {
+                message.success('Đã ký IPA thành công!');
+                setSignModalVisible(false);
+                fetchIpas(); // Reload list
+            }
+        } catch (error: any) {
+            console.error(error);
+            message.error(error.response?.data?.error || 'Lỗi khi ký IPA');
+        } finally {
+            setSigning(false);
+        }
+    };
+
     const getActionMenu = (record: IpaFile): MenuProps['items'] => [
         {
             key: 'header',
@@ -284,6 +340,12 @@ const IpaManager: React.FC = () => {
             icon: <BarChartOutlined />,
             label: 'View Statistics',
             onClick: () => handleViewStats(record)
+        },
+        {
+            key: 'sign',
+            icon: <SafetyCertificateOutlined />,
+            label: 'Sign IPA (Ký ứng dụng)',
+            onClick: () => handleOpenSignModal(record)
         },
         {
             type: 'divider'
@@ -360,7 +422,12 @@ const IpaManager: React.FC = () => {
             title: 'File Size',
             dataIndex: 'size',
             key: 'size',
-            render: (size: number) => `${(size / 1024 / 1024).toFixed(2)} MB`
+            render: (size: number, record: any) => (
+                <Space direction="vertical" size={0}>
+                    <Text>{(size / 1024 / 1024).toFixed(2)} MB</Text>
+                    {record.signedAt && <Tag color="orange" style={{ fontSize: 10, margin: 0 }}>SIGNED</Tag>}
+                </Space>
+            )
         },
         {
             title: 'Created',
@@ -432,9 +499,13 @@ const IpaManager: React.FC = () => {
             setScreenshotFiles([]);
             uploadForm.resetFields();
             fetchIpas();
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            message.error('Tải lên thất bại');
+            if (error.response?.status === 413) {
+                message.error('File quá lớn! Server giới hạn 100MB (Cloudflare).');
+            } else {
+                message.error(error.response?.data?.error || 'Tải lên thất bại. Kiểm tra kết nối mạng.');
+            }
         } finally {
             setUploading(false);
             setUploadProgress(0);
@@ -455,10 +526,22 @@ const IpaManager: React.FC = () => {
         fileList: selectedFile ? [selectedFile] : []
     };
 
-    const filteredFiles = ipaFiles.filter(file =>
-        file.appName?.toLowerCase().includes(searchText.toLowerCase()) ||
-        file.bundleId?.toLowerCase().includes(searchText.toLowerCase())
-    );
+    const uniqueApps = React.useMemo(() => {
+        const apps = new Map();
+        ipaFiles.forEach(file => {
+            if (file.bundleId && !apps.has(file.bundleId)) {
+                apps.set(file.bundleId, file.appName);
+            }
+        });
+        return Array.from(apps.entries()).map(([bundleId, appName]) => ({ bundleId, appName }));
+    }, [ipaFiles]);
+
+    const filteredFiles = ipaFiles.filter(file => {
+        const matchesSearch = file.appName?.toLowerCase().includes(searchText.toLowerCase()) ||
+            file.bundleId?.toLowerCase().includes(searchText.toLowerCase());
+        const matchesApp = selectedAppFilter === 'all' || file.bundleId === selectedAppFilter;
+        return matchesSearch && matchesApp;
+    });
 
     const usedMB = (storageInfo.used / 1024 / 1024).toFixed(2);
     const totalGB = (storageInfo.total / 1024 / 1024 / 1024).toFixed(0);
@@ -483,9 +566,18 @@ const IpaManager: React.FC = () => {
 
             {/* IPA Files Table */}
             <Card style={{ marginBottom: 24 }}>
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 16, display: 'flex' }}>
+                    <Select
+                        value={selectedAppFilter}
+                        style={{ width: 220, marginRight: 12 }}
+                        onChange={setSelectedAppFilter}
+                        options={[
+                            { value: 'all', label: '📂 Tất cả ứng dụng' },
+                            ...uniqueApps.map(app => ({ value: app.bundleId, label: `📱 ${app.appName}` }))
+                        ]}
+                    />
                     <Input
-                        placeholder="Tìm kiếm IPA..."
+                        placeholder="Tìm kiếm version, tên file..."
                         prefix={<SearchOutlined />}
                         value={searchText}
                         onChange={e => setSearchText(e.target.value)}
@@ -862,6 +954,76 @@ const IpaManager: React.FC = () => {
                         </Row>
                     </>
                 )}
+            </Modal>
+
+            {/* Sign IPA Modal */}
+            <Modal
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <SafetyCertificateOutlined style={{ color: '#1890ff' }} />
+                        <span>Sign IPA (Ký ứng dụng iOS)</span>
+                    </div>
+                }
+                open={signModalVisible}
+                onCancel={() => setSignModalVisible(false)}
+                footer={[
+                    <Button key="cancel" onClick={() => setSignModalVisible(false)}>
+                        Hủy
+                    </Button>,
+                    <Button
+                        key="submit"
+                        type="primary"
+                        icon={<SafetyCertificateOutlined />}
+                        loading={signing}
+                        onClick={handleSignIpa}
+                        disabled={!selectedCertId}
+                    >
+                        Bắt đầu Ký IPA
+                    </Button>
+                ]}
+                width={500}
+            >
+                <div style={{ marginBottom: 20 }}>
+                    <Text type="secondary">
+                        Hệ thống sẽ sử dụng <strong>zsign</strong> trên VPS để ký lại file IPA với chứng chỉ bạn chọn.
+                        Sau khi ký xong, link cài đặt sẽ tự động cập nhật bản mới nhất.
+                    </Text>
+                </div>
+
+                <Form layout="vertical">
+                    <Form.Item label="Chọn Chứng chỉ (.p12) để ký" required>
+                        <Select
+                            placeholder="Chọn một chứng chỉ đang hoạt động"
+                            style={{ width: '100%' }}
+                            value={selectedCertId}
+                            onChange={(val) => setSelectedCertId(val)}
+                            size="large"
+                        >
+                            {certificates.map(cert => (
+                                <Select.Option key={cert.id} value={cert.id}>
+                                    <Space>
+                                        <SafetyCertificateOutlined />
+                                        <span>{cert.name}</span>
+                                        <Tag color="blue">{cert.p12_filename}</Tag>
+                                    </Space>
+                                </Select.Option>
+                            ))}
+                        </Select>
+                        {certificates.length === 0 && (
+                            <Text type="danger" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
+                                Chưa có chứng chỉ nào được kích hoạt. Vui lòng vào mục "Certificates" để thêm.
+                            </Text>
+                        )}
+                    </Form.Item>
+
+                    <Card size="small" style={{ background: '#f5f5f5', border: 'none' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <Text style={{ fontSize: 13 }}><strong>App:</strong> {selectedIpaForSign?.appName}</Text>
+                            <Text style={{ fontSize: 13 }}><strong>Version:</strong> {selectedIpaForSign?.version}</Text>
+                            <Text style={{ fontSize: 13 }}><strong>Bundle ID:</strong> {selectedIpaForSign?.bundleId}</Text>
+                        </div>
+                    </Card>
+                </Form>
             </Modal>
         </div>
     );

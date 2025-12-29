@@ -114,44 +114,44 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       console.log('⚠️ Push token error (ignored):', err.message);
     });
 
-    // Handle user tapping on notification
+    // Unified Notification Handler
+    const handleNotificationNavigation = (data: any) => {
+      if (!data || !navigationRef.isReady()) return;
+
+      console.log('🔔 Handling Navigation:', data);
+
+      // Case 1: Chat Notification
+      if (data.conversationId || data.partnerId) {
+        navigationRef.navigate('ChatDetail', {
+          conversationId: data.conversationId,
+          partnerId: data.partnerId,
+          userName: data.userName || 'Người dùng',
+          avatar: data.avatar
+        });
+        return;
+      }
+
+      // Case 2: Specific Screen Navigation (for Admin Push)
+      if (data.screen) {
+        // Check if user is logged in for protected screens (optional check)
+        if (user || !['FinanceHome', 'Profile', 'History'].includes(data.screen)) {
+          // @ts-ignore
+          navigationRef.navigate(data.screen, data.params || {});
+        }
+      }
+    };
+
+    // Handle user tapping on notification (Foreground/Background)
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
-      console.log('🔔 Notification Tapped:', data);
-
-      if (data && (data.conversationId || data.partnerId)) {
-        // Delay slightly to allow app to wake up/mount navigation
-        setTimeout(() => {
-          if (navigationRef.isReady()) {
-            navigationRef.navigate('ChatDetail', {
-              conversationId: data.conversationId,
-              partnerId: data.partnerId,
-              userName: data.userName || response.notification.request.content.title || 'Người dùng',
-              avatar: data.avatar
-            });
-          } else {
-            console.log('⚠️ Navigation not ready');
-          }
-        }, 500);
-      }
+      setTimeout(() => handleNotificationNavigation(data), 500);
     });
 
     // Handle App Cold Start from Notification
     Notifications.getLastNotificationResponseAsync().then(response => {
       if (response) {
         const data = response.notification.request.content.data;
-        if (data && (data.conversationId || data.partnerId)) {
-          setTimeout(() => {
-            if (navigationRef.isReady()) {
-              navigationRef.navigate('ChatDetail', {
-                conversationId: data.conversationId,
-                partnerId: data.partnerId,
-                userName: data.userName || response.notification.request.content.title || 'Người dùng',
-                avatar: data.avatar
-              });
-            }
-          }, 1000);
-        }
+        setTimeout(() => handleNotificationNavigation(data), 1000);
       }
     });
 

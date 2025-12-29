@@ -2,7 +2,7 @@
 // File: groupRoutes.js
 // Import this in index.js
 
-module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForClient) {
+module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForClient, io) {
 
     let tablesInitialized = false;
 
@@ -55,10 +55,52 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                 // Column already exists
             }
 
+            // Add metadata column to messages table for system messages
+            try {
+                await pool.execute('ALTER TABLE messages ADD COLUMN metadata JSON NULL');
+            } catch (e) {
+                // Column already exists
+            }
+
             tablesInitialized = true;
             console.log('✅ Chat groups tables ready');
         } catch (error) {
             console.error('❌ Group tables init error:', error.message);
+        }
+    };
+
+    // Helper function to create system message
+    const createSystemMessage = async (groupId, text, metadata = {}) => {
+        try {
+            const messageId = uuidv4();
+            console.log('📝 Creating system message:', { groupId, text, messageId });
+            await pool.execute(
+                `INSERT INTO messages (id, group_id, sender_id, content, type, metadata, created_at) 
+                 VALUES (?, ?, NULL, ?, 'system', ?, NOW())`,
+                [messageId, groupId, text, JSON.stringify(metadata)]
+            );
+
+            // Emit Socket
+            if (io) {
+                const systemMsg = {
+                    id: messageId,
+                    conversationId: groupId,
+                    groupId,
+                    text,
+                    type: 'system',
+                    metadata,
+                    createdAt: new Date().toISOString(),
+                    time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+                    isSystem: true
+                };
+                io.to(groupId).emit('receiveMessage', systemMsg);
+            }
+
+            console.log('✅ System message created:', messageId);
+            return messageId;
+        } catch (error) {
+            console.error('❌ Create system message error:', error.message);
+            return null;
         }
     };
 
@@ -91,6 +133,18 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                 [uuidv4(), groupId, creatorId, 'admin']
             );
 
+            // Get creator name
+            const [creatorInfo] = await pool.execute('SELECT name FROM users WHERE id = ?', [creatorId]);
+            const creatorName = creatorInfo[0]?.name || 'Ai đó';
+
+            // Create system message: "X đã tạo nhóm"
+            await createSystemMessage(groupId, `${creatorName} đã tạo nhóm mới "${name}"`, {
+                type: 'group_created',
+                creatorId,
+                creatorName,
+                groupName: name
+            });
+
             // Add other members
             for (const memberId of memberIds) {
                 if (memberId !== creatorId) {
@@ -98,6 +152,19 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                         'INSERT INTO group_members (id, group_id, user_id, role) VALUES (?, ?, ?, ?)',
                         [uuidv4(), groupId, memberId, 'member']
                     );
+
+                    // Get member name for system message
+                    const [memberInfo] = await pool.execute('SELECT name FROM users WHERE id = ?', [memberId]);
+                    const memberName = memberInfo[0]?.name || 'Ai đó';
+
+                    // Create system message: "X đã thêm Y vào nhóm"
+                    await createSystemMessage(groupId, `${creatorName} đã thêm ${memberName} vào nhóm`, {
+                        type: 'member_added',
+                        addedBy: creatorId,
+                        addedByName: creatorName,
+                        memberId,
+                        memberName
+                    });
                 }
             }
 
@@ -125,7 +192,7 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
         }
     });
 
-    // Get User's Groups
+    // Get User's Groups - OPTIMIZED VERSION
     app.get('/api/groups', authenticateToken, async (req, res) => {
         try {
             const userId = req.user.id;
@@ -135,58 +202,105 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
             try {
                 await pool.execute('SELECT 1 FROM chat_groups LIMIT 1');
             } catch (e) {
-                // Tables don't exist yet
                 console.log('📦 Tables do not exist yet');
                 return res.json([]);
             }
 
-            // Get groups user is member of
+            // OPTIMIZED: Single query to get groups with member count and last message
             const [groups] = await pool.execute(`
-                SELECT g.id, g.name, g.avatar, g.creator_id, g.created_at, g.updated_at
+                SELECT 
+                    g.id, g.name, g.avatar, g.creator_id, g.created_at, g.updated_at,
+                    (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as memberCount,
+                    lm.id as last_msg_id,
+                    lm.content as last_msg_content,
+                    lm.type as last_msg_type,
+                    lm.created_at as last_msg_time,
+                    lm.sender_id as last_msg_sender_id,
+                    lu.name as last_msg_sender_name
                 FROM chat_groups g
-                JOIN group_members gm ON g.id = gm.group_id
-                WHERE gm.user_id = ?
-                ORDER BY g.updated_at DESC
+                JOIN group_members gm ON g.id = gm.group_id AND gm.user_id = ?
+                LEFT JOIN (
+                    SELECT m1.* FROM messages m1
+                    INNER JOIN (
+                        SELECT group_id, MAX(created_at) as max_created
+                        FROM messages
+                        WHERE group_id IS NOT NULL
+                        GROUP BY group_id
+                    ) m2 ON m1.group_id = m2.group_id AND m1.created_at = m2.max_created
+                ) lm ON lm.group_id = g.id
+                LEFT JOIN users lu ON lm.sender_id COLLATE utf8mb4_unicode_ci = lu.id COLLATE utf8mb4_unicode_ci
+                ORDER BY COALESCE(lm.created_at, g.updated_at) DESC
             `, [userId]);
 
             console.log('📦 Found groups count:', groups.length);
-            console.log('📦 Groups:', JSON.stringify(groups.map(g => ({ id: g.id, name: g.name }))));
 
-            // Get members for each group
-            const groupsWithMembers = await Promise.all(groups.map(async (group) => {
+            // Get all members for all groups in ONE query
+            const groupIds = groups.map(g => g.id);
+            let allMembers = [];
+
+            if (groupIds.length > 0) {
+                const placeholders = groupIds.map(() => '?').join(',');
                 const [members] = await pool.execute(`
-                    SELECT u.id, u.name, u.avatar, u.email, gm.role
+                    SELECT gm.group_id, u.id, u.name, u.avatar, u.email, gm.role
                     FROM group_members gm
                     JOIN users u ON gm.user_id COLLATE utf8mb4_unicode_ci = u.id COLLATE utf8mb4_unicode_ci
-                    WHERE gm.group_id = ?
+                    WHERE gm.group_id IN (${placeholders})
                     ORDER BY gm.joined_at ASC
-                `, [group.id]);
+                `, groupIds);
+                allMembers = members;
+            }
 
-                // Get last message (if messages table has group_id column)
-                let lastMessage = null;
+            // Get unread counts
+            let unreadCounts = {};
+            if (groupIds.length > 0) {
+                const placeholders = groupIds.map(() => '?').join(',');
+                // Note: Check message_read_receipts table
+                // If getting "Table 'message_read_receipts' doesn't exist" error, ensure initTables ran.
                 try {
-                    const [lastMessages] = await pool.execute(`
-                        SELECT m.*, u.name as sender_name
+                    const [counts] = await pool.execute(`
+                        SELECT m.group_id, COUNT(*) as cnt
                         FROM messages m
-                        LEFT JOIN users u ON m.sender_id COLLATE utf8mb4_unicode_ci = u.id COLLATE utf8mb4_unicode_ci
-                        WHERE m.group_id = ?
-                        ORDER BY m.created_at DESC
-                        LIMIT 1
-                    `, [group.id]);
-                    lastMessage = lastMessages[0] || null;
+                        WHERE m.group_id IN (${placeholders})
+                        AND m.sender_id != ?
+                        AND NOT EXISTS (
+                            SELECT 1 FROM message_read_receipts mrr
+                            WHERE mrr.message_id COLLATE utf8mb4_unicode_ci = m.id COLLATE utf8mb4_unicode_ci 
+                            AND mrr.user_id COLLATE utf8mb4_unicode_ci = ?
+                        )
+                        GROUP BY m.group_id
+                     `, [...groupIds, userId, userId]);
+
+                    counts.forEach(c => unreadCounts[c.group_id] = c.cnt);
                 } catch (e) {
-                    // group_id column might not exist yet
+                    console.log('Unread count query error (might be missing table):', e.message);
                 }
+            }
+
+            // Map members to groups
+            const groupsWithDetails = groups.map(group => {
+                const members = allMembers.filter(m => m.group_id === group.id);
 
                 return {
-                    ...group,
+                    id: group.id,
+                    name: group.name,
+                    avatar: group.avatar,
+                    creator_id: group.creator_id,
+                    created_at: group.created_at,
+                    updated_at: group.updated_at,
                     members,
-                    memberCount: members.length,
-                    lastMessage
+                    memberCount: group.memberCount || members.length,
+                    unreadCount: unreadCounts[group.id] || 0,
+                    lastMessage: group.last_msg_id ? {
+                        id: group.last_msg_id,
+                        content: group.last_msg_content,
+                        type: group.last_msg_type,
+                        created_at: group.last_msg_time,
+                        sender_name: group.last_msg_sender_name
+                    } : null
                 };
-            }));
+            });
 
-            res.json(groupsWithMembers);
+            res.json(groupsWithDetails);
 
         } catch (error) {
             console.error('Get groups error:', error);
@@ -255,6 +369,10 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                 return res.status(403).json({ error: 'Chỉ quản trị viên mới có thể thêm thành viên' });
             }
 
+            // Get adder name
+            const [adderInfo] = await pool.execute('SELECT name FROM users WHERE id = ?', [userId]);
+            const adderName = adderInfo[0]?.name || 'Ai đó';
+
             // Add members
             const added = [];
             for (const memberId of membersToAdd) {
@@ -264,6 +382,19 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                         [uuidv4(), groupId, memberId, 'member']
                     );
                     added.push(memberId);
+
+                    // Get member name for system message
+                    const [memberInfo] = await pool.execute('SELECT name FROM users WHERE id = ?', [memberId]);
+                    const memberName = memberInfo[0]?.name || 'Ai đó';
+
+                    // Create system message: "X đã thêm Y vào nhóm"
+                    await createSystemMessage(groupId, `${adderName} đã thêm ${memberName} vào nhóm`, {
+                        type: 'member_added',
+                        addedBy: userId,
+                        addedByName: adderName,
+                        memberId,
+                        memberName
+                    });
                 } catch (e) {
                     // Member already exists, skip
                 }
@@ -309,10 +440,35 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                 return res.status(403).json({ error: 'Không thể xóa người tạo nhóm' });
             }
 
+            // Get names for system message
+            const [removerInfo] = await pool.execute('SELECT name FROM users WHERE id = ?', [userId]);
+            const removerName = removerInfo[0]?.name || 'Ai đó';
+            const [removedInfo] = await pool.execute('SELECT name FROM users WHERE id = ?', [memberId]);
+            const removedName = removedInfo[0]?.name || 'Ai đó';
+
             await pool.execute(
                 'DELETE FROM group_members WHERE group_id = ? AND user_id = ?',
                 [groupId, memberId]
             );
+
+            // Create system message
+            if (isSelf) {
+                // "X đã rời nhóm"
+                await createSystemMessage(groupId, `${removerName} đã rời nhóm`, {
+                    type: 'member_left',
+                    memberId,
+                    memberName: removerName
+                });
+            } else {
+                // "X đã xóa Y khỏi nhóm"
+                await createSystemMessage(groupId, `${removerName} đã xóa ${removedName} khỏi nhóm`, {
+                    type: 'member_removed',
+                    removedBy: userId,
+                    removedByName: removerName,
+                    memberId,
+                    memberName: removedName
+                });
+            }
 
             res.json({ success: true });
 
@@ -443,11 +599,22 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                 }
             }
 
+            // Get user name before removing
+            const [users] = await pool.execute('SELECT name FROM users WHERE id = ?', [userId]);
+            const userName = users[0]?.name || 'Ai đó';
+
             // Remove user from group
             await pool.execute(
                 'DELETE FROM group_members WHERE group_id = ? AND user_id = ?',
                 [groupId, userId]
             );
+
+            // Create system message
+            await createSystemMessage(groupId, `${userName} đã rời nhóm`, {
+                type: 'member_left',
+                memberId: userId,
+                memberName: userName
+            });
 
             res.json({ success: true });
 
@@ -658,6 +825,49 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
         } catch (error) {
             console.error('Get batch readers error:', error);
             res.status(500).json({ error: 'Lỗi server' });
+        }
+    });
+
+    // Mark Group Messages as Read Endpoint
+    app.post('/api/groups/:id/read', authenticateToken, async (req, res) => {
+        try {
+            const groupId = req.params.id;
+            const userId = req.user.id;
+
+            // Find unread group messages for this user
+            const [unread] = await pool.execute(`
+                SELECT m.id FROM messages m
+                WHERE m.group_id = ?
+                AND m.sender_id != ?
+                AND NOT EXISTS (
+                    SELECT 1 FROM message_read_receipts mrr 
+                    WHERE mrr.message_id COLLATE utf8mb4_unicode_ci = m.id COLLATE utf8mb4_unicode_ci 
+                    AND mrr.user_id COLLATE utf8mb4_unicode_ci = ?
+                )
+            `, [groupId, userId, userId]);
+
+            if (unread.length > 0) {
+                for (const msg of unread) {
+                    await pool.execute(
+                        'INSERT IGNORE INTO message_read_receipts (id, message_id, user_id) VALUES (?, ?, ?)',
+                        [uuidv4(), msg.id, userId]
+                    );
+                }
+
+                // Emit socket event
+                if (io) {
+                    io.to(groupId).emit('groupMessageRead', {
+                        conversationId: groupId,
+                        userId,
+                        messageIds: unread.map(u => u.id)
+                    });
+                }
+            }
+
+            res.json({ success: true, count: unread.length });
+        } catch (e) {
+            console.error('Group mark read error:', e);
+            res.status(500).json({ error: e.message });
         }
     });
 

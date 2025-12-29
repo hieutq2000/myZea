@@ -18,6 +18,28 @@ async function optimizeDatabase() {
         connectionLimit: 5,
     });
 
+    // === Update Table Columns ===
+    // Check and add columns
+    try {
+        const [columns] = await pool.execute("SHOW COLUMNS FROM messages LIKE 'is_revoked'");
+        if (columns.length === 0) {
+            await pool.execute("ALTER TABLE messages ADD COLUMN is_revoked BOOLEAN DEFAULT FALSE");
+            console.log('✅ Added is_revoked column to messages table');
+        }
+    } catch (e) { console.log('⚠️ Failed to check/add is_revoked:', e.message); }
+
+    try {
+        const [columns] = await pool.execute("SHOW COLUMNS FROM users LIKE 'push_token'");
+        if (columns.length === 0) {
+            await pool.execute("ALTER TABLE users ADD COLUMN push_token VARCHAR(255) DEFAULT NULL");
+            console.log('✅ Added push_token column to users table');
+        } else {
+            console.log('⏭️  push_token column already exists');
+        }
+    } catch (e) {
+        console.log('⚠️  Failed to check/add push_token:', e.message);
+    }
+
     const indexes = [
         // Messages table - Critical for chat performance
         { table: 'messages', name: 'idx_messages_conv_id', columns: 'conversation_id' },
@@ -109,6 +131,11 @@ async function optimizeDatabase() {
         { table: 'messages', column: 'sender_id' },
         { table: 'messages', column: 'conversation_id' },
         { table: 'messages', column: 'group_id' },
+        // Add message_reads table
+        { table: 'message_reads', column: 'message_id' },
+        { table: 'message_reads', column: 'user_id' },
+        // Add users table
+        { table: 'users', column: 'id' },
     ];
 
     for (const fix of collationFixes) {
@@ -129,6 +156,25 @@ async function optimizeDatabase() {
     console.log(`   ⏭️  Skipped: ${skipped}`);
     console.log(`   ❌ Failed: ${failed}`);
     console.log('\n🎉 Database optimization complete!');
+
+    // Create pinned_messages table if not exists
+    try {
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS pinned_messages (
+                id VARCHAR(36) PRIMARY KEY,
+                conversation_id VARCHAR(36) NOT NULL,
+                message_id VARCHAR(36) NOT NULL,
+                pinner_id VARCHAR(36) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_conversation (conversation_id),
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+                FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+            )
+        `);
+        console.log('✅ Created pinned_messages table');
+    } catch (e) {
+        console.log('⚠️ Failed to create pinned_messages table or already exists:', e.message);
+    }
 
     await pool.end();
 }

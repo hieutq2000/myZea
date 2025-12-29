@@ -327,15 +327,19 @@ const Stickers: React.FC = () => {
             </div>
 
             {/* Create/Edit Pack Modal */}
+            {/* Create/Edit Pack Modal */}
             <Modal
                 title={isEditMode ? "Chỉnh sửa Pack" : "Tạo Pack mới"}
                 open={isPackModalVisible}
                 onOk={handleCreateOrUpdatePack}
                 onCancel={() => setIsPackModalVisible(false)}
+                okText="Được rồi"
+                cancelText="Hủy bỏ"
+                width={600}
             >
                 <Form form={packForm} layout="vertical">
-                    <Form.Item name="name" label="Tên (Internal ID)" rules={[{ required: true }]}>
-                        <Input placeholder="ví du: zalo_pack_1" />
+                    <Form.Item name="name" label="Tên (Mã định danh nội bộ)" rules={[{ required: true }]}>
+                        <Input placeholder="ví dụ: zalo_pack_1" />
                     </Form.Item>
                     <Form.Item name="title" label="Tiêu đề hiển thị" rules={[{ required: true }]}>
                         <Input placeholder="ví dụ: Zalo Cute" />
@@ -343,9 +347,59 @@ const Stickers: React.FC = () => {
                     <Form.Item name="sort_order" label="Thứ tự">
                         <Input type="number" />
                     </Form.Item>
-                    <Form.Item name="icon_url" label="URL Icon (Tạm thời nhập link)">
+                    <Form.Item name="icon_url" label="Biểu tượng URL">
                         <Input placeholder="/uploads/..." />
                     </Form.Item>
+
+                    {/* Show sticker picker only in edit mode when pack has stickers */}
+                    {isEditMode && stickers.length > 0 && (
+                        <Form.Item label="Hoặc chọn từ sticker đã tải lên">
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(6, 1fr)',
+                                gap: 8,
+                                maxHeight: 200,
+                                overflowY: 'auto',
+                                padding: 8,
+                                border: '1px dashed #d9d9d9',
+                                borderRadius: 8,
+                                backgroundColor: '#fafafa'
+                            }}>
+                                {stickers.map(sticker => (
+                                    <div
+                                        key={sticker.id}
+                                        onClick={() => {
+                                            packForm.setFieldsValue({ icon_url: sticker.image_url });
+                                            message.success('Đã chọn làm biểu tượng');
+                                        }}
+                                        style={{
+                                            cursor: 'pointer',
+                                            padding: 4,
+                                            borderRadius: 6,
+                                            border: '2px solid transparent',
+                                            backgroundColor: 'white',
+                                            transition: 'all 0.2s',
+                                            position: 'relative'
+                                        }}
+                                        title="Nhấn để chọn làm biểu tượng"
+                                    >
+                                        <img
+                                            src={sticker.image_url}
+                                            alt="sticker"
+                                            style={{
+                                                width: '100%',
+                                                height: 50,
+                                                objectFit: 'contain'
+                                            }}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            <div style={{ marginTop: 5, fontSize: 12, color: '#666' }}>
+                                * Nhấn vào sticker để chọn làm icon cho pack
+                            </div>
+                        </Form.Item>
+                    )}
                 </Form>
             </Modal>
 

@@ -14,6 +14,8 @@ import {
   CloudSyncOutlined,
   DownOutlined,
   CloudUploadOutlined,
+  SafetyCertificateOutlined,
+  NotificationOutlined,
 } from '@ant-design/icons';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import Login from './pages/Login';
@@ -25,6 +27,9 @@ import FeedbackPage from './pages/Feedback';
 import IpaManager from './pages/IpaManager';
 import RepoManager from './pages/RepoManager';
 import VersionManager from './pages/VersionManager';
+import Certificates from './pages/Certificates';
+import Dashboard from './pages/Dashboard';
+import Notifications from './pages/Notifications';
 
 const { Header, Sider, Content } = Layout;
 
@@ -42,6 +47,7 @@ const MenuWrapper: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
     if (path === '/ipa-manager') return 'ipa-manager';
     if (path === '/repo-manager') return 'repo-manager';
     if (path === '/version-manager') return 'version-manager';
+    if (path === '/certificates') return 'certificates';
     if (path === '/settings') return 'settings';
     return 'dashboard';
   };
@@ -92,6 +98,11 @@ const MenuWrapper: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
               icon: <CustomerServiceOutlined style={{ fontSize: 18 }} />,
               label: <Link to="/feedback" style={{ fontWeight: 500 }}>Phản hồi</Link>,
             },
+            {
+              key: 'notifications',
+              icon: <NotificationOutlined style={{ fontSize: 18 }} />,
+              label: <Link to="/notifications" style={{ fontWeight: 500 }}>Thông báo</Link>,
+            },
           ]
         },
         {
@@ -113,6 +124,11 @@ const MenuWrapper: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
               key: 'version-manager',
               icon: <CloudUploadOutlined style={{ fontSize: 18 }} />,
               label: <Link to="/version-manager" style={{ fontWeight: 500 }}>Version Control</Link>,
+            },
+            {
+              key: 'certificates',
+              icon: <SafetyCertificateOutlined style={{ fontSize: 18 }} />,
+              label: <Link to="/certificates" style={{ fontWeight: 500 }}>Certificates</Link>,
             },
           ]
         },
@@ -319,19 +335,16 @@ const App: React.FC = () => {
             }}
           >
             <Routes>
-              <Route path="/" element={
-                <div>
-                  <h2>Chào mừng trở lại! 👋</h2>
-                  <p>Chọn một mục từ menu bên trái để bắt đầu quản lý.</p>
-                </div>
-              } />
+              <Route path="/" element={<Dashboard />} />
               <Route path="/users" element={<Users />} />
               <Route path="/content" element={<ContentPage />} />
               <Route path="/stickers" element={<Stickers />} />
               <Route path="/feedback" element={<FeedbackPage />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="/ipa-manager" element={<IpaManager />} />
               <Route path="/repo-manager" element={<RepoManager />} />
               <Route path="/version-manager" element={<VersionManager />} />
+              <Route path="/certificates" element={<Certificates />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </Content>

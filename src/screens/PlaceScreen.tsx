@@ -351,8 +351,8 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
         }));
 
         try {
-            // Backend only understands "Like" toggle for now
-            await toggleLikePost(postId);
+            // Send reaction type to backend
+            await toggleLikePost(postId, reactionId);
         } catch (error) {
             console.error('Reaction error', error);
         }

@@ -10,6 +10,9 @@ const sizeOf = require('image-size');
 const fs = require('fs');
 const fileUpload = require('express-fileupload');
 const axios = require('axios');
+const { exec } = require('child_process');
+const { Expo } = require('expo-server-sdk');
+let expo = new Expo();
 
 const app = express();
 const http = require('http');
@@ -112,32 +115,26 @@ function formatDateForClient(mysqlDate) {
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function safeCallApi(apiFunction) {
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            await sleep(1000); // giảm tốc độ mỗi request
-
-            const response = await apiFunction();
-
-            if (response.status === 429) {
-                throw new Error("429 TooManyRequests");
-            }
-
-            return response;
-
+            await sleep(1000);
+            return await apiFunction();
         } catch (error) {
-            if (error.message.includes("429") || error.message.includes("TooManyRequests")) {
-                if (attempt < 4) {
-                    const delaySec = Math.pow(2, attempt) + Math.random();
-                    console.log(`Rate limit hit. Retrying in ${delaySec.toFixed(2)}s...`);
-                    await sleep(delaySec * 1000);
-                    continue;
-                }
+            const status = error.response?.status;
+            if (status === 429 && attempt < 2) {
+                const delay = Math.pow(2, attempt) * 2000;
+                console.log(`Rate limit (429). Retrying in ${delay}ms...`);
+                await sleep(delay);
+                continue;
+            }
+            // Log chi tiết lỗi từ Google để dễ debug
+            if (error.response?.data) {
+                console.error("API Error Detail:", JSON.stringify(error.response.data));
             }
             throw error;
         }
     }
-
-    throw new Error("Failed after 5 retries due to 429 error");
+    throw new Error("Max retries reached");
 }
 
 // Database connection pool
@@ -237,12 +234,16 @@ async function initDatabase() {
         id VARCHAR(36) PRIMARY KEY,
         post_id VARCHAR(36) NOT NULL,
         user_id VARCHAR(36) NOT NULL,
+        reaction_type VARCHAR(20) DEFAULT 'like',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY unique_like (post_id, user_id),
         FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+
+        // Ensure reaction_type column exists for existing databases
+        await ensureColumn('post_likes', 'reaction_type', "VARCHAR(20) DEFAULT 'like'");
 
         // Sticker Packs table
         await pool.execute(`
@@ -343,6 +344,19 @@ async function initDatabase() {
                 INDEX idx_notifications_created_at (created_at DESC),
                 INDEX idx_notifications_recipient_unread (recipient_id, is_read)
             )
+        `);
+
+        // Create message_reads table for tracking unread messages
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS message_reads (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                message_id VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+                user_id VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+                read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_read (message_id, user_id),
+                INDEX idx_message_reads_user (user_id),
+                INDEX idx_message_reads_message (message_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         `);
 
         // Ensure indexes
@@ -446,6 +460,60 @@ async function initDatabase() {
         await pool.execute(`CREATE TABLE IF NOT EXISTS post_tags (id VARCHAR(36) PRIMARY KEY, post_id VARCHAR(36) NOT NULL, user_id VARCHAR(36) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_tag (post_id, user_id))`);
         await pool.execute(`CREATE TABLE IF NOT EXISTS place_notifications (id VARCHAR(36) PRIMARY KEY, recipient_id VARCHAR(36) NOT NULL, actor_id VARCHAR(36) NOT NULL, type VARCHAR(20) NOT NULL, post_id VARCHAR(36) NULL, comment_id VARCHAR(36) NULL, message TEXT, post_preview VARCHAR(255) NULL, is_read BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
+        // Check reactions column in messages
+        try {
+            await pool.execute("SELECT reactions FROM messages LIMIT 1");
+        } catch (e) {
+            console.log("🛠 Adding reactions column to messages table...");
+            // reactions is JSON column
+            await pool.execute("ALTER TABLE messages ADD COLUMN reactions JSON DEFAULT NULL");
+        }
+
+        // --- STICKER TABLES ---
+        await pool.execute(`CREATE TABLE IF NOT EXISTS sticker_packs (
+            id VARCHAR(36) PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            icon_url TEXT,
+            sort_order INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // Ensure all required columns exist for sticker_packs
+        const stickerPackCols = [
+            { name: 'icon_url', type: 'TEXT' },
+            { name: 'sort_order', type: 'INT DEFAULT 0' },
+            { name: 'name', type: 'VARCHAR(255)' },
+            { name: 'title', type: 'VARCHAR(255)' }
+        ];
+
+        for (const col of stickerPackCols) {
+            try {
+                // Sử dụng backticks để tránh lỗi từ khoá SQL (như 'name', 'title')
+                await pool.execute(`SELECT \`${col.name}\` FROM \`sticker_packs\` LIMIT 1`);
+            } catch (e) {
+                console.log(`🛠 [DB] Adding column ${col.name} to sticker_packs...`);
+                try {
+                    await pool.execute(`ALTER TABLE \`sticker_packs\` ADD COLUMN \`${col.name}\` ${col.type}`);
+                } catch (err) {
+                    console.error(`[DB] Failed to add column ${col.name}:`, err.message);
+                }
+            }
+        }
+
+        await pool.execute(`CREATE TABLE IF NOT EXISTS stickers (
+            id VARCHAR(36) PRIMARY KEY,
+            pack_id VARCHAR(36) NOT NULL,
+            image_url TEXT NOT NULL,
+            file_format VARCHAR(10),
+            width INT,
+            height INT,
+            is_animated BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (pack_id) REFERENCES sticker_packs(id) ON DELETE CASCADE
+        )`);
+
         console.log('✅ Database connected and tables created');
     } catch (error) {
         console.error('❌ Database connection failed:', error.message);
@@ -501,246 +569,16 @@ app.get('/api/health', (req, res) => {
 });
 
 // ============ AUTH ROUTES ============
-
-// Register
-app.post('/api/auth/register', async (req, res) => {
-    try {
-        const { email, password, name } = req.body;
-
-        if (!email || !password || !name) {
-            return res.status(400).json({ error: 'Vui lòng điền đầy đủ thông tin' });
-        }
-
-        const [existing] = await pool.execute('SELECT id FROM users WHERE email = ?', [email]);
-        if (existing.length > 0) {
-            return res.status(400).json({ error: 'Email đã được sử dụng' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const userId = uuidv4();
-
-        await pool.execute(
-            'INSERT INTO users (id, email, password, name, badges) VALUES (?, ?, ?, ?, ?)',
-            [userId, email, hashedPassword, name, '[]']
-        );
-
-        const token = jwt.sign({ id: userId, email }, process.env.JWT_SECRET, { expiresIn: '30d' });
-
-        res.json({
-            token,
-            user: { id: userId, email, name, xp: 0, level: 1, badges: [] }
-        });
-    } catch (error) {
-        console.error('Register error:', error);
-        res.status(500).json({ error: 'Lỗi server' });
-    }
-});
-
-// Login
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Vui lòng nhập email và mật khẩu' });
-        }
-
-        const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
-        if (users.length === 0) {
-            return res.status(401).json({ error: 'Email hoặc mật khẩu không đúng' });
-        }
-
-        const user = users[0];
-
-        const validPassword = await bcrypt.compare(password, user.password);
-        if (!validPassword) {
-            return res.status(401).json({ error: 'Email hoặc mật khẩu không đúng' });
-        }
-
-        const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '30d' });
-
-        res.json({
-            token,
-            user: {
-                id: user.id,
-                email: user.email,
-                name: user.name,
-                avatar: user.avatar,
-                coverImage: user.cover_image,
-                voice: user.voice,
-                xp: user.xp,
-                level: user.level,
-                badges: safeJsonParse(user.badges)
-            }
-        });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Lỗi server' });
-    }
-});
-
-// Get current user
-app.get('/api/auth/me', authenticateToken, async (req, res) => {
-    try {
-        const [users] = await pool.execute('SELECT * FROM users WHERE id = ?', [req.user.id]);
-        if (users.length === 0) {
-            return res.status(404).json({ error: 'Người dùng không tồn tại' });
-        }
-
-        const user = users[0];
-
-        const [results] = await pool.execute(
-            'SELECT * FROM exam_results WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
-            [user.id]
-        );
-
-        res.json({
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            avatar: user.avatar,
-            coverImage: user.cover_image,
-            voice: user.voice,
-            xp: user.xp,
-            level: user.level,
-            badges: safeJsonParse(user.badges),
-            history: results.map(r => ({
-                id: r.id,
-                timestamp: r.created_at,
-                score: r.score,
-                duration: r.duration,
-                topic: r.topic,
-                transcript: safeJsonParse(r.transcript)
-            }))
-        });
-    } catch (error) {
-        console.error('Get user error:', error);
-        res.status(500).json({ error: 'Lỗi server' });
-    }
-});
-
-// Update user profile
-app.put('/api/auth/profile', authenticateToken, async (req, res) => {
-    try {
-        const { name, avatar, voice, coverImage } = req.body;
-
-        // Dynamic update to avoid overwriting with null if fields are missing in request
-        // But for simplicity, we assume the client sends current values for existing fields
-        // However, to be safe let's assume client sends all or we need a better query.
-        // Let's stick to the current pattern but add cover_image
-        // NOTE: Client MUST send all fields or we need to fetch user first.
-        // Better: UPDATE users SET name=COALESCE(?, name), avatar=COALESCE(?, avatar) ...
-
-        console.log('📝 Updating profile for user:', req.user.id);
-        console.log('   - name:', name);
-        console.log('   - avatar:', avatar ? avatar.substring(0, 50) + '...' : 'null');
-        console.log('   - voice:', voice);
-        console.log('   - coverImage:', coverImage ? coverImage.substring(0, 50) + '...' : 'null');
-
-        await pool.execute(
-            'UPDATE users SET name = COALESCE(?, name), avatar = COALESCE(?, avatar), voice = COALESCE(?, voice), cover_image = COALESCE(?, cover_image) WHERE id = ?',
-            [name || null, avatar || null, voice || null, coverImage || null, req.user.id]
-        );
-
-        console.log('✅ Profile updated successfully');
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Update profile error:', error);
-        res.status(500).json({ error: 'Lỗi server' });
-    }
-});
-
-// Update push token
-app.post('/api/auth/push-token', authenticateToken, async (req, res) => {
-    try {
-        const { token } = req.body;
-        if (!token) return res.status(400).json({ error: 'Token is required' });
-
-        // Add column if not exists (quick hack for development)
-        try {
-            await pool.execute('ALTER TABLE users ADD COLUMN push_token VARCHAR(255)');
-        } catch (e) {
-            // Column likely exists
-        }
-
-        await pool.execute(
-            'UPDATE users SET push_token = ? WHERE id = ?',
-            [token, req.user.id]
-        );
-
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Update push token error:', error);
-        res.status(500).json({ error: 'Lỗi server' });
-    }
-});
+// NOTE: Auth routes (register, login, me, profile, push-token) 
+// have been moved to ./routes/authRoutes.js for better code organization.
+// The modular routes are mounted at the end of this file.
 
 // ============ ADMIN ROUTES ============
-app.get('/api/admin/users', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
-            return res.status(403).json({ error: 'Không có quyền truy cập' });
-        }
-        const [users] = await pool.execute('SELECT id, name, email, avatar, level, xp, is_banned, created_at FROM users ORDER BY created_at DESC');
-        res.json(users);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Lỗi server' });
-    }
-});
+// NOTE: Admin user management routes (get users, update, delete, reset-avatar)
+// have been moved to ./routes/adminRoutes.js for better code organization.
+// The modular routes are mounted at the end of this file.
 
-// Update user info
-app.put('/api/admin/users/:id', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') return res.status(403).json({ error: 'Không có quyền truy cập' });
-
-        const { id } = req.params;
-        const { name, email, xp, level, resetPassword, is_banned } = req.body;
-
-        let query = 'UPDATE users SET name = ?, email = ?, xp = ?, level = ?';
-        let params = [name, email, xp, level];
-
-        if (is_banned !== undefined) {
-            query += ', is_banned = ?';
-            params.push(is_banned);
-        }
-
-        if (resetPassword) {
-            const hashedPassword = await bcrypt.hash(resetPassword, 10);
-            query += ', password = ?';
-            params.push(hashedPassword);
-        }
-
-        query += ' WHERE id = ?';
-        params.push(id);
-
-        await pool.execute(query, params);
-        res.json({ success: true });
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'Lỗi server' });
-    }
-});
-
-// Delete user
-app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.email !== 'hieu@gmail.com') return res.status(403).json({ error: 'Không có quyền truy cập' });
-
-        const { id } = req.params;
-        // Prevent deleting self
-        const [currentUser] = await pool.execute('SELECT id FROM users WHERE email = ?', ['hieu@gmail.com']);
-        if (currentUser[0] && currentUser[0].id === id) {
-            return res.status(400).json({ error: 'Không thể tự xóa chính mình' });
-        }
-
-        await pool.execute('DELETE FROM users WHERE id = ?', [id]);
-        res.json({ success: true });
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'Lỗi server' });
-    }
-});
+// --- Other Admin Routes (not yet refactored) ---
 
 // Get all posts (for content moderation)
 app.get('/api/admin/posts', authenticateToken, async (req, res) => {
@@ -834,6 +672,49 @@ app.post('/api/admin/app-settings', authenticateToken, async (req, res) => {
         res.json({ success: true, message: 'Cập nhật thành công' });
     } catch (error) {
         console.error('Update settings error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// ============ APP VERSION CONTROL (Force Update) ============
+
+app.get('/api/app-version/latest', async (req, res) => {
+    try {
+        const [rows] = await pool.execute('SELECT setting_value FROM app_settings WHERE setting_key = "mobile_version_config"');
+        if (rows.length > 0 && rows[0].setting_value) {
+            res.json(JSON.parse(rows[0].setting_value));
+        } else {
+            res.json({
+                version: '1.0.0',
+                title: 'Cập nhật ứng dụng',
+                message: 'Vui lòng cập nhật phiên bản mới nhất.',
+                downloadUrl: '',
+                forceUpdate: false
+            });
+        }
+    } catch (error) {
+        console.error('Get app version error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+app.post('/api/admin/app-version', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const config = req.body;
+        const configJson = JSON.stringify(config);
+
+        await pool.execute(
+            'INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+            ['mobile_version_config', configJson, configJson]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Update app version error:', error);
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
@@ -1251,6 +1132,233 @@ app.delete('/api/admin/ipas/:filename', authenticateToken, (req, res) => {
     } catch (error) {
         console.error('Delete IPA error:', error);
         res.status(500).json({ error: 'Lỗi khi xóa file' });
+    }
+});
+
+// ============ CERTIFICATE MANAGEMENT ============
+
+// List certificates
+app.get('/api/admin/certificates', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const [rows] = await pool.execute('SELECT * FROM certificates ORDER BY created_at DESC');
+        res.json(rows);
+    } catch (error) {
+        console.error('List certificates error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Create certificate (upload p12 and mobileprovision)
+app.post('/api/admin/certificates', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        if (!req.files || !req.files.p12 || !req.files.provision) {
+            return res.status(400).json({ error: 'Vui lòng upload cả file .p12 và .mobileprovision' });
+        }
+
+        const { name, password, description } = req.body;
+        const p12File = req.files.p12;
+        const provisionFile = req.files.provision;
+
+        const certDir = path.join(__dirname, '../uploads/certs');
+        if (!fs.existsSync(certDir)) {
+            fs.mkdirSync(certDir, { recursive: true });
+        }
+
+        const timestamp = Date.now();
+        const p12Name = `cert_${timestamp}.p12`;
+        const provisionName = `prov_${timestamp}.mobileprovision`;
+
+        await p12File.mv(path.join(certDir, p12Name));
+        await provisionFile.mv(path.join(certDir, provisionName));
+
+        const [result] = await pool.execute(
+            'INSERT INTO certificates (name, p12_filename, provision_filename, p12_password, description) VALUES (?, ?, ?, ?, ?)',
+            [name || 'New Certificate', p12Name, provisionName, password || '', description || '']
+        );
+
+        res.json({ success: true, id: result.insertId });
+    } catch (error) {
+        console.error('Upload certificate error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Update certificate
+app.put('/api/admin/certificates/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { id } = req.params;
+        const { name, password, description, is_active } = req.body;
+
+        await pool.execute(
+            'UPDATE certificates SET name = ?, p12_password = ?, description = ?, is_active = ? WHERE id = ?',
+            [name, password, description, is_active, id]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Update certificate error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Delete certificate
+app.delete('/api/admin/certificates/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { id } = req.params;
+
+        // Find filenames to delete
+        const [rows] = await pool.execute('SELECT p12_filename, provision_filename FROM certificates WHERE id = ?', [id]);
+        if (rows.length > 0) {
+            const { p12_filename, provision_filename } = rows[0];
+            const certDir = path.join(__dirname, '../uploads/certs');
+
+            try {
+                if (fs.existsSync(path.join(certDir, p12_filename))) fs.unlinkSync(path.join(certDir, p12_filename));
+                if (fs.existsSync(path.join(certDir, provision_filename))) fs.unlinkSync(path.join(certDir, provision_filename));
+            } catch (err) {
+                console.error('File delete warning:', err);
+            }
+        }
+
+        await pool.execute('DELETE FROM certificates WHERE id = ?', [id]);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Delete certificate error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// IPA Signing using zsign
+// const { exec } = require('child_process'); // Removed duplicate
+
+app.post('/api/admin/sign-ipa', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { ipaTimestamp, certificateId } = req.body;
+
+        // 1. Get IPA Path
+        const uploadDir = path.join(__dirname, '../public/uploads/ipa');
+        const metadataPath = path.join(uploadDir, `metadata_${ipaTimestamp}.json`);
+
+        if (!fs.existsSync(metadataPath)) {
+            return res.status(404).json({ error: 'IPA Metadata không tồn tại' });
+        }
+
+        const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+        const originalIpaPath = path.join(uploadDir, metadata.ipaFileName);
+
+        // 2. Get Certificate Info
+        const [certs] = await pool.execute('SELECT * FROM certificates WHERE id = ?', [certificateId]);
+        if (certs.length === 0) {
+            return res.status(404).json({ error: 'Chứng chỉ không tồn tại' });
+        }
+        const cert = certs[0];
+        const certDir = path.join(__dirname, '../uploads/certs');
+        const p12Path = path.join(certDir, cert.p12_filename);
+        const provPath = path.join(certDir, cert.provision_filename);
+
+        // 3. Prepare output path
+        const signTimestamp = Date.now();
+        const signedFileName = `signed_${signTimestamp}_${metadata.ipaFileName}`;
+        const outputPath = path.join(uploadDir, signedFileName);
+
+        // 4. Run zsign command
+        // Format: zsign -k cert.p12 -p password -m prov.mobileprovision -o output.ipa input.ipa
+        const zsignCmd = `zsign -k "${p12Path}" -p "${cert.p12_password}" -m "${provPath}" -o "${outputPath}" "${originalIpaPath}"`;
+
+        console.log('🚀 Starting zsign command:', zsignCmd.replace(cert.p12_password, '******'));
+
+        exec(zsignCmd, async (error, stdout, stderr) => {
+            if (error) {
+                console.error('zsign error:', error);
+                console.error('stderr:', stderr);
+                return res.status(500).json({ error: `Lỗi khi ký IPA: ${stderr || error.message}` });
+            }
+
+            console.log('✅ zsign output:', stdout);
+
+            // 5. Update Metadata with signed file info
+            const oldIpaFileName = metadata.ipaFileName;
+            metadata.ipaFileName = signedFileName;
+            metadata.signedAt = new Date().toISOString();
+            metadata.usedCert = cert.name;
+
+            fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+
+            // Clean up old IPA if it was also a signed one (to save space)
+            if (oldIpaFileName.startsWith('signed_')) {
+                const oldIpaPath = path.join(uploadDir, oldIpaFileName);
+                if (fs.existsSync(oldIpaPath)) fs.unlinkSync(oldIpaPath);
+            }
+
+            // 6. Update Plist
+            const baseUrl = 'https://data5g.site';
+            const ipaUrl = `${baseUrl}/uploads/ipa/${signedFileName}`;
+            const plistPath = path.join(uploadDir, `manifest_${ipaTimestamp}.plist`);
+
+            const newPlistContent = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>items</key>
+    <array>
+        <dict>
+            <key>assets</key>
+            <array>
+                <dict>
+                    <key>kind</key>
+                    <string>software-package</string>
+                    <key>url</key>
+                    <string>${ipaUrl}</string>
+                </dict>
+            </array>
+            <key>metadata</key>
+            <dict>
+                <key>bundle-identifier</key>
+                <string>${metadata.bundleId}</string>
+                <key>bundle-version</key>
+                <string>${metadata.version}</string>
+                <key>kind</key>
+                <string>software</string>
+                <key>title</key>
+                <string>${metadata.appName}</string>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>`;
+            fs.writeFileSync(plistPath, newPlistContent);
+
+            res.json({
+                success: true,
+                message: 'Ký IPA thành công!',
+                signedFileName,
+                itmsLink: `itms-services://?action=download-manifest&url=${baseUrl}/uploads/ipa/manifest_${ipaTimestamp}.plist`
+            });
+        });
+
+    } catch (error) {
+        console.error('Sign IPA error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
     }
 });
 
@@ -1734,115 +1842,109 @@ app.post('/api/finance/parse-transaction', authenticateToken, async (req, res) =
 
         // Expanded category list for better AI context
         const categories = `
-        Expense:
-        - food: Thức ăn (ăn uống, cafe, đi chợ)
-        - transport: Di chuyển (xăng, xe, taxi, gửi xe)
-        - shopping: Mua sắm (quần áo, giày dép, mỹ phẩm)
-        - entertainment: Giải trí (xem phim, game, du lịch)
-        - bills: Hóa đơn (điện, nước, net, thuê nhà)
+        Expense (Chi tiêu):
+        - food: Thức ăn (ăn uống, cafe, đi chợ, trà sữa, quán nhậu)
+        - transport: Di chuyển (xăng, xe, taxi, gửi xe, vé máy bay)
+        - shopping: Mua sắm (quần áo, giày dép, mỹ phẩm, đồ gia dụng)
+        - entertainment: Giải trí (xem phim, game, du lịch, karaoke)
+        - bills: Hóa đơn (điện, nước, net, thuê nhà, cước điện thoại)
         - health: Sức khỏe (thuốc, khám bệnh, gym)
         - education: Giáo dục (học phí, sách, khóa học)
-        - family: Gia đình (biếu bố mẹ, con cái)
+        - family: Gia đình (biếu bố mẹ, con cái, quà tặng người thân)
         - other_expense: Khác
 
-        Income:
+        Income (Thu nhập):
         - salary: Lương
         - bonus: Thưởng
-        - investment: Đầu tư (lãi, chứng khoán)
-        - freelance: Làm thêm (job ngoài)
-        - gift_income: Được tặng (lì xì)
-        - sell: Bán đồ
+        - investment: Đầu tư (lãi, chứng khoán, crypto, vàng)
+        - freelance: Làm thêm (job ngoài, dự án)
+        - gift_income: Được tặng (lì xì, tiền mừng)
+        - sell: Bán đồ (thanh lý)
         - other_income: Khác
         `;
 
         const prompt = `
-        Vai trò: Hệ thống xử lý ngôn ngữ tự nhiên cho ứng dụng tài chính (Strict JSON Mode).
-        Nhiệm vụ: Phân tích đoạn văn bản đầu vào và trích xuất TOÀN BỘ các giao dịch tài chính có trong đó.
+        Vai trò: Hệ thống phân tích tài chính thông minh (Strict JSON Array Mode).
+        Nhiệm vụ: Trích xuất TOÀN BỘ các giao dịch tài chính từ câu nói của người dùng.
 
-        Input Text: "${text}"
+        VĂN BẢN CẦN PHÂN TÍCH: "${text}"
 
-        Danh sách Category ID:
+        DANH SÁCH CATEGORY ID HỢP LỆ:
         ${categories}
 
-        LOGIC PHÂN TÍCH:
-        1. Tìm các cụm [Hành động] đi kèm [Số tiền].
-        2. Nếu thấy nhiều cụm như vậy -> TÁCH THÀNH CÁC OBJECT RIÊNG BIỆT.
-        3. Số tiền: Tự động normalize (10k -> 10000).
+        YÊU CẦU BẮT BUỘC:
+        1. Phải nhận diện được NHIỀU giao dịch trong một câu (ví dụ: "Ăn sáng 30 ca và cafe 20 ca" là 2 giao dịch).
+        2. Mỗi giao dịch phải được tách thành một Object trong mảng JSON.
+        3. Số tiền (amount): 
+           - Quy đổi về số nguyên.
+           - Nhận diện đơn vị: "k", "nghìn", "ngàn", "ca", "cành" đều nhân với 1000.
+           - Ví dụ: "10 ca" -> 10000, "50 cành" -> 50000.
+        4. CategoryId PHẢI trùng khớp với danh sách ở trên.
+        5. Nếu không chắc chắn về CategoryId, hãy dùng "other_expense" hoặc "other_income".
+        6. Chú ý: Nếu người dùng nói "và", "với", "rồi", "tiếp là"... thường là dấu hiệu có nhiều giao dịch.
 
-        VÍ DỤ MẪU (Học theo pattern này):
-        
-        Case 1 (Câu liền mạch):
-        Input: "Ăn sáng 30k cafe 25k"
-        Output: [
-            {"type":"expense","amount":30000,"categoryId":"food","description":"Ăn sáng"},
-            {"type":"expense","amount":25000,"categoryId":"drinks","description":"Cafe"}
+        ĐỊNH DẠNG ĐẦU RA:
+        Chỉ trả về DUY NHẤT một mảng JSON theo mẫu sau, không giải thích thêm:
+        [
+            {"type": "expense", "amount": 30000, "categoryId": "food", "description": "Ăn sáng"},
+            {"type": "expense", "amount": 20000, "categoryId": "food", "description": "Cà phê"}
         ]
-
-        Case 2 (Có từ nối):
-        Input: "Đổ xăng 50k và mua thẻ 100k"
-        Output: [
-            {"type":"expense","amount":50000,"categoryId":"transport","description":"Đổ xăng"},
-            {"type":"expense","amount":100000,"categoryId":"bills","description":"Mua thẻ"}
-        ]
-
-        Case 3 (Thu nhập):
-        Input: "Lương 10 triệu thưởng 2 triệu"
-        Output: [
-            {"type":"income","amount":10000000,"categoryId":"salary","description":"Lương tháng"},
-            {"type":"income","amount":2000000,"categoryId":"other","description":"Tiền thưởng"}
-        ]
-
-        OUTPUT FINAL (Chỉ trả về JSON Array):
         `;
 
         const contents = [{
             parts: [{ text: prompt }]
         }];
 
-        const response = await safeCallApi(() => fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents })
-            }
-        ));
-
-        const data = await response.json();
-        const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        console.log('AI Logic Response:', aiText);
-
-        // Parse JSON Logic
-        let parsedResult = [];
+        // Sử dụng Groq AI (Llama 3) làm bộ não duy nhất - Cực nhanh và ổn định
+        const groqKey = process.env.GROQ_API_KEY;
+        if (!groqKey) {
+            console.error("LỖI: Chưa cấu hình GROQ_API_KEY trong file .env");
+            return res.status(500).json({ error: "Hệ thống AI chưa được cấu hình Key." });
+        }
 
         try {
-            // Lọc lấy phần JSON Array trong text
-            const jsonStartIndex = aiText.indexOf('[');
-            const jsonEndIndex = aiText.lastIndexOf(']');
+            console.log("Attempting AI with Groq (Llama 3)...");
+            const groqResponse = await axios.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                {
+                    model: "llama-3.3-70b-versatile",
+                    messages: [
+                        { role: "system", content: "You are a financial assistant. Always respond with a raw JSON array of objects. Each object has: type (expense/income), amount (number), categoryId (string), description (string). No explanation. No markdown code blocks." },
+                        { role: "user", content: prompt }
+                    ],
+                    temperature: 0.1
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${groqKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 8000
+                }
+            );
 
-            if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-                const cleanJson = aiText.substring(jsonStartIndex, jsonEndIndex + 1);
-                parsedResult = JSON.parse(cleanJson);
-            } else {
-                // Fallback: Nếu trả về object đơn lẻ {...}
-                const objStartIndex = aiText.indexOf('{');
-                const objEndIndex = aiText.lastIndexOf('}');
-
-                if (objStartIndex !== -1 && objEndIndex !== -1) {
-                    const cleanObj = aiText.substring(objStartIndex, objEndIndex + 1);
-                    const obj = JSON.parse(cleanObj);
-                    if (obj.amount) parsedResult = [obj];
+            const content = groqResponse.data?.choices?.[0]?.message?.content;
+            if (content) {
+                console.log('Groq Raw Response:', content);
+                const jsonMatch = content.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                    const parsedResult = JSON.parse(jsonMatch[0]);
+                    if (Array.isArray(parsedResult) && parsedResult.length > 0) {
+                        const cleanedResult = parsedResult.map(item => ({
+                            type: item.type === 'income' ? 'income' : 'expense',
+                            amount: Math.abs(parseInt(item.amount) || 0),
+                            categoryId: item.categoryId || (item.type === 'income' ? 'other_income' : 'other_expense'),
+                            description: item.description || 'Giao dịch không tên'
+                        }));
+                        return res.json(cleanedResult);
+                    }
                 }
             }
-        } catch (e) {
-            console.error('JSON Parse Error:', e);
+            return res.status(422).json({ error: 'Groq không thể trích xuất dữ liệu.' });
+        } catch (err) {
+            console.error("Groq AI Error:", err.message);
+            return res.status(500).json({ error: 'AI processing failed' });
         }
-
-        if (Array.isArray(parsedResult) && parsedResult.length > 0) {
-            return res.json(parsedResult);
-        }
-
-        return res.status(422).json({ error: 'Không thể phân tích giao dịch' });
 
     } catch (error) {
         console.error('Parse transaction error:', error);
@@ -2049,13 +2151,12 @@ Lưu ý: confidence >= 60 là match thành công. Nếu ảnh mờ hoặc khó n
 
 // ============ CHAT API ============
 
-// Get list of conversations
+// Get list of conversations - OPTIMIZED (with fallback for unread_count)
 app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Get private conversations with partner info, pin/mute status
-        // Using simpler query without message_reads table dependency
+        // Main query without unread_count (for safety)
         const [rows] = await pool.execute(`
             SELECT 
                 c.id as conversation_id,
@@ -2078,8 +2179,7 @@ app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
                 u.last_seen,
                 u.status,
                 IFNULL(cp_me.is_pinned, 0) as is_pinned,
-                IFNULL(cp_me.is_muted, 0) as is_muted,
-                0 as unread_count
+                IFNULL(cp_me.is_muted, 0) as is_muted
             FROM conversations c
             INNER JOIN conversation_participants cp_me ON cp_me.conversation_id = c.id AND cp_me.user_id = ?
             INNER JOIN conversation_participants cp_other ON cp_other.conversation_id = c.id AND cp_other.user_id != ?
@@ -2091,7 +2191,40 @@ app.get('/api/chat/conversations', authenticateToken, async (req, res) => {
             LIMIT 100
         `, [userId, userId]);
 
-        res.json(rows);
+        // Try to get unread counts in batch (if message_reads exists)
+        let unreadCounts = {};
+        try {
+            if (rows.length > 0) {
+                const convIds = rows.map(r => r.conversation_id);
+                const placeholders = convIds.map(() => '?').join(',');
+                const [counts] = await pool.execute(`
+                    SELECT msg.conversation_id, COUNT(*) as cnt
+                    FROM messages msg
+                    WHERE msg.conversation_id IN (${placeholders})
+                    AND msg.sender_id != ?
+                    AND NOT EXISTS (
+                        SELECT 1 FROM message_reads mr 
+                        WHERE mr.message_id COLLATE utf8mb4_unicode_ci = msg.id COLLATE utf8mb4_unicode_ci 
+                        AND mr.user_id COLLATE utf8mb4_unicode_ci = ?
+                    )
+                    GROUP BY msg.conversation_id
+                `, [...convIds, userId, userId]);
+
+                console.log('📊 Unread counts:', counts);
+                counts.forEach(c => { unreadCounts[c.conversation_id] = c.cnt; });
+            }
+        } catch (e) {
+            console.error('❌ message_reads query error:', e.message);
+            // message_reads table might not exist, ignore
+        }
+
+        // Merge unread counts
+        const result = rows.map(row => ({
+            ...row,
+            unread_count: unreadCounts[row.conversation_id] || 0
+        }));
+
+        res.json(result);
     } catch (error) {
         console.error('Get conversations error:', error);
         res.status(500).json({ error: 'Lỗi server' });
@@ -2289,7 +2422,9 @@ app.post('/api/chat/conversations/:id/read', authenticateToken, async (req, res)
             SELECT id FROM messages 
             WHERE conversation_id = ? 
             AND sender_id != ?
-            AND id NOT IN (SELECT message_id FROM message_reads WHERE user_id = ?)
+            AND id COLLATE utf8mb4_unicode_ci NOT IN (
+                SELECT message_id COLLATE utf8mb4_unicode_ci FROM message_reads WHERE user_id = ?
+            )
         `, [conversationId, userId, userId]);
 
         if (unreadMessages.length > 0) {
@@ -2338,7 +2473,9 @@ app.post('/api/messages/read', authenticateToken, async (req, res) => {
             SELECT id FROM messages 
             WHERE conversation_id = ? 
             AND sender_id != ?
-            AND id NOT IN (SELECT message_id FROM message_reads WHERE user_id = ?)
+            AND id COLLATE utf8mb4_unicode_ci NOT IN (
+                SELECT message_id COLLATE utf8mb4_unicode_ci FROM message_reads WHERE user_id = ?
+            )
         `, [conversationId, userId, userId]);
 
         if (unreadMessages.length > 0) {
@@ -2412,7 +2549,8 @@ app.use('/uploads', express.static(uploadsDir));
 
 // Upload image endpoint
 
-const { exec } = require('child_process');
+// Duplicate require removed
+
 const util = require('util');
 const execPromise = util.promisify(exec);
 
@@ -3029,49 +3167,75 @@ app.post('/api/place/posts', authenticateToken, async (req, res) => {
     }
 });
 
-// Toggle like
+// Toggle reaction (like, love, haha, wow, sad, angry) - Facebook style
 app.post('/api/place/posts/:id/like', authenticateToken, async (req, res) => {
     try {
         const postId = req.params.id;
         const userId = req.user.id;
+        const { reactionType } = req.body; // 'like', 'love', 'haha', 'wow', 'sad', 'angry'
+        const validReactions = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
+        const reaction = validReactions.includes(reactionType) ? reactionType : 'like';
 
-        // Check if liked
-        const [likes] = await pool.execute(
-            'SELECT id FROM post_likes WHERE post_id = ? AND user_id = ?',
+        // Check if already reacted
+        const [existingReaction] = await pool.execute(
+            'SELECT id, reaction_type FROM post_likes WHERE post_id = ? AND user_id = ?',
             [postId, userId]
         );
 
         let isLiked = false;
+        let currentReaction = null;
 
-        if (likes.length > 0) {
-            // Unlike
-            await pool.execute(
-                'DELETE FROM post_likes WHERE post_id = ? AND user_id = ?',
-                [postId, userId]
-            );
-            isLiked = false;
+        if (existingReaction.length > 0) {
+            const existingType = existingReaction[0].reaction_type;
+
+            if (existingType === reaction) {
+                // Same reaction - remove it (unlike)
+                await pool.execute(
+                    'DELETE FROM post_likes WHERE post_id = ? AND user_id = ?',
+                    [postId, userId]
+                );
+                isLiked = false;
+                currentReaction = null;
+            } else {
+                // Different reaction - update it
+                await pool.execute(
+                    'UPDATE post_likes SET reaction_type = ? WHERE post_id = ? AND user_id = ?',
+                    [reaction, postId, userId]
+                );
+                isLiked = true;
+                currentReaction = reaction;
+            }
         } else {
-            // Like
+            // New reaction
             await pool.execute(
-                'INSERT INTO post_likes (id, post_id, user_id) VALUES (?, ?, ?)',
-                [uuidv4(), postId, userId]
+                'INSERT INTO post_likes (id, post_id, user_id, reaction_type) VALUES (?, ?, ?, ?)',
+                [uuidv4(), postId, userId, reaction]
             );
             isLiked = true;
+            currentReaction = reaction;
 
             // Create notification for post owner
             try {
+                const reactionLabels = {
+                    like: 'đã thích',
+                    love: 'đã yêu thích',
+                    haha: 'đã cười với',
+                    wow: 'đã ngạc nhiên với',
+                    sad: 'đã buồn với',
+                    angry: 'đã giận dữ với'
+                };
                 const [posts] = await pool.execute(
                     'SELECT user_id, LEFT(content, 50) as preview FROM posts WHERE id = ?',
                     [postId]
                 );
                 if (posts.length > 0 && posts[0].user_id !== userId) {
                     await createNotification(
-                        posts[0].user_id,  // recipient (post owner)
-                        userId,             // actor (who liked)
+                        posts[0].user_id,
+                        userId,
                         'like',
                         postId,
                         null,
-                        'đã thích bài viết của bạn',
+                        `${reactionLabels[reaction] || 'đã thích'} bài viết của bạn`,
                         posts[0].preview || ''
                     );
                 }
@@ -3080,9 +3244,9 @@ app.post('/api/place/posts/:id/like', authenticateToken, async (req, res) => {
             }
         }
 
-        res.json({ success: true, isLiked });
+        res.json({ success: true, isLiked, reactionType: currentReaction });
     } catch (error) {
-        console.error('Toggle like error:', error);
+        console.error('Toggle reaction error:', error);
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
@@ -3321,6 +3485,29 @@ app.patch('/api/place/notifications/read-all', authenticateToken, async (req, re
     }
 });
 
+// Delete a notification
+app.delete('/api/place/notifications/:id', authenticateToken, async (req, res) => {
+    try {
+        const notificationId = req.params.id;
+        const userId = req.user.id;
+
+        // Only allow deleting own notifications
+        const [result] = await pool.execute(
+            'DELETE FROM place_notifications WHERE id = ? AND recipient_id = ?',
+            [notificationId, userId]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Không tìm thấy thông báo' });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Delete notification error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
 // ============ GROUPS API ============
 
 // Function to optimize database indexes
@@ -3383,6 +3570,18 @@ const initGroupsTables = async () => {
                 UNIQUE KEY unique_member (group_id, user_id)
             )
         `);
+
+        // Add avatar column to place_groups if not exists
+        try {
+            await pool.execute('ALTER TABLE place_groups ADD COLUMN avatar TEXT');
+            console.log('✅ Added avatar column to place_groups');
+        } catch (e) { /* Column exists */ }
+
+        // Add cover_image column to place_groups if not exists
+        try {
+            await pool.execute('ALTER TABLE place_groups ADD COLUMN cover_image TEXT');
+            console.log('✅ Added cover_image column to place_groups');
+        } catch (e) { /* Column exists */ }
 
         // Add group_id to posts if not exists
         try {
@@ -3565,6 +3764,145 @@ app.post('/api/place/groups', authenticateToken, async (req, res) => {
     }
 });
 
+// Update group info (Admin only)
+app.put('/api/place/groups/:id', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const userId = req.user.id;
+        const { name, description, privacy, coverImage, avatar } = req.body;
+
+        // Check if current user is admin
+        const [adminCheck] = await pool.execute(
+            'SELECT role FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+
+        if (adminCheck.length === 0 || adminCheck[0].role !== 'admin') {
+            return res.status(403).json({ error: 'Chỉ quản trị viên mới có thể chỉnh sửa nhóm' });
+        }
+
+        // Check if group exists
+        const [groupCheck] = await pool.execute(
+            'SELECT id, name, description, privacy, cover_image, avatar FROM place_groups WHERE id = ?',
+            [groupId]
+        );
+
+        if (groupCheck.length === 0) {
+            return res.status(404).json({ error: 'Nhóm không tồn tại' });
+        }
+
+        const currentGroup = groupCheck[0];
+
+        // Validate name if provided
+        if (name !== undefined && name.trim().length === 0) {
+            return res.status(400).json({ error: 'Tên nhóm không được để trống' });
+        }
+
+        // Validate privacy if provided
+        if (privacy !== undefined && !['public', 'private', 'secret'].includes(privacy)) {
+            return res.status(400).json({ error: 'Quyền riêng tư không hợp lệ' });
+        }
+
+        // Build update query dynamically
+        const updates = [];
+        const params = [];
+
+        if (name !== undefined) {
+            updates.push('name = ?');
+            params.push(name.trim());
+        }
+        if (description !== undefined) {
+            updates.push('description = ?');
+            params.push(description);
+        }
+        if (privacy !== undefined) {
+            updates.push('privacy = ?');
+            params.push(privacy);
+        }
+        if (coverImage !== undefined) {
+            updates.push('cover_image = ?');
+            params.push(coverImage);
+        }
+        if (avatar !== undefined) {
+            updates.push('avatar = ?');
+            params.push(avatar);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'Không có thông tin nào để cập nhật' });
+        }
+
+        updates.push('updated_at = NOW()');
+        params.push(groupId);
+
+        console.log('📝 Updating group:', groupId);
+        console.log('📝 Updates:', updates);
+        console.log('📝 Params:', params);
+
+        await pool.execute(
+            `UPDATE place_groups SET ${updates.join(', ')} WHERE id = ?`,
+            params
+        );
+
+        console.log('✅ Group updated successfully');
+
+        // Get updated group info
+        const [updatedGroup] = await pool.execute(
+            'SELECT id, name, description, privacy, cover_image, avatar, member_count FROM place_groups WHERE id = ?',
+            [groupId]
+        );
+
+        res.json({
+            success: true,
+            message: 'Đã cập nhật thông tin nhóm',
+            group: {
+                id: updatedGroup[0].id,
+                name: updatedGroup[0].name,
+                description: updatedGroup[0].description,
+                privacy: updatedGroup[0].privacy,
+                coverImage: updatedGroup[0].cover_image,
+                avatar: updatedGroup[0].avatar,
+                memberCount: updatedGroup[0].member_count
+            }
+        });
+    } catch (error) {
+        console.error('Update group error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Delete group (Admin only)
+app.delete('/api/place/groups/:id', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const userId = req.user.id;
+
+        // Check if current user is admin
+        const [adminCheck] = await pool.execute(
+            'SELECT role FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+
+        if (adminCheck.length === 0 || adminCheck[0].role !== 'admin') {
+            return res.status(403).json({ error: 'Chỉ quản trị viên mới có thể xóa nhóm' });
+        }
+
+        // Delete all members
+        await pool.execute('DELETE FROM place_group_members WHERE group_id = ?', [groupId]);
+
+        // Delete all posts (optional - depends on your data model)
+        await pool.execute('DELETE FROM place_group_posts WHERE group_id = ?', [groupId]);
+
+        // Delete group
+        await pool.execute('DELETE FROM place_groups WHERE id = ?', [groupId]);
+
+        res.json({ success: true, message: 'Đã xóa nhóm' });
+    } catch (error) {
+        console.error('Delete group error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
 // Join group
 app.post('/api/place/groups/:id/join', authenticateToken, async (req, res) => {
     try {
@@ -3639,6 +3977,303 @@ app.post('/api/place/groups/:id/pin', authenticateToken, async (req, res) => {
         res.json({ success: true, isPinned: pin });
     } catch (error) {
         console.error('Pin group error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Get group members with roles
+app.get('/api/place/groups/:id/members', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const userId = req.user.id;
+        const { search } = req.query;
+
+        // First check if user has access (is member or group is public)
+        const [groupCheck] = await pool.execute(`
+            SELECT g.privacy, gm.role as myRole
+            FROM place_groups g
+            LEFT JOIN place_group_members gm ON g.id = gm.group_id AND gm.user_id = ?
+            WHERE g.id = ?
+        `, [userId, groupId]);
+
+        if (groupCheck.length === 0) {
+            return res.status(404).json({ error: 'Nhóm không tồn tại' });
+        }
+
+        const group = groupCheck[0];
+        const isMember = !!group.myRole;
+        const isAdmin = group.myRole === 'admin';
+
+        // For private/secret groups, only members can see member list
+        if ((group.privacy === 'private' || group.privacy === 'secret') && !isMember) {
+            return res.status(403).json({ error: 'Bạn cần tham gia nhóm để xem thành viên' });
+        }
+
+        // Build search condition
+        let searchCondition = '';
+        let searchParams = [groupId];
+        if (search && search.trim()) {
+            searchCondition = 'AND u.name LIKE ?';
+            searchParams.push(`%${search.trim()}%`);
+        }
+
+        // Get all members
+        const [allMembers] = await pool.execute(`
+            SELECT 
+                u.id,
+                u.name,
+                u.avatar,
+                gm.role,
+                gm.joined_at as joinedAt
+            FROM place_group_members gm
+            JOIN users u ON gm.user_id = u.id
+            WHERE gm.group_id = ? ${searchCondition}
+            ORDER BY 
+                CASE gm.role 
+                    WHEN 'admin' THEN 1 
+                    WHEN 'moderator' THEN 2 
+                    ELSE 3 
+                END,
+                gm.joined_at ASC
+        `, searchParams);
+
+        // Separate by role
+        const admins = allMembers.filter(m => m.role === 'admin');
+        const moderators = allMembers.filter(m => m.role === 'moderator');
+        const recentMembers = allMembers.filter(m => m.role === 'member').slice(0, 20);
+
+        // Calculate "recent" as joined in last 30 days
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const newMembers = allMembers.filter(m =>
+            m.role === 'member' && new Date(m.joinedAt) > thirtyDaysAgo
+        );
+
+        res.json({
+            totalCount: allMembers.length,
+            myRole: group.myRole || null,
+            isAdmin,
+            adminsAndModerators: [...admins, ...moderators],
+            newMembers: newMembers.slice(0, 10),
+            allMembers: allMembers.slice(0, 50) // Limit for performance
+        });
+    } catch (error) {
+        console.error('Get group members error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Remove member from group (Admin only)
+app.delete('/api/place/groups/:id/members/:memberId', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const memberId = req.params.memberId;
+        const userId = req.user.id;
+
+        // Check if current user is admin
+        const [adminCheck] = await pool.execute(
+            'SELECT role FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+
+        if (adminCheck.length === 0 || adminCheck[0].role !== 'admin') {
+            return res.status(403).json({ error: 'Chỉ quản trị viên mới có thể xóa thành viên' });
+        }
+
+        // Cannot remove yourself
+        if (memberId === userId) {
+            return res.status(400).json({ error: 'Bạn không thể xóa chính mình khỏi nhóm' });
+        }
+
+        // Check if target is also admin (cannot remove other admins)
+        const [targetCheck] = await pool.execute(
+            'SELECT role FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, memberId]
+        );
+
+        if (targetCheck.length === 0) {
+            return res.status(404).json({ error: 'Thành viên không tồn tại trong nhóm' });
+        }
+
+        if (targetCheck[0].role === 'admin') {
+            return res.status(403).json({ error: 'Không thể xóa quản trị viên khác' });
+        }
+
+        // Remove member
+        await pool.execute(
+            'DELETE FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, memberId]
+        );
+
+        // Update member count
+        await pool.execute(
+            'UPDATE place_groups SET member_count = GREATEST(member_count - 1, 0) WHERE id = ?',
+            [groupId]
+        );
+
+        res.json({ success: true, message: 'Đã xóa thành viên khỏi nhóm' });
+    } catch (error) {
+        console.error('Remove member error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Change member role (Admin only)
+app.put('/api/place/groups/:id/members/:memberId/role', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const memberId = req.params.memberId;
+        const userId = req.user.id;
+        const { role } = req.body;
+
+        // Validate role
+        if (!['member', 'moderator', 'admin'].includes(role)) {
+            return res.status(400).json({ error: 'Vai trò không hợp lệ' });
+        }
+
+        // Check if current user is admin
+        const [adminCheck] = await pool.execute(
+            'SELECT role FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+
+        if (adminCheck.length === 0 || adminCheck[0].role !== 'admin') {
+            return res.status(403).json({ error: 'Chỉ quản trị viên mới có thể thay đổi vai trò' });
+        }
+
+        // Cannot change own role
+        if (memberId === userId) {
+            return res.status(400).json({ error: 'Bạn không thể thay đổi vai trò của chính mình' });
+        }
+
+        // Check if target exists
+        const [targetCheck] = await pool.execute(
+            'SELECT role FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, memberId]
+        );
+
+        if (targetCheck.length === 0) {
+            return res.status(404).json({ error: 'Thành viên không tồn tại trong nhóm' });
+        }
+
+        // Update role
+        await pool.execute(
+            'UPDATE place_group_members SET role = ? WHERE group_id = ? AND user_id = ?',
+            [role, groupId, memberId]
+        );
+
+        res.json({ success: true, message: 'Đã cập nhật vai trò thành viên', newRole: role });
+    } catch (error) {
+        console.error('Change role error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Invite/Add member to group
+app.post('/api/place/groups/:id/members', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const userId = req.user.id;
+        const { targetUserId } = req.body;
+
+        if (!targetUserId) {
+            return res.status(400).json({ error: 'Thiếu ID người dùng' });
+        }
+
+        // Check if current user is member (any member can invite)
+        const [memberCheck] = await pool.execute(
+            'SELECT role FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+
+        if (memberCheck.length === 0) {
+            return res.status(403).json({ error: 'Bạn cần là thành viên để mời người khác' });
+        }
+
+        // Check if group exists and get privacy
+        const [groupCheck] = await pool.execute(
+            'SELECT privacy FROM place_groups WHERE id = ?',
+            [groupId]
+        );
+
+        if (groupCheck.length === 0) {
+            return res.status(404).json({ error: 'Nhóm không tồn tại' });
+        }
+
+        // Check if target user exists
+        const [userCheck] = await pool.execute(
+            'SELECT id, name, avatar FROM users WHERE id = ?',
+            [targetUserId]
+        );
+
+        if (userCheck.length === 0) {
+            return res.status(404).json({ error: 'Người dùng không tồn tại' });
+        }
+
+        // Check if already a member
+        const [existingMember] = await pool.execute(
+            'SELECT id FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, targetUserId]
+        );
+
+        if (existingMember.length > 0) {
+            return res.status(400).json({ error: 'Người này đã là thành viên của nhóm' });
+        }
+
+        // Add member
+        const memberId = uuidv4();
+        await pool.execute(
+            'INSERT INTO place_group_members (id, group_id, user_id, role) VALUES (?, ?, ?, ?)',
+            [memberId, groupId, targetUserId, 'member']
+        );
+
+        // Update member count
+        await pool.execute(
+            'UPDATE place_groups SET member_count = member_count + 1 WHERE id = ?',
+            [groupId]
+        );
+
+        res.json({
+            success: true,
+            message: 'Đã thêm thành viên vào nhóm',
+            member: {
+                id: userCheck[0].id,
+                name: userCheck[0].name,
+                avatar: userCheck[0].avatar,
+                role: 'member'
+            }
+        });
+    } catch (error) {
+        console.error('Add member error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Search users to invite (exclude existing members)
+app.get('/api/place/groups/:id/invite-search', authenticateToken, async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const { q } = req.query;
+
+        if (!q || q.trim().length < 2) {
+            return res.json([]);
+        }
+
+        // Search users not in group
+        const [users] = await pool.execute(`
+            SELECT u.id, u.name, u.avatar
+            FROM users u
+            WHERE u.name LIKE ?
+            AND u.id NOT IN (
+                SELECT user_id FROM place_group_members WHERE group_id = ?
+            )
+            LIMIT 20
+        `, [`%${q.trim()}%`, groupId]);
+
+        res.json(users);
+    } catch (error) {
+        console.error('Invite search error:', error);
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
@@ -3745,6 +4380,16 @@ app.post('/api/place/groups/:id/posts', authenticateToken, async (req, res) => {
         const groupId = req.params.id;
         const userId = req.user.id;
         const { content, images } = req.body;
+
+        // ✅ IMPORTANT: Check if user is a member of the group
+        const [membership] = await pool.execute(
+            'SELECT role FROM place_group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+
+        if (membership.length === 0) {
+            return res.status(403).json({ error: 'Bạn cần tham gia nhóm trước khi đăng bài' });
+        }
 
         if ((!content || content.trim().length === 0) && (!images || !Array.isArray(images) || images.length === 0)) {
             return res.status(400).json({ error: 'Nội dung hoặc hình ảnh không được để trống' });
@@ -4604,6 +5249,33 @@ app.delete('/api/admin/feedback/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// ============ DASHBOARD STATS ============
+
+app.get('/api/admin/stats', authenticateToken, async (req, res) => {
+    try {
+        // Basic admin check
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const [users] = await pool.execute('SELECT COUNT(*) as count FROM users');
+        const [posts] = await pool.execute('SELECT COUNT(*) as count FROM posts');
+        const [groups] = await pool.execute('SELECT COUNT(*) as count FROM place_groups');
+        const [feedback] = await pool.execute('SELECT COUNT(*) as count FROM feedback WHERE status = "pending"');
+
+        res.json({
+            users: users[0].count,
+            posts: posts[0].count,
+            groups: groups[0].count,
+            pendingFeedback: feedback[0].count,
+            uptime: process.uptime()
+        });
+    } catch (error) {
+        console.error('Get stats error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
 // ============ REPO MANAGEMENT (source.json for AltStore/SideStore) ============
 
 // Path to source.json file (will be served as static file)
@@ -5117,13 +5789,390 @@ app.post('/api/admin/repo/sync-ipa/:timestamp', authenticateToken, (req, res) =>
 // Export sync function for use in upload-ipa endpoint
 global.syncIpaToRepo = syncIpaToRepo;
 
+// ============ STICKER MANAGEMENT (ADMIN) ============
+
+// GET Sticker Packs
+app.get('/api/admin/sticker-packs', authenticateToken, async (req, res) => {
+    try {
+        const [packs] = await pool.execute('SELECT * FROM sticker_packs ORDER BY sort_order ASC');
+        for (let p of packs) {
+            const [c] = await pool.execute('SELECT COUNT(*) as cnt FROM stickers WHERE pack_id = ?', [p.id]);
+            p.sticker_count = c[0].cnt;
+        }
+        res.json({ packs });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET Stickers in Pack
+app.get('/api/admin/sticker-packs/:id', authenticateToken, async (req, res) => {
+    try {
+        const [stickers] = await pool.execute('SELECT * FROM stickers WHERE pack_id = ? ORDER BY created_at DESC', [req.params.id]);
+        res.json({ stickers });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Create Pack
+app.post('/api/admin/sticker-packs', authenticateToken, async (req, res) => {
+    try {
+        const { name, title, sort_order, icon_url } = req.body;
+        const id = uuidv4();
+        await pool.execute('INSERT INTO sticker_packs (id, name, title, sort_order, icon_url) VALUES (?, ?, ?, ?, ?)',
+            [id, name, title, parseInt(sort_order || 0), icon_url]);
+        res.json({ success: true, id });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT Update Pack
+app.put('/api/admin/sticker-packs/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, title, sort_order, icon_url } = req.body;
+
+        console.log(`[STK] Update Pack ID: ${id}`);
+
+        const vals = [
+            name || '',
+            title || name || '',
+            parseInt(sort_order || 0),
+            icon_url || '',
+            id
+        ];
+
+        // SỬ DỤNG EXECUTE VÀ BACKTICKS CHO ĐỘ TIN CẬY CAO NHẤT
+        const sql = 'UPDATE `sticker_packs` SET `name` = ?, `title` = ?, `sort_order` = ?, `icon_url` = ? WHERE `id` = ?';
+        const [result] = await pool.execute(sql, vals);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Không tìm thấy ID gói sticker' });
+        }
+
+        res.json({ success: true });
+    } catch (e) {
+        console.error('[STK] Update error:', e);
+        res.status(500).json({
+            error: 'Lỗi Database',
+            details: e.message,
+            sqlMessage: e.sqlMessage,
+            code: e.code
+        });
+    }
+});
+
+// DELETE Pack
+app.delete('/api/admin/sticker-packs/:id', authenticateToken, async (req, res) => {
+    try {
+        await pool.execute('DELETE FROM sticker_packs WHERE id=?', [req.params.id]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Add Sticker to Pack
+app.post('/api/admin/sticker-packs/:id/stickers', authenticateToken, async (req, res) => {
+    try {
+        const packId = req.params.id;
+        const { image_url, file_format, width, height, is_animated } = req.body;
+        const id = uuidv4();
+        await pool.execute('INSERT INTO stickers (id, pack_id, image_url, file_format, width, height, is_animated) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [id, packId, image_url, file_format || 'png', width || 0, height || 0, is_animated ? 1 : 0]);
+        res.json({ success: true, id });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE Sticker
+app.delete('/api/admin/stickers/:id', authenticateToken, async (req, res) => {
+    try {
+        await pool.execute('DELETE FROM stickers WHERE id=?', [req.params.id]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT Move Sticker
+app.put('/api/admin/stickers/:id', authenticateToken, async (req, res) => {
+    try {
+        const { pack_id } = req.body;
+        await pool.execute('UPDATE stickers SET pack_id=? WHERE id=?', [pack_id, req.params.id]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUBLIC: GET All Sticker Packs (For Mobile App)
+app.get('/api/app/sticker-packs', async (req, res) => {
+    try {
+        const [packs] = await pool.execute('SELECT * FROM sticker_packs ORDER BY sort_order ASC');
+        for (let pack of packs) {
+            const [stickers] = await pool.execute('SELECT * FROM stickers WHERE pack_id = ?', [pack.id]);
+            pack.stickers = stickers;
+        }
+        res.json(packs);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ============ REACTION ROUTES ============
+// Message Reactions API
+app.post('/api/messages/:id/react', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { type } = req.body; // 'LIKE', 'LOVE', 'HAHA', 'WOW', 'SAD', 'ANGRY'
+        const userId = req.user.id;
+        const userName = req.user.name;
+
+        // Get current reactions
+        const [rows] = await pool.execute('SELECT reactions, group_id, sender_id FROM messages WHERE id = ?', [id]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Message not found' });
+
+        const message = rows[0];
+        let reactions = [];
+        if (message.reactions) {
+            try {
+                reactions = typeof message.reactions === 'string' ? JSON.parse(message.reactions) : message.reactions;
+            } catch (e) { reactions = []; }
+        }
+        if (!Array.isArray(reactions)) reactions = [];
+
+        // Check if user already reacted
+        const existingIndex = reactions.findIndex(r => r.userId === userId);
+
+        // If type is empty/null, remove reaction
+        if (!type) {
+            if (existingIndex > -1) reactions.splice(existingIndex, 1);
+        } else {
+            if (existingIndex > -1) {
+                if (reactions[existingIndex].type === type) {
+                    // Same reaction -> toggle off (remove)
+                    reactions.splice(existingIndex, 1);
+                } else {
+                    // Different reaction -> update
+                    reactions[existingIndex].type = type;
+                }
+            } else {
+                // Add new reaction w/ userName for display
+                reactions.push({ userId, userName, type });
+            }
+        }
+
+        // Save back to DB
+        await pool.execute('UPDATE messages SET reactions = ? WHERE id = ?', [JSON.stringify(reactions), id]);
+
+        // Emit socket event
+        const io = getIO();
+        const eventData = { messageId: id, reactions, conversationId: null, groupId: null };
+
+        if (message.group_id) {
+            eventData.groupId = message.group_id;
+            io.to(message.group_id).emit('messageReaction', eventData);
+        } else {
+            // 1-1 Chat: emit to both sender and current user
+            io.to(userId).emit('messageReaction', eventData);
+            if (message.sender_id && message.sender_id !== userId) {
+                io.to(message.sender_id).emit('messageReaction', eventData);
+            }
+        }
+
+        res.json({ success: true, reactions });
+    } catch (error) {
+        console.error('Reaction error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============ PUSH NOTIFICATIONS ============
+
+// Helper to send push notifications
+async function sendPushNotification(pushTokens, title, body, data = {}) {
+    let notifications = [];
+    for (let pushToken of pushTokens) {
+        if (!Expo.isExpoPushToken(pushToken)) {
+            console.error(`Push token ${pushToken} is not a valid Expo push token`);
+            continue;
+        }
+        notifications.push({
+            to: pushToken,
+            sound: 'default',
+            title: title,
+            body: body,
+            data: data,
+        });
+    }
+
+    let chunks = expo.chunkPushNotifications(notifications);
+    let tickets = [];
+
+    for (let chunk of chunks) {
+        try {
+            let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+            tickets.push(...ticketChunk);
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    return tickets;
+}
+
+// Admin Send Push Notification Endpoint
+app.post('/api/admin/notifications/send', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.email !== 'hieu@gmail.com' && req.user.email !== 'admin@gmail.com') {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+
+        const { title, body, target, data, priority } = req.body;
+
+        let parsedData = {};
+        if (data) {
+            try {
+                parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+            } catch (e) { }
+        }
+
+        let pushTokens = [];
+
+        if (target === 'all') {
+            const [rows] = await pool.execute('SELECT push_token FROM users WHERE push_token IS NOT NULL AND status IN ("active", "away")');
+            pushTokens = rows.map(r => r.push_token);
+        } else if (target === 'active_7days') {
+            // Logic to find users active in last 7 days
+            const [rows] = await pool.execute('SELECT push_token FROM users WHERE push_token IS NOT NULL AND last_seen > DATE_SUB(NOW(), INTERVAL 7 DAY)');
+            pushTokens = rows.map(r => r.push_token);
+        }
+
+        // Limit to valid expo tokens is handled in helper, but good to filter unique
+        pushTokens = [...new Set(pushTokens)];
+
+        if (pushTokens.length === 0) {
+            return res.json({ success: true, message: 'Không tìm thấy user nào để gửi (hoặc user chưa có push token)' });
+        }
+
+        // Send async (fire and forget relevant to response, but we wait for tickets)
+        const tickets = await sendPushNotification(pushTokens, title, body, parsedData);
+
+        res.json({
+            success: true,
+            message: `Đã gửi đến ${pushTokens.length} thiết bị`,
+            ticketCount: tickets.length
+        });
+
+    } catch (error) {
+        console.error('Send push error:', error);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// Upload Audio
+app.post('/api/upload/audio', authenticateToken, async (req, res) => {
+    try {
+        if (!req.files || !req.files.audio) {
+            return res.status(400).json({ error: 'No audio file uploaded' });
+        }
+
+        const audioFile = req.files.audio;
+        // Generate valid filename
+        const ext = path.extname(audioFile.name) || '.m4a';
+        const fileName = `${uuidv4()}${ext}`;
+        const uploadPath = path.join(__dirname, '../uploads/audio', fileName);
+
+        // Ensure dir exists
+        const dir = path.dirname(uploadPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        await audioFile.mv(uploadPath);
+
+        res.json({
+            success: true,
+            url: `/uploads/audio/${fileName}`,
+            duration: req.body.duration || 0
+        });
+    } catch (e) {
+        console.error('Audio upload error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get Pinned Message for Conversation
+app.get('/api/chat/conversations/:id/pinned', authenticateToken, async (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        const [rows] = await pool.execute(`
+            SELECT pm.id as pinId, pm.created_at as pinTime, m.*, u.name as senderName, u.avatar as senderAvatar
+            FROM pinned_messages pm
+            JOIN messages m ON pm.message_id = m.id
+            JOIN users u ON m.sender_id = u.id
+            WHERE pm.conversation_id = ?
+            ORDER BY pm.created_at DESC
+            LIMIT 1
+        `, [conversationId]);
+
+        res.json({ pinned: rows[0] || null });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get Message Readers (Read Receipts)
+app.post('/api/messages/readers', authenticateToken, async (req, res) => {
+    try {
+        const { messageIds } = req.body;
+        if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+            return res.json({});
+        }
+
+        // Using IN (?)
+        const placeholders = messageIds.map(() => '?').join(',');
+        const [rows] = await pool.execute(`
+            SELECT mr.message_id, u.id, u.name, u.avatar, mr.read_at
+            FROM message_reads mr
+            JOIN users u ON mr.user_id = u.id
+            WHERE mr.message_id IN (${placeholders})
+        `, messageIds);
+
+        const result = {};
+        rows.forEach(row => {
+            if (!result[row.message_id]) result[row.message_id] = [];
+            result[row.message_id].push({
+                id: row.id,
+                name: row.name,
+                avatar: row.avatar,
+                readAt: row.read_at
+            });
+        });
+
+        res.json(result);
+    } catch (e) {
+        console.error('Get readers error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ============ GROUP CHAT ROUTES ============
-// Import group routes (will be initialized after database is ready)
+// Import group routes (will be initialized after database is ready) 
 const initGroupRoutes = require('./groupRoutes');
 
+// ============ MODULAR ROUTES ============
+// Import modular routes for better code organization
+const adminRoutes = require('./routes/adminRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const authRoutes = require('./routes/authRoutes');
+
 initDatabase().then(async () => {
+    // Initialize Socket.IO handlers for realtime features
+    const initSocketHandlers = require('./socketHandlers');
+    const socketHelpers = initSocketHandlers(io, pool);
+
+    // Make socket helpers available to routes
+    app.set('socketHelpers', socketHelpers);
+
     // Initialize group routes AFTER database is ready
-    initGroupRoutes(app, pool, authenticateToken, uuidv4, formatDateForClient);
+    initGroupRoutes(app, pool, authenticateToken, uuidv4, formatDateForClient, io);
+
+    // Mount modular routes
+    app.use('/api/admin', adminRoutes(pool, authenticateToken));
+    app.use('/api/admin/notifications', notificationRoutes(pool, authenticateToken));
+    app.use('/api/auth', authRoutes(pool, authenticateToken));
+
+    console.log('✅ Modular routes loaded (Admin, Notifications, Auth)');
+    console.log('✅ Socket.IO handlers initialized (Typing, Online Status, Seen)');
 
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Server running on port ${PORT}`);

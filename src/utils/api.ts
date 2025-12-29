@@ -328,6 +328,11 @@ export async function deleteMessage(messageId: string): Promise<any> {
     });
 }
 
+// Get Pinned Message
+export async function getPinnedMessage(conversationId: string): Promise<any> {
+    return apiRequest(`/api/chat/conversations/${conversationId}/pinned`);
+}
+
 // Update Push Token
 export async function updatePushToken(token: string): Promise<void> {
     return apiRequest('/api/auth/push-token', {
@@ -463,9 +468,10 @@ export async function updatePost(
 }
 // ... existing code ...
 
-export async function toggleLikePost(postId: string): Promise<{ liked: boolean }> {
-    return apiRequest<{ liked: boolean }>(`/api/place/posts/${postId}/like`, {
+export async function toggleLikePost(postId: string, reactionType: string = 'like'): Promise<{ liked: boolean; reactionType: string | null }> {
+    return apiRequest<{ liked: boolean; reactionType: string | null }>(`/api/place/posts/${postId}/like`, {
         method: 'POST',
+        body: JSON.stringify({ reactionType }),
     });
 }
 
@@ -555,4 +561,19 @@ export async function markAllNotificationsAsRead(): Promise<void> {
 
 export async function deleteNotification(notificationId: string): Promise<void> {
     return apiRequest(`/api/place/notifications/${notificationId}`, { method: 'DELETE' });
+}
+// ============ REACTION API ============
+export type ReactionType = 'LIKE' | 'LOVE' | 'HAHA' | 'WOW' | 'SAD' | 'ANGRY';
+
+export interface Reaction {
+    userId: string;
+    userName?: string;
+    type: ReactionType;
+}
+
+export async function toggleMessageReaction(messageId: string, type: ReactionType | null): Promise<any> {
+    return apiRequest(`/api/messages/${messageId}/react`, {
+        method: 'POST',
+        body: JSON.stringify({ type })
+    });
 }

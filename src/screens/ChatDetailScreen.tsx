@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, StatusBar, Keyboard, Modal, Alert, ActivityIndicator, Dimensions, Animated, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import { Audio } from 'expo-av';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
 import { Ionicons, Feather, FontAwesome, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { getSocket } from '../utils/socket';
-import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage, getImageUrl, getUserInfo, apiRequest } from '../utils/api';
+import { getSocket, handleTypingInput, stopTyping, joinConversation, leaveConversation, markMessageAsSeen } from '../utils/socket';
+import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage, getImageUrl, getUserInfo, apiRequest, getToken, getPinnedMessage } from '../utils/api';
 import { launchImageLibrary, launchCamera } from '../utils/imagePicker';
 import EmojiPicker from '../components/EmojiPicker';
 import StickerPicker from '../components/StickerPicker';
@@ -58,6 +59,16 @@ export default function ChatDetailScreen() {
     const [pickerTab, setPickerTab] = useState<'emoji' | 'sticker'>('sticker');
     const [showMediaPicker, setShowMediaPicker] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    // Audio Recording State
+    const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingDuration, setRecordingDuration] = useState(0);
+    const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+    const [pinnedMessage, setPinnedMessage] = useState<any>(null);
+    const [showUnpinOption, setShowUnpinOption] = useState(false);
+
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [partnerTyping, setPartnerTyping] = useState(false);
     const [replyingTo, setReplyingTo] = useState<any | null>(null);
@@ -81,6 +92,7 @@ export default function ChatDetailScreen() {
     const [showMention, setShowMention] = useState(false);
     const [mentionKeyword, setMentionKeyword] = useState('');
     const [groupMembers, setGroupMembers] = useState<any[]>([]);
+    const socket = getSocket();
 
     useEffect(() => {
         if (isGroup && groupId) {
@@ -107,13 +119,59 @@ export default function ChatDetailScreen() {
             // Correct logic: Replace "@key" with "@Name "
             const newInput = prefix + nameToInsert;
             setInputText(newInput);
-            setShowMention(false);
         }
     };
 
+    // --- PIN MESSAGE LOGIC START ---
+    useEffect(() => {
+        if (!conversationId) return;
+        getPinnedMessage(conversationId).then(res => {
+            if (res && res.pinned) setPinnedMessage(res.pinned);
+        }).catch(err => console.log('Get pinned err:', err));
+
+        if (!socket) return;
+        const onPinned = (data: any) => {
+            if (data.conversationId === conversationId) {
+                setPinnedMessage(data.message);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+        };
+        const onUnpinned = (data: any) => {
+            if (data.conversationId === conversationId) {
+                setPinnedMessage(null);
+            }
+        };
+
+        socket.on('messagePinned', onPinned);
+        socket.on('messageUnpinned', onUnpinned);
+        return () => { socket.off('messagePinned', onPinned); socket.off('messageUnpinned', onUnpinned); }
+    }, [conversationId, socket]);
+
+    const handlePinMessageAction = () => {
+        if (!selectedMessage || !socket) return;
+        socket.emit('pinMessage', { conversationId, messageId: selectedMessage.id, userId: currentUserId });
+        setSelectedMessage(null);
+        Alert.alert('Thành công', 'Đã ghim tin nhắn');
+    };
+
+    const handleUnpinMessageAction = () => {
+        if (!pinnedMessage || !socket) return;
+        socket.emit('unpinMessage', { conversationId, messageId: pinnedMessage.id });
+        setShowUnpinOption(false);
+    };
+
+    const scrollToMessage = (messageId: string) => {
+        const index = messages.findIndex(m => m.id === messageId);
+        if (index !== -1 && flatListRef.current) {
+            flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+        } else {
+            Alert.alert("Thông báo", "Tin nhắn nằm ngoài phạm vi tải hiện tại.");
+        }
+    };
+    // --- PIN MESSAGE LOGIC END ---
+
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
-    const socket = getSocket();
     const isFirstLoad = useRef(true);
 
     useEffect(() => {
@@ -141,7 +199,7 @@ export default function ChatDetailScreen() {
         if (socket) {
             socket.on('receiveMessage', (message) => {
                 appendMessage(message);
-                if (conversationId) markConversationAsRead(conversationId);
+                if (conversationId || (isGroup && groupId)) markMessagesAsRead();
             });
             socket.on('messageSent', (message) => {
                 setMessages(prev => prev.map(msg => msg.id === message.tempId ? {
@@ -150,21 +208,20 @@ export default function ChatDetailScreen() {
                     time: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 } : msg));
             });
-            // Typing listeners
+            // Typing listeners - NEW FORMAT with isTyping flag
             socket.on('userTyping', (data) => {
                 if (data.conversationId === conversationId && data.userId !== currentUserId) {
-                    setPartnerTyping(true);
-                }
-            });
-            socket.on('userStoppedTyping', (data) => {
-                if (data.conversationId === conversationId && data.userId !== currentUserId) {
-                    setPartnerTyping(false);
+                    setPartnerTyping(data.isTyping ?? true);
                 }
             });
             // Revoke listener
             socket.on('messageRevoked', (data) => {
                 if (data.conversationId === conversationId) {
-                    setMessages(prev => prev.filter(m => m.id !== data.messageId));
+                    setMessages(prev => prev.map(m =>
+                        m.id === data.messageId
+                            ? { ...m, isRevoked: true, text: 'Tin nhắn đã thu hồi', type: 'text', imageUrl: null, videoUrl: null }
+                            : m
+                    ));
                 }
             });
             // Read status listener
@@ -188,16 +245,20 @@ export default function ChatDetailScreen() {
                 }
             });
 
-            // Online status listeners
-            socket.on('userOnline', (data) => {
+            // Online status listener - NEW UNIFIED EVENT
+            socket.on('userStatusChange', (data) => {
                 if (data.userId === partnerId) {
-                    setIsPartnerOnline(true);
+                    setIsPartnerOnline(data.status === 'online');
+                    if (data.status === 'offline' && data.lastSeen) {
+                        setPartnerLastSeen(new Date(data.lastSeen));
+                    }
                 }
             });
-            socket.on('userOffline', (data) => {
-                if (data.userId === partnerId) {
-                    setIsPartnerOnline(false);
-                    setPartnerLastSeen(new Date());
+
+            // Message seen acknowledgement listener
+            socket.on('messageSeenAck', (data) => {
+                if (data.conversationId === conversationId) {
+                    setLastSeenMessageId(data.messageId);
                 }
             });
 
@@ -212,6 +273,23 @@ export default function ChatDetailScreen() {
                 }
             });
 
+            // Message reaction listener
+            socket.on('messageReacted', (data) => {
+                const targetConvId = conversationId || groupId;
+                const dataConvId = data.conversationId || data.groupId;
+                if (dataConvId === targetConvId) {
+                    setMessages(prev => prev.map(m =>
+                        m.id === data.messageId
+                            ? { ...m, reactions: data.reactions }
+                            : m
+                    ));
+                    // Optional: Haptic feedback
+                    if (data.changedBy !== currentUserId) {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }
+                }
+            });
+
             // Request partner's online status
             socket.emit('checkUserOnline', { userId: partnerId });
         }
@@ -222,22 +300,21 @@ export default function ChatDetailScreen() {
             if (socket) {
                 socket.off('receiveMessage');
                 socket.off('messageSent');
+                socket.off('messageReacted');
             }
         };
     }, [conversationId, partnerId, currentUserId, socket]);
 
-    // Group Chat Socket Join
+    // Chat Room Socket Join/Leave
     useEffect(() => {
-        if (isGroup && groupId && socket) {
-            socket.emit('joinGroup', groupId);
-            // console.log('Joined group room:', groupId);
-
-            return () => {
-                socket.emit('leaveGroup', groupId);
-                // console.log('Left group room:', groupId);
-            };
+        if (isGroup && groupId) {
+            joinConversation(undefined, groupId);
+            return () => leaveConversation(undefined, groupId);
+        } else if (conversationId) {
+            joinConversation(conversationId);
+            return () => leaveConversation(conversationId);
         }
-    }, [isGroup, groupId, socket]);
+    }, [isGroup, groupId, conversationId]);
 
     // State for empty screen sticker suggestions
     const [suggestedStickers, setSuggestedStickers] = useState<any[]>([]);
@@ -398,9 +475,9 @@ export default function ChatDetailScreen() {
     const markMessagesAsRead = async () => {
         try {
             if (isGroup && groupId) {
-                await apiRequest('/api/messages/read', {
+                await apiRequest(`/api/groups/${groupId}/read`, {
                     method: 'POST',
-                    body: JSON.stringify({ groupId })
+                    body: JSON.stringify({})
                 });
             } else if (conversationId) {
                 await apiRequest('/api/messages/read', {
@@ -441,7 +518,7 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const sendMessage = async (text?: string, type: string = 'text', imageUrl?: string, imageWidth?: number, imageHeight?: number) => {
+    const sendMessage = async (text?: string, type: string = 'text', imageUrl?: string, imageWidth?: number, imageHeight?: number, videoUrl?: string, audioDuration?: number) => {
         const messageText = text || inputText.trim();
         if (!messageText && type === 'text') return;
         if (!currentUserId) return;
@@ -451,9 +528,10 @@ export default function ChatDetailScreen() {
             id: tempId,
             text: messageText,
             type: type,
-            imageUrl: imageUrl,
+            imageUrl: imageUrl, // Uses imageUrl field for audio URL as well
             imageWidth: imageWidth,
             imageHeight: imageHeight,
+            audioDuration: audioDuration,
             sender: 'me',
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             senderId: currentUserId,
@@ -475,12 +553,13 @@ export default function ChatDetailScreen() {
                 imageUrl: imageUrl,
                 imageWidth: imageWidth,
                 imageHeight: imageHeight,
+                audioDuration: audioDuration,
                 tempId: tempId,
                 replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, type: replyingTo.type } : undefined
             });
 
-            if (!isGroup) {
-                socket.emit('userStoppedTyping', { conversationId, userId: currentUserId });
+            if (!isGroup && conversationId && partnerId) {
+                stopTyping(conversationId, partnerId);
             }
         }
 
@@ -508,12 +587,9 @@ export default function ChatDetailScreen() {
             }
         }
 
-        if (socket) {
-            if (text.length > 0) {
-                socket.emit('userTyping', { conversationId, userId: currentUserId });
-            } else {
-                socket.emit('userStoppedTyping', { conversationId, userId: currentUserId });
-            }
+        // Emit typing indicator using helper (handles auto-stop after 2s)
+        if (text.length > 0 && conversationId && partnerId) {
+            handleTypingInput(conversationId, partnerId);
         }
     };
 
@@ -573,6 +649,118 @@ export default function ChatDetailScreen() {
         }
     };
 
+    const handlePlayAudio = async (messageId: string, audioUrl: string) => {
+        try {
+            if (sound) {
+                await sound.unloadAsync();
+                setSound(null);
+                setPlayingMessageId(null);
+                if (playingMessageId === messageId) return;
+            }
+
+            const { sound: newSound } = await Audio.Sound.createAsync(
+                { uri: getImageUrl(audioUrl)! },
+                { shouldPlay: true }
+            );
+
+            setSound(newSound);
+            setPlayingMessageId(messageId);
+
+            newSound.setOnPlaybackStatusUpdate((status) => {
+                if (status.isLoaded && status.didJustFinish) {
+                    setPlayingMessageId(null);
+                    setSound(null);
+                }
+            });
+        } catch (error) {
+            console.error('Play audio error:', error);
+        }
+    };
+
+    // Audio Functions
+    async function startRecording() {
+        try {
+            const permission = await Audio.requestPermissionsAsync();
+            if (permission.status === 'granted') {
+                await Audio.setAudioModeAsync({
+                    allowsRecordingIOS: true,
+                    playsInSilentModeIOS: true,
+                });
+                const { recording } = await Audio.Recording.createAsync(
+                    Audio.RecordingOptionsPresets.HIGH_QUALITY
+                );
+                setRecording(recording);
+                setIsRecording(true);
+                setRecordingDuration(0);
+
+                recordingTimerRef.current = setInterval(() => {
+                    setRecordingDuration(prev => prev + 1);
+                }, 1000);
+
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            } else {
+                Alert.alert("Quyền truy cập", "Vui lòng cấp quyền micro để gửi tin nhắn thoại.");
+            }
+        } catch (err) {
+            console.error('Failed to start recording', err);
+        }
+    }
+
+    async function stopRecording() {
+        if (!recording) return;
+
+        setIsRecording(false);
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+        }
+
+        try {
+            await recording.stopAndUnloadAsync();
+            const uri = recording.getURI();
+            const duration = recordingDuration;
+            setRecording(null);
+
+            if (uri && duration >= 1) {
+                uploadAndSendAudio(uri, duration);
+            }
+        } catch (error) {
+            console.error('Stop recording error', error);
+        }
+    }
+
+    const uploadAndSendAudio = async (uri: string, duration: number) => {
+        try {
+            setIsUploading(true);
+            const token = await getToken();
+            const formData = new FormData();
+            formData.append('audio', {
+                uri: uri,
+                type: 'audio/m4a',
+                name: 'voice.m4a',
+            } as any);
+            formData.append('duration', duration.toString());
+
+            const response = await fetch(`${API_URL}/api/upload/audio`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                }
+            });
+
+            if (!response.ok) throw new Error('Upload audio failed');
+            const data = await response.json();
+
+            sendMessage(undefined, 'audio', data.url, undefined, undefined, undefined, data.duration || duration);
+        } catch (e) {
+            console.error('Upload audio error:', e);
+            Alert.alert('Lỗi', 'Gửi tin nhắn thoại thất bại');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     const uploadAndSendMedia = async (mediaUri: string, caption: string = '', mediaType: 'image' | 'video' = 'image') => {
         setIsUploading(true);
 
@@ -600,6 +788,7 @@ export default function ChatDetailScreen() {
         }
 
         try {
+
             // Create FormData for upload
             const formData = new FormData();
             const fileName = mediaUri.split('/').pop() || (mediaType === 'video' ? 'video.mp4' : 'image.jpg');
@@ -656,10 +845,9 @@ export default function ChatDetailScreen() {
         setImageCaption('');
     };
 
-    // Format last seen time like Facebook
+    // Format last seen time like Zalo (header only shows online status, NOT typing)
     const formatLastSeen = () => {
         if (isPartnerOnline) return 'Đang hoạt động';
-        if (partnerTyping) return 'Đang nhập...';
         if (!partnerLastSeen) return 'Vừa mới truy cập';
 
         const now = new Date();
@@ -769,35 +957,40 @@ export default function ChatDetailScreen() {
                 </TouchableOpacity>
             </View>
             <View style={styles.headerRight}>
-                <TouchableOpacity
-                    style={styles.headerIconCircle}
-                    onPress={() => (navigation as any).navigate('Call', {
-                        partnerId,
-                        userName,
-                        avatar,
-                        isVideo: false,
-                        isIncoming: false,
-                        conversationId, // Pass conversationId
-                    })}
-                >
-                    <Ionicons name="call" size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.headerIconCircle}
-                    onPress={() => (navigation as any).navigate('Call', {
-                        partnerId,
-                        userName,
-                        avatar,
-                        isVideo: true,
-                        isIncoming: false,
-                        conversationId, // Pass conversationId
-                    })}
-                >
-                    <Ionicons name="videocam" size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.headerIcon}>
-                    <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
-                </TouchableOpacity>
+                {/* Only show call buttons for 1-1 chat, not group */}
+                {!isGroup && (
+                    <>
+                        <TouchableOpacity
+                            style={styles.headerIconCircle}
+                            onPress={() => (navigation as any).navigate('Call', {
+                                partnerId,
+                                userName,
+                                avatar,
+                                isVideo: false,
+                                isIncoming: false,
+                                conversationId,
+                            })}
+                        >
+                            <Ionicons name="call" size={18} color="#FFFFFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerIconCircle}
+                            onPress={() => (navigation as any).navigate('Call', {
+                                partnerId,
+                                userName,
+                                avatar,
+                                isVideo: true,
+                                isIncoming: false,
+                                conversationId,
+                            })}
+                        >
+                            <Ionicons name="videocam" size={18} color="#FFFFFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.headerIcon}>
+                            <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
+                        </TouchableOpacity>
+                    </>
+                )}
             </View>
         </View >
     );
@@ -819,7 +1012,7 @@ export default function ChatDetailScreen() {
     const handleDeleteMessageAction = async () => {
         if (!selectedMessage) return;
         const messageId = selectedMessage.id;
-        // Mark as deleted locally with deletedBy array
+        // Mark as deleted locally with deletedBy array ("Xóa ở phía tôi")
         setMessages(prev => prev.map(m =>
             m.id === messageId
                 ? {
@@ -834,10 +1027,72 @@ export default function ChatDetailScreen() {
         setSelectedMessage(null);
         try {
             await deleteMessage(messageId);
-            if (socket) socket.emit('revokeMessage', { conversationId, messageId });
+            // Previously emitted revokeMessage here, but now separated
         } catch (error) {
             console.error('Delete message error', error);
         }
+    };
+
+    const handleRevokeMessageAction = async () => {
+        if (!selectedMessage) return;
+        const messageId = selectedMessage.id;
+
+        // Call socket ("Thu hồi")
+        if (socket) {
+            socket.emit('revokeMessage', {
+                conversationId,
+                messageId,
+                userId: currentUserId
+            });
+        }
+
+        // Optimistically update UI
+        setMessages(prev => prev.map(m =>
+            m.id === messageId
+                ? { ...m, isRevoked: true, text: 'Tin nhắn đã thu hồi', type: 'text', imageUrl: null, videoUrl: null }
+                : m
+        ));
+
+        setSelectedMessage(null);
+    };
+
+    // Handle adding reaction to a message
+    const handleAddReaction = (emoji: string) => {
+        if (!selectedMessage || !currentUserId || !socket) return;
+
+        const messageId = selectedMessage.id;
+        const roomId = isGroup ? groupId : conversationId;
+
+        // Emit socket event
+        socket.emit('addReaction', {
+            messageId,
+            conversationId: isGroup ? undefined : conversationId,
+            groupId: isGroup ? groupId : undefined,
+            userId: currentUserId,
+            emoji
+        });
+
+        // Optimistically update UI
+        setMessages(prev => prev.map(m => {
+            if (m.id !== messageId) return m;
+            const reactions = { ...m.reactions } || {};
+
+            // Remove user from any existing reaction
+            Object.keys(reactions).forEach(key => {
+                reactions[key] = (reactions[key] || []).filter((r: any) => r.id !== currentUserId);
+                if (reactions[key].length === 0) delete reactions[key];
+            });
+
+            // Add new reaction
+            if (!reactions[emoji]) reactions[emoji] = [];
+            reactions[emoji].push({ id: currentUserId, name: 'Bạn' });
+
+            return { ...m, reactions };
+        }));
+
+        // Haptic feedback
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setSelectedMessage(null);
     };
 
     // Edit message - start editing
@@ -1025,9 +1280,32 @@ export default function ChatDetailScreen() {
             callType = 'call_ended';
         }
 
+        // Check for system message (group events)
+        const isSystemMessage = item.type === 'system' || item.senderId === 'system' || (!item.senderId && item.type === 'system');
+
         // Check for date separator
         const prevMessage = index > 0 ? messages[index - 1] : null;
         const showDateSeparator = shouldShowDateSeparator(item, prevMessage);
+
+        // Render system message differently
+        if (isSystemMessage) {
+            return (
+                <>
+                    {showDateSeparator && item.createdAt && (
+                        <View style={styles.dateSeparator}>
+                            <Text style={styles.dateSeparatorText}>
+                                {formatDateSeparator(item.createdAt)}
+                            </Text>
+                        </View>
+                    )}
+                    <View style={styles.systemMessageContainer}>
+                        <Text style={styles.systemMessageText}>
+                            {item.text}
+                        </Text>
+                    </View>
+                </>
+            );
+        }
 
         return (
             <>
@@ -1056,7 +1334,11 @@ export default function ChatDetailScreen() {
                         { marginBottom: isLast ? 8 : 2 }
                     ]}>
                         {!isMe && (
-                            <View style={styles.avatarContainer}>
+                            <TouchableOpacity
+                                style={styles.avatarContainer}
+                                onPress={() => handleViewProfile(isGroup ? item.senderId : partnerId)}
+                                activeOpacity={0.7}
+                            >
                                 {/* Use sender avatar for group chat, partner avatar for 1-1 chat */}
                                 {(isGroup ? item.senderAvatar : avatar) ? (
                                     <Image
@@ -1070,7 +1352,7 @@ export default function ChatDetailScreen() {
                                         </Text>
                                     </View>
                                 )}
-                            </View>
+                            </TouchableOpacity>
                         )}
 
                         <View style={{ flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
@@ -1103,6 +1385,50 @@ export default function ChatDetailScreen() {
                                         paddingHorizontal: 2,
                                         overflow: 'hidden'
                                     }]}>{item.time}</Text>
+                                </TouchableOpacity>
+                            ) : item.type === 'audio' ? (
+                                <TouchableOpacity
+                                    style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther, { width: 220, padding: 12 }]}
+                                    onLongPress={() => handleCheckSelectMessage(item)}
+                                    delayLongPress={500}
+                                    activeOpacity={0.9}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <TouchableOpacity
+                                            onPress={() => handlePlayAudio(item.id, item.imageUrl)}
+                                            style={{
+                                                width: 36, height: 36, borderRadius: 18,
+                                                backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)',
+                                                alignItems: 'center', justifyContent: 'center',
+                                                marginRight: 10
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name={playingMessageId === item.id ? "pause" : "play"}
+                                                size={20}
+                                                color={isMe ? '#FFFFFF' : '#333333'}
+                                                style={{ marginLeft: playingMessageId === item.id ? 0 : 2 }}
+                                            />
+                                        </TouchableOpacity>
+                                        <View style={{ flex: 1, justifyContent: 'center' }}>
+                                            <View style={{ height: 3, backgroundColor: isMe ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)', borderRadius: 2, width: '100%', marginBottom: 4 }} />
+                                            <Text style={{ color: isMe ? 'rgba(255,255,255,0.9)' : '#555555', fontSize: 11 }}>
+                                                {item.audioDuration ? `${item.audioDuration}s` : 'Voice Message'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <View style={{ position: 'absolute', bottom: 4, right: 8, flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)', marginRight: 4 }]}>
+                                            {item.time}
+                                        </Text>
+                                        {isMe && (
+                                            <Ionicons
+                                                name={item.seenBy && item.seenBy.length > 0 ? "checkmark-done" : "checkmark"}
+                                                size={12}
+                                                color="white"
+                                            />
+                                        )}
+                                    </View>
                                 </TouchableOpacity>
                             ) : isImage ? (
                                 <ChatMedia
@@ -1164,17 +1490,21 @@ export default function ChatDetailScreen() {
                                     activeOpacity={0.8}
                                 >
                                     {item.replyTo && (
-                                        <View style={[
-                                            styles.replyPreview,
-                                            !isMe && styles.replyPreviewOther
-                                        ]}>
+                                        <TouchableOpacity
+                                            activeOpacity={0.7}
+                                            onPress={() => scrollToMessage(item.replyTo.id)}
+                                            style={[
+                                                styles.replyPreview,
+                                                !isMe && styles.replyPreviewOther
+                                            ]}
+                                        >
                                             <Text style={[
                                                 styles.replyText,
                                                 !isMe && styles.replyTextOther
                                             ]} numberOfLines={1}>
                                                 ↩ {item.replyTo.text || (item.replyTo.type === 'image' ? '[Hình ảnh]' : '...')}
                                             </Text>
-                                        </View>
+                                        </TouchableOpacity>
                                     )}
                                     {renderMessageText(item.text, isMe)}
                                     <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4 }}>
@@ -1182,8 +1512,18 @@ export default function ChatDetailScreen() {
                                             <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF', marginRight: 4 }]}>Đã chỉnh sửa</Text>
                                         )}
                                         <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF' }]}>{item.time}</Text>
+
+                                        {/* Status Icon for my messages */}
+                                        {isMe && !isGroup && (
+                                            <Ionicons
+                                                name={lastSeenMessageId === item.id ? "checkmark-done-circle" : "checkmark-circle-outline"}
+                                                size={12}
+                                                color={isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF'}
+                                                style={{ marginLeft: 4 }}
+                                            />
+                                        )}
                                     </View>
-                                    {/* Read receipts for group chat or seen status for 1-1 */}
+                                    {/* Read receipts for group chat */}
                                     {isMe && isGroup && readReceipts[item.id] && readReceipts[item.id].length > 0 ? (
                                         <View style={styles.readReceiptsContainer}>
                                             {readReceipts[item.id].slice(0, 5).map((reader, idx) => (
@@ -1202,9 +1542,35 @@ export default function ChatDetailScreen() {
                                                 </View>
                                             )}
                                         </View>
-                                    ) : isMe && isLast && !isGroup ? (
-                                        <Text style={[styles.seenText, { color: 'rgba(255,255,255,0.7)' }]}>{lastSeenMessageId === item.id ? 'Đã xem' : 'Đã gửi'}</Text>
                                     ) : null}
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Message Reactions Display */}
+                            {item.reactions && Object.keys(item.reactions).length > 0 && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.reactionsContainer,
+                                        isMe ? styles.reactionsContainerMe : styles.reactionsContainerOther
+                                    ]}
+                                    onPress={() => {
+                                        setSelectedMessage(item);
+                                    }}
+                                    activeOpacity={0.7}
+                                >
+                                    {Object.entries(item.reactions).slice(0, 4).map(([emoji, users]: [string, any]) => (
+                                        <View key={emoji} style={styles.reactionBadge}>
+                                            <Text style={styles.reactionBadgeEmoji}>{emoji}</Text>
+                                            {(users as any[]).length > 1 && (
+                                                <Text style={styles.reactionBadgeCount}>{(users as any[]).length}</Text>
+                                            )}
+                                        </View>
+                                    ))}
+                                    {Object.keys(item.reactions).length > 4 && (
+                                        <View style={styles.reactionBadge}>
+                                            <Text style={styles.reactionBadgeCount}>+{Object.keys(item.reactions).length - 4}</Text>
+                                        </View>
+                                    )}
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -1220,6 +1586,43 @@ export default function ChatDetailScreen() {
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
             {renderHeader()}
+
+            {pinnedMessage && (
+                <View style={styles.pinnedMessageBar}>
+                    <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                        onPress={() => scrollToMessage(pinnedMessage.id)}
+                    >
+                        <Ionicons name="pin" size={16} color={ZALO_BLUE} style={{ marginRight: 8 }} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: ZALO_BLUE }}>Tin nhắn đã ghim</Text>
+                            <Text style={{ fontSize: 12, color: '#333' }} numberOfLines={1}>
+                                {pinnedMessage.type === 'image' ? '[Hình ảnh]' :
+                                    pinnedMessage.type === 'video' ? '[Video]' :
+                                        pinnedMessage.type === 'audio' ? '[Tin nhắn thoại]' :
+                                            pinnedMessage.text}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => setShowUnpinOption(!showUnpinOption)} style={{ padding: 4 }}>
+                        <Ionicons name="ellipsis-vertical" size={16} color="#666" />
+                    </TouchableOpacity>
+
+                    {showUnpinOption && (
+                        <View style={{
+                            position: 'absolute', right: 10, top: 30,
+                            backgroundColor: 'white', padding: 8, borderRadius: 8,
+                            shadowColor: "#000", shadowOpacity: 0.2, elevation: 5, zIndex: 100, width: 100
+                        }}>
+                            <TouchableOpacity onPress={handleUnpinMessageAction} style={{ padding: 4, flexDirection: 'row', alignItems: 'center' }}>
+                                <Ionicons name="close-circle-outline" size={18} color="red" />
+                                <Text style={{ color: 'red', marginLeft: 6, fontSize: 12 }}>Bỏ ghim</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </View>
+            )}
 
             <KeyboardAvoidingView
                 style={styles.keyboardAvoid}
@@ -1284,11 +1687,7 @@ export default function ChatDetailScreen() {
                     }
                 />
 
-                {partnerTyping && (
-                    <View style={styles.typingIndicator}>
-                        <Text style={styles.typingText}>Người ấy đang nhập...</Text>
-                    </View>
-                )}
+
 
                 {/* Scroll to bottom button - positioned above input bar */}
                 {showScrollToBottom && (
@@ -1354,6 +1753,16 @@ export default function ChatDetailScreen() {
                             />
                         </View>
                     )}
+
+                    {/* Typing Indicator - shown above input like Zalo */}
+                    {partnerTyping && !isGroup && (
+                        <View style={styles.typingIndicatorContainer}>
+                            <Text style={styles.typingIndicatorText}>
+                                {headerName} đang soạn tin...
+                            </Text>
+                        </View>
+                    )}
+
                     {replyingTo && (
                         <View style={styles.replyBarContainer}>
                             <View style={styles.replyBarAccent} />
@@ -1382,35 +1791,47 @@ export default function ChatDetailScreen() {
 
                     <View style={styles.inputRow}>
                         {/* Attachment Button (Left) */}
-                        <TouchableOpacity style={styles.leftButton} onPress={() => setShowMediaPicker(true)}>
-                            <Ionicons name="add" size={22} color="#FFFFFF" />
-                        </TouchableOpacity>
+                        {!isRecording && (
+                            <TouchableOpacity style={styles.leftButton} onPress={() => setShowMediaPicker(true)}>
+                                <Ionicons name="add" size={22} color="#FFFFFF" />
+                            </TouchableOpacity>
+                        )}
 
                         {/* Text Input Wrapper (Center) */}
                         <View style={styles.inputWrapper}>
-                            <TextInput
-                                ref={inputRef}
-                                style={styles.input}
-                                value={inputText}
-                                onChangeText={handleTextChange}
-                                placeholder="Tin nhắn"
-                                placeholderTextColor="#9CA3AF"
-                                multiline
-                                onFocus={() => {
-                                    setShowEmojiPicker(false);
-                                    setTimeout(() => scrollToBottom(), 300);
-                                }}
-                            />
-                            {/* Sticker Button (Inside Input) */}
-                            <TouchableOpacity style={styles.stickerInnerButton} onPress={toggleEmojiPicker}>
-                                {showEmojiPicker ? (
-                                    <MaterialIcons name="keyboard" size={24} color="#6B7280" />
-                                ) : (
-                                    <View style={styles.stickerIconContainer}>
-                                        <MaterialCommunityIcons name="sticker-emoji" size={16} color="#FFFFFF" />
-                                    </View>
-                                )}
-                            </TouchableOpacity>
+                            {isRecording ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingLeft: 10 }}>
+                                    <Ionicons name="mic" size={20} color="#EF4444" />
+                                    <Text style={{ marginLeft: 8, color: '#EF4444', fontWeight: '500' }}>Đang ghi âm... {recordingDuration}s</Text>
+                                    <Text style={{ marginLeft: 'auto', marginRight: 10, color: '#6B7280', fontSize: 12 }}>Thả để gửi</Text>
+                                </View>
+                            ) : (
+                                <>
+                                    <TextInput
+                                        ref={inputRef}
+                                        style={styles.input}
+                                        value={inputText}
+                                        onChangeText={handleTextChange}
+                                        placeholder="Tin nhắn"
+                                        placeholderTextColor="#9CA3AF"
+                                        multiline
+                                        onFocus={() => {
+                                            setShowEmojiPicker(false);
+                                            setTimeout(() => scrollToBottom(), 300);
+                                        }}
+                                    />
+                                    {/* Sticker Button (Inside Input) */}
+                                    <TouchableOpacity style={styles.stickerInnerButton} onPress={toggleEmojiPicker}>
+                                        {showEmojiPicker ? (
+                                            <MaterialIcons name="keyboard" size={24} color="#6B7280" />
+                                        ) : (
+                                            <View style={styles.stickerIconContainer}>
+                                                <MaterialCommunityIcons name="sticker-emoji" size={16} color="#FFFFFF" />
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                </>
+                            )}
                         </View>
 
                         {/* Mic or Send Button (Right) */}
@@ -1419,8 +1840,12 @@ export default function ChatDetailScreen() {
                                 <Ionicons name="send" size={22} color={ZALO_BLUE} />
                             </TouchableOpacity>
                         ) : (
-                            <TouchableOpacity style={styles.rightButton} onPress={() => Alert.alert('Thông báo', 'Tính năng ghi âm đang phát triển')}>
-                                <Ionicons name="mic" size={24} color="#6B7280" />
+                            <TouchableOpacity
+                                style={[styles.rightButton, isRecording && { backgroundColor: '#FEE2E2', transform: [{ scale: 1.1 }] }]}
+                                onPressIn={startRecording}
+                                onPressOut={stopRecording}
+                            >
+                                <Ionicons name="mic" size={24} color={isRecording ? "#EF4444" : "#6B7280"} />
                             </TouchableOpacity>
                         )}
                     </View>
@@ -1613,13 +2038,26 @@ export default function ChatDetailScreen() {
                     <View style={styles.optionsContainer}>
                         {/* Reactions */}
                         <View style={styles.reactionBar}>
-                            {['❤️', '👍', '👎', '🔥', '🥰', '👏', '😂', '⬇️'].map((emoji, index) => (
-                                <TouchableOpacity key={index} style={styles.reactionButton}>
+                            {['❤️', '👍', '👎', '🔥', '🥰', '👏', '😂', '😢'].map((emoji, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={styles.reactionButton}
+                                    onPress={() => handleAddReaction(emoji)}
+                                >
                                     <Text style={styles.reactionText}>{emoji}</Text>
                                 </TouchableOpacity>
                             ))}
-                            <TouchableOpacity style={styles.reactionButton}>
-                                <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                            <TouchableOpacity
+                                style={styles.reactionButton}
+                                onPress={() => {
+                                    setSelectedMessage(null);
+                                    setTimeout(() => {
+                                        setShowEmojiPicker(true);
+                                        setPickerTab('emoji');
+                                    }, 100);
+                                }}
+                            >
+                                <Ionicons name="add-circle-outline" size={22} color="#9CA3AF" />
                             </TouchableOpacity>
                         </View>
 
@@ -1653,7 +2091,7 @@ export default function ChatDetailScreen() {
                             )}
 
 
-                            <TouchableOpacity style={styles.menuItem} onPress={() => setSelectedMessage(null)}>
+                            <TouchableOpacity style={styles.menuItem} onPress={handlePinMessageAction}>
                                 <Text style={styles.menuItemText}>Ghim</Text>
                                 <Ionicons name="pin-outline" size={20} color="white" />
                             </TouchableOpacity>
@@ -1665,8 +2103,18 @@ export default function ChatDetailScreen() {
                             </TouchableOpacity>
                             <View style={styles.menuDivider} />
 
+                            {selectedMessage?.sender === 'me' && (
+                                <>
+                                    <TouchableOpacity style={styles.menuItem} onPress={handleRevokeMessageAction}>
+                                        <Text style={[styles.menuItemText, { color: '#FF3B30' }]}>Thu hồi</Text>
+                                        <Ionicons name="arrow-undo-circle-outline" size={20} color="#FF3B30" />
+                                    </TouchableOpacity>
+                                    <View style={styles.menuDivider} />
+                                </>
+                            )}
+
                             <TouchableOpacity style={styles.menuItem} onPress={handleDeleteMessageAction}>
-                                <Text style={[styles.menuItemText, { color: '#FF3B30' }]}>Xóa</Text>
+                                <Text style={[styles.menuItemText, { color: '#FF3B30' }]}>Xóa ở phía tôi</Text>
                                 <Ionicons name="trash-outline" size={20} color="#FF3B30" />
                             </TouchableOpacity>
                             <View style={styles.menuDivider} />
@@ -1978,6 +2426,16 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         paddingHorizontal: 12,
     },
+    pinnedMessageBar: {
+        backgroundColor: '#fff',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+        zIndex: 20,
+    },
     replyBarContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2268,6 +2726,46 @@ const styles = StyleSheet.create({
         height: StyleSheet.hairlineWidth,
         backgroundColor: '#3A3A3A',
         marginLeft: 16,
+    },
+    // Message Reactions Display Styles
+    reactionsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        marginTop: -8,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 2,
+        elevation: 2,
+        borderWidth: 0.5,
+        borderColor: 'rgba(0,0,0,0.05)',
+    },
+    reactionsContainerMe: {
+        alignSelf: 'flex-end',
+        marginRight: 4,
+    },
+    reactionsContainerOther: {
+        alignSelf: 'flex-start',
+        marginLeft: 44,
+    },
+    reactionBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 3,
+        paddingVertical: 1,
+    },
+    reactionBadgeEmoji: {
+        fontSize: 14,
+    },
+    reactionBadgeCount: {
+        fontSize: 11,
+        color: '#666',
+        marginLeft: 2,
+        fontWeight: '500',
     },
     // Swipe Reply Styles
     swipeActionRightContainer: {
@@ -2571,5 +3069,34 @@ const styles = StyleSheet.create({
     mentionSubtitle: {
         color: '#6B7280', // Gray text
         fontSize: 12
+    },
+    // SYSTEM MESSAGE STYLES
+    systemMessageContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 20,
+        marginVertical: 4,
+    },
+    systemMessageText: {
+        backgroundColor: 'rgba(0,0,0,0.04)',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 16,
+        fontSize: 13,
+        color: '#666666',
+        textAlign: 'center',
+        overflow: 'hidden',
+    },
+    // TYPING INDICATOR STYLES
+    typingIndicatorContainer: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        backgroundColor: 'transparent',
+    },
+    typingIndicatorText: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontStyle: 'italic',
     },
 });

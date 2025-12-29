@@ -132,6 +132,34 @@ const Users: React.FC = () => {
         }
     };
 
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all');
+
+    const filteredUsers = users.filter(user => {
+        const matchesSearch = user.name.toLowerCase().includes(searchText.toLowerCase()) ||
+            user.email.toLowerCase().includes(searchText.toLowerCase());
+
+        if (!matchesSearch) return false;
+
+        if (statusFilter === 'active') return !user.is_banned;
+        if (statusFilter === 'banned') return user.is_banned;
+
+        return true;
+    });
+
+    const handleResetAvatar = async (userId: string) => {
+        try {
+            const token = localStorage.getItem('admin_token');
+            await axios.put(`/api/admin/users/${userId}/reset-avatar`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            message.success('Đã reset avatar về mặc định');
+            fetchUsers();
+            setIsModalVisible(false);
+        } catch (error) {
+            message.error('Lỗi khi reset avatar');
+        }
+    };
+
     const columns = [
         {
             title: 'Avatar',
@@ -145,31 +173,37 @@ const Users: React.FC = () => {
             ),
         },
         {
-            title: 'Tên hiển thị',
-            dataIndex: 'name',
-            key: 'name',
+            title: 'Thông tin User',
+            key: 'info',
             sorter: (a: User, b: User) => a.name.localeCompare(b.name),
-            render: (text: string, record: User) => (
-                <span style={{ textDecoration: record.is_banned ? 'line-through' : 'none', color: record.is_banned ? '#999' : 'inherit' }}>
-                    {text} {record.is_banned && <Tag color="red">BANNED</Tag>}
-                </span>
+            render: (_: any, record: User) => (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontWeight: 500, textDecoration: record.is_banned ? 'line-through' : 'none', color: record.is_banned ? '#999' : 'inherit' }}>
+                        {record.name}
+                    </span>
+                    <span style={{ fontSize: 12, color: '#888' }}>{record.email}</span>
+                    {record.is_banned && <Tag color="red" style={{ marginTop: 4, width: 'fit-content' }}>BANNED</Tag>}
+                </div>
             )
-        },
-        {
-            title: 'Email',
-            dataIndex: 'email',
-            key: 'email',
         },
         {
             title: 'Cấp độ',
             dataIndex: 'level',
             key: 'level',
+            width: 100,
             render: (level: number) => (
                 <Tag color="geekblue" key={level}>
                     LV.{level}
                 </Tag>
             ),
             sorter: (a: User, b: User) => a.level - b.level,
+        },
+        {
+            title: 'Ngày tham gia',
+            dataIndex: 'created_at',
+            key: 'created_at',
+            render: (date: string) => new Date(date).toLocaleDateString('vi-VN'),
+            sorter: (a: User, b: User) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
         },
         {
             title: 'Thao tác',
@@ -219,30 +253,54 @@ const Users: React.FC = () => {
         },
     ];
 
-    const filteredUsers = users.filter(user =>
-        user.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchText.toLowerCase())
-    );
-
     return (
         <div>
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-                <h2 style={{ margin: 0 }}>Quản lý Người dùng ({users.length})</h2>
-                <div style={{ display: 'flex', gap: 10 }}>
-                    <Input
-                        placeholder="Tìm kiếm user..."
-                        prefix={<SearchOutlined />}
-                        style={{ width: 250 }}
-                        value={searchText}
-                        onChange={e => setSearchText(e.target.value)}
-                    />
+            <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h2 style={{ margin: 0 }}>Quản lý Người dùng ({users.length})</h2>
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateModalVisible(true)}>
                         Tạo User
                     </Button>
                 </div>
+
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: '#fff', padding: 12, borderRadius: 8 }}>
+                    <Input
+                        placeholder="Tìm kiếm theo tên, email..."
+                        prefix={<SearchOutlined />}
+                        style={{ width: 300 }}
+                        value={searchText}
+                        onChange={e => setSearchText(e.target.value)}
+                    />
+                    <div style={{ borderLeft: '1px solid #f0f0f0', height: 24, margin: '0 8px' }} />
+                    <Space>
+                        <span>Trạng thái:</span>
+                        <Button
+                            type={statusFilter === 'all' ? 'primary' : 'default'}
+                            size="small"
+                            onClick={() => setStatusFilter('all')}
+                        >
+                            Tất cả
+                        </Button>
+                        <Button
+                            type={statusFilter === 'active' ? 'primary' : 'default'}
+                            size="small"
+                            onClick={() => setStatusFilter('active')}
+                        >
+                            Hoạt động
+                        </Button>
+                        <Button
+                            type={statusFilter === 'banned' ? 'primary' : 'default'}
+                            danger={statusFilter === 'banned'}
+                            size="small"
+                            onClick={() => setStatusFilter('banned')}
+                        >
+                            Đã khóa
+                        </Button>
+                    </Space>
+                </div>
             </div>
 
-            <Card style={{ borderRadius: 8 }}>
+            <Card style={{ borderRadius: 8, marginTop: 16 }}>
                 <Table
                     columns={columns}
                     dataSource={filteredUsers}
@@ -278,6 +336,21 @@ const Users: React.FC = () => {
                             <InputNumber style={{ width: '100%' }} />
                         </Form.Item>
                     </Space>
+
+                    {editingUser?.avatar && (
+                        <Form.Item label="Avatar hiện tại">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                <Avatar src={editingUser.avatar} size="large" />
+                                <Button
+                                    danger
+                                    size="small"
+                                    onClick={() => handleResetAvatar(editingUser.id)}
+                                >
+                                    Reset về mặc định
+                                </Button>
+                            </div>
+                        </Form.Item>
+                    )}
                     <Form.Item name="is_banned" valuePropName="checked" label="Trạng thái">
                         <Switch checkedChildren="Đang bị chặn" unCheckedChildren="Hoạt động" />
                     </Form.Item>

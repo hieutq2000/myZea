@@ -104,6 +104,27 @@ export default function PlaceGroupsScreen({ onBack, onOpenGroup, onCreateGroup }
         }
     };
 
+    const [joiningGroupId, setJoiningGroupId] = useState<string | null>(null);
+
+    const handleJoinGroup = async (group: Group) => {
+        try {
+            setJoiningGroupId(group.id);
+            await apiRequest(`/api/place/groups/${group.id}/join`, {
+                method: 'POST'
+            });
+
+            // Move from suggested to myGroups
+            setSuggestedGroups(prev => prev.filter(g => g.id !== group.id));
+            setMyGroups(prev => [{ ...group, role: 'member' }, ...prev]);
+
+            Alert.alert('Thành công', `Bạn đã tham gia nhóm "${group.name}"`);
+        } catch (error) {
+            Alert.alert('Lỗi', 'Không thể tham gia nhóm');
+        } finally {
+            setJoiningGroupId(null);
+        }
+    };
+
     const renderGroupItem = ({ item }: { item: Group }) => {
         const avatarUri = getAvatarUri(item.avatar, item.name);
 
@@ -239,8 +260,16 @@ export default function PlaceGroupsScreen({ onBack, onOpenGroup, onCreateGroup }
                                                 <Text style={styles.suggestedName} numberOfLines={2}>{group.name}</Text>
                                                 <Text style={styles.suggestedMeta}>{formatMemberCount(group.memberCount)}</Text>
                                             </View>
-                                            <TouchableOpacity style={styles.joinButton}>
-                                                <Text style={styles.joinButtonText}>Tham gia</Text>
+                                            <TouchableOpacity
+                                                style={[styles.joinButton, joiningGroupId === group.id && { opacity: 0.6 }]}
+                                                onPress={() => handleJoinGroup(group)}
+                                                disabled={joiningGroupId === group.id}
+                                            >
+                                                {joiningGroupId === group.id ? (
+                                                    <ActivityIndicator size="small" color="#1877F2" />
+                                                ) : (
+                                                    <Text style={styles.joinButtonText}>Tham gia</Text>
+                                                )}
                                             </TouchableOpacity>
                                         </TouchableOpacity>
                                     ))}

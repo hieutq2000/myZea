@@ -5,9 +5,8 @@ import {
     StyleSheet,
     TouchableOpacity,
     Image,
-    StatusBar,
-    Platform,
     ScrollView,
+    StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
@@ -84,7 +83,7 @@ export default function PlaceMenuScreen({
 
             {/* Header */}
             <SafeAreaView style={styles.headerSafeArea}>
-                <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
+                <View style={styles.header}>
                     <Text style={styles.headerTitle}>Menu</Text>
                     <TouchableOpacity style={styles.searchButton}>
                         <Ionicons name="search" size={24} color="#333" />

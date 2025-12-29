@@ -108,7 +108,7 @@ export default function ChatListScreen() {
                     lastMessageSenderName: g.lastMessage?.sender_name,
                     time: formatMessageTime(g.lastMessage?.created_at || g.lastMessage?.createdAt || g.created_at),
                     avatar: g.avatar,
-                    unread: 0,
+                    unread: g.unreadCount || 0,
                     isOnline: false,
                     isPinned: false,
                     isMuted: false,
@@ -280,6 +280,15 @@ export default function ChatListScreen() {
         const msg = item.lastMessage;
         const isFromMe = item.lastMessageSenderId === currentUserId;
 
+        // Check for system message first
+        if (item.lastMessageType === 'system' || !item.lastMessageSenderId) {
+            // System message - show as is
+            if (msg.includes('đã tạo nhóm') || msg.includes('đã thêm') ||
+                msg.includes('đã xóa') || msg.includes('đã rời nhóm')) {
+                return msg.length > 35 ? msg.substring(0, 35) + '...' : msg;
+            }
+        }
+
         // Determine prefix based on sender
         let prefix = '';
         if (item.isGroup) {
@@ -316,7 +325,7 @@ export default function ChatListScreen() {
             msg.startsWith('{') ||         // JSON object (might be sticker data)
             msg.startsWith('http') && (msg.includes('.webp') || msg.includes('.gif')) // Sticker image URL
         ) {
-            return `${prefix}[Sticker]`;
+            return `${prefix}đã gửi một sticker 🎉`;
         }
 
         // Check for image
@@ -325,7 +334,12 @@ export default function ChatListScreen() {
             msg.includes('/upload/') ||
             msg.includes('/images/')
         ) {
-            return `${prefix}[Hình ảnh]`;
+            return `${prefix}đã gửi một hình ảnh 📷`;
+        }
+
+        // Check for video
+        if (msg.startsWith('http') && (msg.includes('.mp4') || msg.includes('.mov') || msg.includes('.avi'))) {
+            return `${prefix}đã gửi một video 🎬`;
         }
 
         return `${prefix}${msg}`;

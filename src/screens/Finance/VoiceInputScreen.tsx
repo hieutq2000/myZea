@@ -39,52 +39,6 @@ const formatMoney = (amount: number): string => {
     return new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
 };
 
-// Parse số tiền từ text
-const parseAmount = (text: string): number => {
-    const lowerText = text.toLowerCase();
-
-    const nghinMatch = lowerText.match(/(\d+(?:[.,]\d+)?)\s*(?:nghìn|ngàn|ngh)/);
-    if (nghinMatch) return parseFloat(nghinMatch[1].replace(',', '.')) * 1000;
-
-    const kMatch = lowerText.match(/(\d+(?:[.,]\d+)?)\s*k/);
-    if (kMatch) return parseFloat(kMatch[1].replace(',', '.')) * 1000;
-
-    const trieuMatch = lowerText.match(/(\d+(?:[.,]\d+)?)\s*tri[ệe]u/);
-    if (trieuMatch) return parseFloat(trieuMatch[1].replace(',', '.')) * 1000000;
-
-    const numMatch = lowerText.match(/(\d{1,3}(?:[.,]?\d{3})*)/g);
-    if (numMatch) {
-        const numbers = numMatch.map(n => parseFloat(n.replace(/[.,]/g, '')));
-        return Math.max(...numbers);
-    }
-
-    return 0;
-};
-
-// Parse voice to result
-const parseVoiceLocal = (text: string): VoiceParseResult | null => {
-    const lowerText = text.toLowerCase();
-
-    const incomeKeywords = ['lương', 'thu', 'nhận', 'bán', 'thưởng', 'được cho', 'lì xì', 'tiền mừng'];
-    const isIncome = incomeKeywords.some(kw => lowerText.includes(kw));
-    const type: TransactionType = isIncome ? 'income' : 'expense';
-
-    const amount = parseAmount(text);
-    if (amount <= 0) return null;
-
-    const category = findCategoryFromText(text, type);
-
-    return {
-        type,
-        amount,
-        description: text,
-        categoryId: category.id,
-        categoryName: category.name,
-        date: new Date().toISOString().split('T')[0],
-        confidence: 0.8,
-    };
-};
-
 // Waveform Bar Component
 const WaveformBar = ({ index, isListening }: { index: number; isListening: boolean }) => {
     const heightAnim = useRef(new Animated.Value(20)).current;
@@ -255,10 +209,16 @@ export default function VoiceInputScreen() {
         }
         setIsProcessing(true);
         try {
+            // Gửi toàn bộ văn bản cho AI để "đoán" mọi thứ (số món, giá tiền, danh mục)
+            console.log('Sending to AI for parsing:', text);
             const aiResults = await parseTransactionWithAI(text);
+
             if (aiResults && aiResults.length > 0) {
                 const results: VoiceParseResult[] = aiResults.map(item => {
-                    const mappedCategory = getCategoryById(item.categoryId || '') || ALL_CATEGORIES[ALL_CATEGORIES.length - 1];
+                    // Tìm danh mục khớp nhất từ AI ID trả về
+                    const mappedCategory = getCategoryById(item.categoryId || '') ||
+                        findCategoryFromText(item.description || '', (item.type || 'expense') as any);
+
                     return {
                         type: item.type || 'expense',
                         amount: item.amount || 0,
@@ -266,23 +226,18 @@ export default function VoiceInputScreen() {
                         categoryName: mappedCategory.name,
                         description: item.description || text,
                         date: new Date().toISOString(),
-                        confidence: 0.95
+                        confidence: 0.98
                     };
                 });
+
                 setParseResults(results);
                 setError(null);
             } else {
-                throw new Error('AI incomplete response');
+                throw new Error('AI không thể bóc tách dữ liệu');
             }
         } catch (e) {
-            console.log('AI Parse failed, fallback to local:', e);
-            const result = parseVoiceLocal(text);
-            if (result) {
-                setParseResults([result]);
-                setError(null);
-            } else {
-                setError('Không thể nhận dạng giao dịch');
-            }
+            console.log('AI processing failed:', e);
+            setError('Hệ thống AI không phản hồi. Hãy thử lại (VD: 30k cà phê)');
         }
         setIsProcessing(false);
     };

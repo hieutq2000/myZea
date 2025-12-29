@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import * as Updates from 'expo-updates';
+import { AppState, AppStateStatus } from 'react-native';
 
 interface UseAppUpdatesReturn {
     isUpdateAvailable: boolean;
@@ -12,14 +13,29 @@ interface UseAppUpdatesReturn {
 export function useAppUpdates(): UseAppUpdatesReturn {
     const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
+    const isCheckingRef = useRef(false);
+    const lastCheckRef = useRef(0);
 
     const checkForUpdate = useCallback(async () => {
+        // Prevent duplicate checks
+        if (isCheckingRef.current) return;
+
+        // Throttle: don't check more than once per 30 seconds
+        const now = Date.now();
+        if (now - lastCheckRef.current < 30000) {
+            console.log('[Updates] Throttled, last check was recent');
+            return;
+        }
+
         try {
             // Don't check in development mode
             if (__DEV__) {
                 console.log('[Updates] Skipping update check in DEV mode');
                 return;
             }
+
+            isCheckingRef.current = true;
+            lastCheckRef.current = now;
 
             console.log('[Updates] Checking for updates...');
             const update = await Updates.checkForUpdateAsync();
@@ -34,6 +50,8 @@ export function useAppUpdates(): UseAppUpdatesReturn {
         } catch (error) {
             console.log('[Updates] Error checking for updates:', error);
             setIsUpdateAvailable(false);
+        } finally {
+            isCheckingRef.current = false;
         }
     }, []);
 
@@ -56,14 +74,26 @@ export function useAppUpdates(): UseAppUpdatesReturn {
         setIsUpdateAvailable(false);
     }, []);
 
-    // Auto check on mount
+    // Auto check on mount - show modal if update available
     useEffect(() => {
-        // Delay check slightly to let app fully load
         const timer = setTimeout(() => {
             checkForUpdate();
         }, 2000);
 
         return () => clearTimeout(timer);
+    }, [checkForUpdate]);
+
+    // Also check when app comes back from background
+    useEffect(() => {
+        const handleAppStateChange = (nextState: AppStateStatus) => {
+            if (nextState === 'active') {
+                // Check for updates when app becomes active
+                checkForUpdate();
+            }
+        };
+
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        return () => subscription.remove();
     }, [checkForUpdate]);
 
     return {
