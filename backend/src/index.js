@@ -6145,6 +6145,52 @@ app.post('/api/messages/readers', authenticateToken, async (req, res) => {
     }
 });
 
+// ============ FILE UPLOAD ROUTE ============
+
+// Generic File Upload configuration
+const fileStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadPath = path.join(__dirname, '../uploads/files');
+        if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const cleanName = createSlug(path.parse(file.originalname).name);
+        const ext = path.extname(file.originalname);
+        cb(null, `${cleanName}-${uniqueSuffix}${ext}`);
+    }
+});
+
+const uploadGeneralFile = multer({
+    storage: fileStorage,
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB max
+});
+
+app.post('/api/upload/file', authenticateToken, uploadGeneralFile.single('file'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+        // Construct URL correctly
+        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/files/${req.file.filename}`;
+
+        res.json({
+            success: true,
+            url: fileUrl,
+            filename: req.file.filename,
+            originalName: req.file.originalname,
+            size: req.file.size,
+            mimetype: req.file.mimetype
+        });
+    } catch (error) {
+        console.error('Upload file error:', error);
+        res.status(500).json({ error: 'Upload failed' });
+    }
+});
+
 // ============ GROUP CHAT ROUTES ============
 // Import group routes (will be initialized after database is ready) 
 const initGroupRoutes = require('./groupRoutes');

@@ -18,10 +18,16 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                     name VARCHAR(255) NOT NULL,
                     avatar TEXT,
                     creator_id VARCHAR(36) NOT NULL,
+                    invite_code VARCHAR(50) UNIQUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
             `);
+
+            // Ensure invite_code column exists for existing tables
+            try {
+                await pool.execute('ALTER TABLE chat_groups ADD COLUMN invite_code VARCHAR(50) UNIQUE');
+            } catch (e) { /* Column exists */ }
 
             // Create group_members table without FK for compatibility
             await pool.execute(`
@@ -216,31 +222,29 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                 return res.json([]);
             }
 
-            // OPTIMIZED: Single query to get groups with member count and last message
+            // OPTIMIZED: Messages with same timestamp caused duplicates. 
+            // Fixed by using a correlated subquery to fetch the latest message ID directly.
             const [groups] = await pool.execute(`
                 SELECT 
                     g.id, g.name, g.avatar, g.creator_id, g.created_at, g.updated_at,
                     gm.is_muted, gm.is_pinned,
                     (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as memberCount,
-                    lm.id as last_msg_id,
-                    lm.content as last_msg_content,
-                    lm.type as last_msg_type,
-                    lm.created_at as last_msg_time,
-                    lm.sender_id as last_msg_sender_id,
-                    lu.name as last_msg_sender_name
+                    m.id as last_msg_id,
+                    m.content as last_msg_content,
+                    m.type as last_msg_type,
+                    m.created_at as last_msg_time,
+                    m.sender_id as last_msg_sender_id,
+                    u.name as last_msg_sender_name
                 FROM chat_groups g
                 JOIN group_members gm ON g.id = gm.group_id AND gm.user_id = ?
-                LEFT JOIN (
-                    SELECT m1.* FROM messages m1
-                    INNER JOIN (
-                        SELECT group_id, MAX(created_at) as max_created
-                        FROM messages
-                        WHERE group_id IS NOT NULL
-                        GROUP BY group_id
-                    ) m2 ON m1.group_id = m2.group_id AND m1.created_at = m2.max_created
-                ) lm ON lm.group_id = g.id
-                LEFT JOIN users lu ON lm.sender_id COLLATE utf8mb4_unicode_ci = lu.id COLLATE utf8mb4_unicode_ci
-                ORDER BY gm.is_pinned DESC, COALESCE(lm.created_at, g.updated_at) DESC
+                LEFT JOIN messages m ON m.id = (
+                    SELECT id FROM messages 
+                    WHERE group_id = g.id 
+                    ORDER BY created_at DESC, id DESC 
+                    LIMIT 1
+                )
+                LEFT JOIN users u ON m.sender_id COLLATE utf8mb4_unicode_ci = u.id COLLATE utf8mb4_unicode_ci
+                ORDER BY gm.is_pinned DESC, COALESCE(m.created_at, g.updated_at) DESC
             `, [userId]);
 
             console.log('📦 Found groups count:', groups.length);
@@ -977,8 +981,157 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
 
             res.json({ success: true, count: unread.length });
         } catch (e) {
-            console.error('Group mark read error:', e);
             res.status(500).json({ error: e.message });
+        }
+    });
+
+    // --- GROUP INVITATION LINK FEATURES ---
+
+    // Get (or create) Invite Link
+    app.get('/api/groups/:id/invite-link', authenticateToken, async (req, res) => {
+        try {
+            const groupId = req.params.id;
+            const userId = req.user.id;
+
+            // Check if user is a member
+            const [membership] = await pool.execute(
+                'SELECT * FROM group_members WHERE group_id = ? AND user_id = ?',
+                [groupId, userId]
+            );
+
+            if (membership.length === 0) {
+                return res.status(403).json({ error: 'Bạn không phải thành viên của nhóm này' });
+            }
+
+            // Get current code
+            const [rows] = await pool.execute(
+                'SELECT invite_code FROM chat_groups WHERE id = ?',
+                [groupId]
+            );
+
+            if (rows.length === 0) return res.status(404).json({ error: 'Không tìm thấy nhóm' });
+
+            let inviteCode = rows[0].invite_code;
+
+            // If no code, generate one
+            if (!inviteCode) {
+                const crypto = require('crypto');
+                inviteCode = crypto.randomBytes(4).toString('hex').toUpperCase(); // 8 chars
+                await pool.execute(
+                    'UPDATE chat_groups SET invite_code = ? WHERE id = ?',
+                    [inviteCode, groupId]
+                );
+            }
+
+            res.json({ inviteCode, link: `https://vinalive.vn/join/${inviteCode}` });
+
+        } catch (error) {
+            console.error('Get invite link error:', error);
+            res.status(500).json({ error: 'Lỗi server' });
+        }
+    });
+
+    // Reset Invite Link (Admin only)
+    app.post('/api/groups/:id/reset-invite-link', authenticateToken, async (req, res) => {
+        try {
+            const groupId = req.params.id;
+            const userId = req.user.id;
+
+            // Check if admin
+            const [adminCheck] = await pool.execute(
+                'SELECT * FROM group_members WHERE group_id = ? AND user_id = ? AND role = "admin"',
+                [groupId, userId]
+            );
+
+            if (adminCheck.length === 0) {
+                return res.status(403).json({ error: 'Chỉ quản trị viên mới được tạo link mới' });
+            }
+
+            // Generate new code
+            const crypto = require('crypto');
+            const newCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+
+            await pool.execute(
+                'UPDATE chat_groups SET invite_code = ? WHERE id = ?',
+                [newCode, groupId]
+            );
+
+            res.json({ inviteCode: newCode, link: `https://vinalive.vn/join/${newCode}` });
+
+        } catch (error) {
+            console.error('Reset invite link error:', error);
+            res.status(500).json({ error: 'Lỗi server' });
+        }
+    });
+
+    // Join Group by Code
+    app.post('/api/groups/join/:code', authenticateToken, async (req, res) => {
+        try {
+            const inviteCode = req.params.code;
+            const userId = req.user.id;
+
+            // Find group by code
+            const [groups] = await pool.execute(
+                'SELECT id, name, avatar FROM chat_groups WHERE invite_code = ?',
+                [inviteCode]
+            );
+
+            if (groups.length === 0) {
+                return res.status(404).json({ error: 'Mã mời không hợp lệ hoặc đã hết hạn' });
+            }
+
+            const group = groups[0];
+
+            // Check if already member
+            const [existing] = await pool.execute(
+                'SELECT * FROM group_members WHERE group_id = ? AND user_id = ?',
+                [group.id, userId]
+            );
+
+            if (existing.length > 0) {
+                return res.json({ success: true, alreadyJoined: true, groupId: group.id });
+            }
+
+            // Add member
+            await pool.execute(
+                'INSERT INTO group_members (id, group_id, user_id, role) VALUES (?, ?, ?, ?)',
+                [uuidv4(), group.id, userId, 'member']
+            );
+
+            // System message
+            const sysMsgId = uuidv4();
+            const [userRows] = await pool.execute('SELECT name FROM users WHERE id = ?', [userId]);
+            const userName = userRows[0]?.name || 'Một người dùng';
+
+            await pool.execute(`
+                INSERT INTO messages (id, group_id, sender_id, content, type) 
+                VALUES (?, ?, ?, ?, 'system')
+            `, [sysMsgId, group.id, null, `${userName} đã tham gia nhóm qua link mời`]);
+
+            // Realtime Update for existing members
+            if (io) {
+                io.to(group.id).emit('newGroupMessage', {
+                    id: sysMsgId,
+                    group_id: group.id,
+                    content: `${userName} đã tham gia nhóm qua link mời`,
+                    type: 'system',
+                    created_at: new Date(),
+                    sender_id: null
+                });
+
+                io.to(group.id).emit('groupUpdate', { type: 'member_added', groupId: group.id });
+            }
+
+            // Add new member to socket room
+            // Note: In a real scenario, we might need to find the user's socket and join it. 
+            // Since this API is called by the user themselves, their client will handle the logic 
+            // to subscribe or refresh list after success response.
+
+            res.json({ success: true, groupId: group.id, groupName: group.name });
+
+        } catch (error) {
+            console.error('Join group by code error:', error);
+            res.status(500).json({ error: 'Lỗi server' });
         }
     });
 

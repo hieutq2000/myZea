@@ -7,8 +7,11 @@ import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { COLORS, SPACING } from '../utils/theme';
 import { Ionicons, Feather, FontAwesome, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as Location from 'expo-location';
+import { Linking } from 'react-native';
 import { getSocket, handleTypingInput, stopTyping, joinConversation, leaveConversation, markMessageAsSeen } from '../utils/socket';
-import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage, getImageUrl, getUserInfo, apiRequest, getToken, getPinnedMessage } from '../utils/api';
+import { getChatHistory, getCurrentUser, markConversationAsRead, API_URL, deleteMessage, getImageUrl, getUserInfo, apiRequest, getToken, getPinnedMessage, uploadFile } from '../utils/api';
 import { launchImageLibrary, launchCamera } from '../utils/imagePicker';
 import EmojiPicker from '../components/EmojiPicker';
 import StickerPicker from '../components/StickerPicker';
@@ -19,6 +22,9 @@ import * as Haptics from 'expo-haptics';
 import GroupAvatar from '../components/GroupAvatar';
 import * as Clipboard from 'expo-clipboard';
 import ForwardMessageModal from '../components/ForwardMessageModal';
+
+
+
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList, 'ChatDetail'>;
 
@@ -840,6 +846,63 @@ export default function ChatDetailScreen() {
         }
     };
 
+    const handlePickFile = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: '*/*',
+                copyToCacheDirectory: true
+            });
+
+            if (result.canceled || !result.assets) return;
+            const asset = result.assets[0];
+
+            setIsUploading(true);
+            setShowMediaPicker(false);
+
+            try {
+                const uploadRes = await uploadFile(asset.uri, asset.name, asset.mimeType || 'application/octet-stream');
+                if (uploadRes.success) {
+                    const contentValue = JSON.stringify({
+                        url: uploadRes.url,
+                        name: uploadRes.originalName,
+                        size: uploadRes.size,
+                        mimeType: uploadRes.mimetype
+                    });
+
+                    await sendMessage(contentValue, 'file');
+                }
+            } catch (error) {
+                console.log('Upload error', error);
+                Alert.alert('Lỗi', 'Upload file thất bại');
+            } finally {
+                setIsUploading(false);
+            }
+
+        } catch (err) {
+            console.log('File picker error:', err);
+            setIsUploading(false);
+        }
+    };
+
+    const handleSendLocation = async () => {
+        try {
+            setShowMediaPicker(false);
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền vị trí để gửi tọa độ.');
+                return;
+            }
+
+            const location = await Location.getCurrentPositionAsync({});
+            const { latitude, longitude } = location.coords;
+            const content = `${latitude},${longitude}`;
+            await sendMessage(content, 'location');
+
+        } catch (err) {
+            Alert.alert('Lỗi', 'Không thể lấy vị trí');
+        }
+    };
+
     // Send media (image or video) with caption
     const handleSendImageWithCaption = async () => {
         if (!previewImage) return;
@@ -1490,6 +1553,60 @@ export default function ChatDetailScreen() {
                                 </Text>
                             )}
 
+
+
+                            {item.type === 'file' && (() => {
+                                let fileData = { name: 'File', size: 0, url: '' };
+                                try { fileData = JSON.parse(item.text); } catch { }
+                                const isMe = item.sender === 'me' || (currentUserId && item.senderId === currentUserId);
+                                return (
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.messageBubble,
+                                            isMe ? styles.bubbleMe : styles.bubbleOther,
+                                            { flexDirection: 'row', alignItems: 'center', width: 250 }
+                                        ]}
+                                        onPress={() => Linking.openURL(fileData.url)}
+                                        onLongPress={() => handleCheckSelectMessage(item)}
+                                        delayLongPress={500}
+                                    >
+                                        <View style={{ width: 44, height: 44, backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : '#E0E0E0', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                                            <Ionicons name="document-text" size={24} color={isMe ? '#FFF' : '#555'} />
+                                        </View>
+                                        <View style={{ flex: 1, justifyContent: 'center' }}>
+                                            <Text style={[styles.messageText, { color: isMe ? '#FFF' : '#333', fontWeight: 'bold' }]} numberOfLines={1}>{fileData.name}</Text>
+                                            <Text style={{ color: isMe ? 'rgba(255,255,255,0.8)' : '#666', fontSize: 11 }}>{Math.round(fileData.size / 1024)} KB • {item.time}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })()}
+
+                            {item.type === 'location' && (() => {
+                                const isMe = item.sender === 'me' || (currentUserId && item.senderId === currentUserId);
+                                const [lat, long] = item.text.split(',');
+                                const mapUrl = Platform.OS === 'ios' ? `http://maps.apple.com/?ll=${lat},${long}` : `geo:${lat},${long}?q=${lat},${long}`;
+                                return (
+                                    <TouchableOpacity
+                                        style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther, { width: 250, padding: 0, overflow: 'hidden' }]}
+                                        onPress={() => Linking.openURL(mapUrl)}
+                                        onLongPress={() => handleCheckSelectMessage(item)}
+                                        delayLongPress={500}
+                                    >
+                                        <View style={{ height: 120, backgroundColor: '#EEE', justifyContent: 'center', alignItems: 'center' }}>
+                                            <Ionicons name="location" size={40} color="#FF3B30" />
+                                            <Text style={{ fontSize: 10, color: '#666', marginTop: 4 }}>{lat}, {long}</Text>
+                                        </View>
+                                        <View style={{ padding: 10 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <Ionicons name="location" size={20} color={isMe ? '#FFF' : '#FF3B30'} />
+                                                <Text style={[styles.messageText, { color: isMe ? '#FFF' : '#333', fontWeight: 'bold', marginLeft: 5 }]}>Vị trí đã chia sẻ</Text>
+                                            </View>
+                                            <Text style={{ color: isMe ? 'rgba(255,255,255,0.8)' : '#0084FF', fontSize: 12, marginTop: 4 }}>Bấm để mở bản đồ</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })()}
+
                             {item.type === 'sticker' ? (
                                 <TouchableOpacity
                                     style={[styles.stickerContainer, isMe ? styles.alignRight : styles.alignLeft]}
@@ -2050,19 +2167,35 @@ export default function ChatDetailScreen() {
                         <Text style={styles.mediaPickerTitle}>Chọn phương thức</Text>
 
                         <View style={styles.mediaPickerOptions}>
-                            <TouchableOpacity style={styles.mediaOption} onPress={handleTakePhoto}>
-                                <View style={[styles.mediaOptionIcon, { backgroundColor: '#E0F2FE' }]}>
-                                    <Ionicons name="camera" size={28} color="#0284C7" />
-                                </View>
-                                <Text style={styles.mediaOptionText}>Chụp ảnh</Text>
-                            </TouchableOpacity>
+                            <View style={styles.mediaRow}>
+                                <TouchableOpacity style={styles.mediaOption} onPress={handleTakePhoto}>
+                                    <View style={[styles.mediaOptionIcon, { backgroundColor: '#E0F2FE' }]}>
+                                        <Ionicons name="camera" size={28} color="#0284C7" />
+                                    </View>
+                                    <Text style={styles.mediaOptionText}>Chụp ảnh</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.mediaOption} onPress={handlePickImage}>
-                                <View style={[styles.mediaOptionIcon, { backgroundColor: '#DCFCE7' }]}>
-                                    <Ionicons name="images" size={28} color="#16A34A" />
-                                </View>
-                                <Text style={styles.mediaOptionText}>Thư viện</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity style={styles.mediaOption} onPress={handlePickImage}>
+                                    <View style={[styles.mediaOptionIcon, { backgroundColor: '#DCFCE7' }]}>
+                                        <Ionicons name="images" size={28} color="#16A34A" />
+                                    </View>
+                                    <Text style={styles.mediaOptionText}>Thư viện</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.mediaOption} onPress={handlePickFile}>
+                                    <View style={[styles.mediaOptionIcon, { backgroundColor: '#F3E8FF' }]}>
+                                        <Ionicons name="document-text" size={28} color="#9333EA" />
+                                    </View>
+                                    <Text style={styles.mediaOptionText}>Tài liệu</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.mediaOption} onPress={handleSendLocation}>
+                                    <View style={[styles.mediaOptionIcon, { backgroundColor: '#FEE2E2' }]}>
+                                        <Ionicons name="location" size={28} color="#DC2626" />
+                                    </View>
+                                    <Text style={styles.mediaOptionText}>Vị trí</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
                 </TouchableOpacity>
@@ -2934,6 +3067,14 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     // Picker Styles
+    mediaRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-around',
+        width: '100%',
+        paddingVertical: 10
+    },
+
     pickerContainer: {
         height: 280,
         backgroundColor: '#fff',

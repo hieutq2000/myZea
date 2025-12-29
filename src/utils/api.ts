@@ -389,6 +389,40 @@ export async function uploadImage(imageUri: string): Promise<UploadResponse> { /
     };
 }
 
+export interface FileUploadResponse {
+    success: boolean;
+    url: string;
+    filename: string;
+    originalName: string;
+    size: number;
+    mimetype: string;
+}
+
+export async function uploadFile(fileUri: string, fileName: string, mimeType: string): Promise<FileUploadResponse> {
+    const token = await getToken();
+    const formData = new FormData();
+
+    formData.append('file', {
+        uri: fileUri,
+        type: mimeType,
+        name: fileName,
+    } as any);
+
+    const response = await fetch(`${API_URL}/api/upload/file`, {
+        method: 'POST',
+        headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+    });
+
+    if (!response.ok) {
+        throw new Error('Upload file failed');
+    }
+
+    return await response.json();
+}
+
 // ============ PLACE API ============
 
 export interface Comment {
