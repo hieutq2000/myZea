@@ -46,6 +46,10 @@ export default function GroupInfoScreen({ navigation, route }: any) {
     const [displayName, setDisplayName] = useState(initialGroupName || '');
     const [displayAvatar, setDisplayAvatar] = useState(initialGroupAvatar || '');
 
+    // Mute/Pin states
+    const [isMuted, setIsMuted] = useState(false);
+    const [isPinned, setIsPinned] = useState(false);
+
     const finalCreatorId = fetchedCreatorId || paramCreatorId;
 
     useEffect(() => {
@@ -60,6 +64,8 @@ export default function GroupInfoScreen({ navigation, route }: any) {
             if (data) {
                 if (data.creator_id) setFetchedCreatorId(data.creator_id);
                 if (data.members) setMembers(data.members);
+                if (data.is_muted !== undefined) setIsMuted(data.is_muted);
+                if (data.is_pinned !== undefined) setIsPinned(data.is_pinned);
             }
         } catch (e) {
             console.log(e);
@@ -177,6 +183,33 @@ export default function GroupInfoScreen({ navigation, route }: any) {
                 }
             }
         ]);
+    };
+
+    // Toggle Mute/Pin Functions
+    const toggleMute = async () => {
+        try {
+            const newMuted = !isMuted;
+            await apiRequest(`/api/groups/${groupId}/mute`, {
+                method: 'POST',
+                body: JSON.stringify({ muted: newMuted })
+            });
+            setIsMuted(newMuted);
+        } catch (e) {
+            Alert.alert('Lỗi', 'Không thể thay đổi trạng thái thông báo');
+        }
+    };
+
+    const togglePin = async () => {
+        try {
+            const newPinned = !isPinned;
+            await apiRequest(`/api/groups/${groupId}/pin`, {
+                method: 'POST',
+                body: JSON.stringify({ pinned: newPinned })
+            });
+            setIsPinned(newPinned);
+        } catch (e) {
+            Alert.alert('Lỗi', 'Không thể thay đổi trạng thái ghim');
+        }
     };
 
     // Edit Group Functions
@@ -349,6 +382,23 @@ export default function GroupInfoScreen({ navigation, route }: any) {
                             <Text style={styles.editNameText}>Chỉnh sửa</Text>
                         </TouchableOpacity>
                     )}
+
+                    {/* Quick Actions: Mute & Pin */}
+                    <View style={styles.quickActions}>
+                        <TouchableOpacity style={styles.quickActionBtn} onPress={toggleMute}>
+                            <View style={[styles.quickActionIcon, isMuted && styles.quickActionIconActive]}>
+                                <Ionicons name={isMuted ? "notifications-off" : "notifications-outline"} size={20} color={isMuted ? "#FFF" : "#666"} />
+                            </View>
+                            <Text style={styles.quickActionText}>{isMuted ? "Bật thông báo" : "Tắt thông báo"}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.quickActionBtn} onPress={togglePin}>
+                            <View style={[styles.quickActionIcon, isPinned && styles.quickActionIconActive]}>
+                                <Ionicons name={isPinned ? "pin" : "pin-outline"} size={20} color={isPinned ? "#FFF" : "#666"} />
+                            </View>
+                            <Text style={styles.quickActionText}>{isPinned ? "Bỏ ghim" : "Ghim"}</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <View style={styles.tabBar}>
@@ -608,5 +658,11 @@ const styles = StyleSheet.create({
     editInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 16 },
     // Add button
     addBtn: { backgroundColor: '#0084FF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
-    addBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 }
+    addBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+    // Quick actions
+    quickActions: { flexDirection: 'row', justifyContent: 'center', marginTop: 16, gap: 24 },
+    quickActionBtn: { alignItems: 'center' },
+    quickActionIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#F2F2F2', justifyContent: 'center', alignItems: 'center' },
+    quickActionIconActive: { backgroundColor: '#0084FF' },
+    quickActionText: { marginTop: 6, fontSize: 12, color: '#666' }
 });

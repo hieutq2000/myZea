@@ -30,10 +30,20 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                     group_id VARCHAR(36) NOT NULL,
                     user_id VARCHAR(36) NOT NULL,
                     role VARCHAR(20) DEFAULT 'member',
+                    is_muted BOOLEAN DEFAULT FALSE,
+                    is_pinned BOOLEAN DEFAULT FALSE,
                     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE KEY unique_member (group_id, user_id)
                 )
             `);
+
+            // Ensure is_muted and is_pinned columns exist for existing tables
+            try {
+                await pool.execute('ALTER TABLE group_members ADD COLUMN is_muted BOOLEAN DEFAULT FALSE');
+            } catch (e) { /* Column exists */ }
+            try {
+                await pool.execute('ALTER TABLE group_members ADD COLUMN is_pinned BOOLEAN DEFAULT FALSE');
+            } catch (e) { /* Column exists */ }
 
             // Create message_read_receipts table for tracking who read messages
             await pool.execute(`
@@ -210,6 +220,7 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
             const [groups] = await pool.execute(`
                 SELECT 
                     g.id, g.name, g.avatar, g.creator_id, g.created_at, g.updated_at,
+                    gm.is_muted, gm.is_pinned,
                     (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as memberCount,
                     lm.id as last_msg_id,
                     lm.content as last_msg_content,
@@ -229,7 +240,7 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                     ) m2 ON m1.group_id = m2.group_id AND m1.created_at = m2.max_created
                 ) lm ON lm.group_id = g.id
                 LEFT JOIN users lu ON lm.sender_id COLLATE utf8mb4_unicode_ci = lu.id COLLATE utf8mb4_unicode_ci
-                ORDER BY COALESCE(lm.created_at, g.updated_at) DESC
+                ORDER BY gm.is_pinned DESC, COALESCE(lm.created_at, g.updated_at) DESC
             `, [userId]);
 
             console.log('📦 Found groups count:', groups.length);
@@ -287,6 +298,8 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
                     creator_id: group.creator_id,
                     created_at: group.created_at,
                     updated_at: group.updated_at,
+                    is_muted: !!group.is_muted,
+                    is_pinned: !!group.is_pinned,
                     members,
                     memberCount: group.memberCount || members.length,
                     unreadCount: unreadCounts[group.id] || 0,
@@ -693,6 +706,48 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
 
         } catch (error) {
             console.error('Delete group error:', error);
+            res.status(500).json({ error: 'Lỗi server' });
+        }
+    });
+
+    // ============ MUTE / PIN GROUP ============
+
+    // Toggle mute group
+    app.post('/api/groups/:id/mute', authenticateToken, async (req, res) => {
+        try {
+            const groupId = req.params.id;
+            const userId = req.user.id;
+            const { muted } = req.body; // true or false
+
+            await pool.execute(
+                'UPDATE group_members SET is_muted = ? WHERE group_id = ? AND user_id = ?',
+                [muted ? 1 : 0, groupId, userId]
+            );
+
+            res.json({ success: true, is_muted: muted });
+
+        } catch (error) {
+            console.error('Mute group error:', error);
+            res.status(500).json({ error: 'Lỗi server' });
+        }
+    });
+
+    // Toggle pin group
+    app.post('/api/groups/:id/pin', authenticateToken, async (req, res) => {
+        try {
+            const groupId = req.params.id;
+            const userId = req.user.id;
+            const { pinned } = req.body; // true or false
+
+            await pool.execute(
+                'UPDATE group_members SET is_pinned = ? WHERE group_id = ? AND user_id = ?',
+                [pinned ? 1 : 0, groupId, userId]
+            );
+
+            res.json({ success: true, is_pinned: pinned });
+
+        } catch (error) {
+            console.error('Pin group error:', error);
             res.status(500).json({ error: 'Lỗi server' });
         }
     });
