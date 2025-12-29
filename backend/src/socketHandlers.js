@@ -508,6 +508,135 @@ module.exports = function (io, pool) {
             }
         });
 
+        // ============ FORWARD MESSAGE ============
+
+        socket.on('forwardMessage', async (data) => {
+            const { originalMessage, targetConversationIds, targetGroupIds, senderId } = data;
+
+            if (!originalMessage || !senderId) {
+                socket.emit('forwardError', { error: 'Missing data' });
+                return;
+            }
+
+            try {
+                // Get sender info
+                const [senders] = await pool.execute(
+                    'SELECT id, name, avatar FROM users WHERE id = ?',
+                    [senderId]
+                );
+
+                if (senders.length === 0) {
+                    socket.emit('forwardError', { error: 'Sender not found' });
+                    return;
+                }
+
+                const sender = senders[0];
+                const forwardedResults = [];
+
+                // Forward to individual conversations
+                if (targetConversationIds && targetConversationIds.length > 0) {
+                    for (const convId of targetConversationIds) {
+                        const newMessageId = uuidv4();
+                        const forwardedText = originalMessage.type === 'text'
+                            ? originalMessage.text
+                            : (originalMessage.type === 'image' ? '[Hình ảnh]' :
+                                (originalMessage.type === 'sticker' ? '' : originalMessage.text));
+
+                        // Insert forwarded message
+                        await pool.execute(
+                            `INSERT INTO messages (id, conversation_id, sender_id, content, type, media_url, created_at) 
+                             VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+                            [
+                                newMessageId,
+                                convId,
+                                senderId,
+                                forwardedText,
+                                originalMessage.type || 'text',
+                                originalMessage.imageUrl || null
+                            ]
+                        );
+
+                        // Update conversation last_message
+                        await pool.execute(
+                            `UPDATE conversations SET last_message_id = ?, updated_at = NOW() WHERE id = ?`,
+                            [newMessageId, convId]
+                        );
+
+                        // Emit to the target conversation room
+                        const newMessage = {
+                            id: newMessageId,
+                            conversationId: convId,
+                            senderId: senderId,
+                            senderName: sender.name,
+                            senderAvatar: sender.avatar,
+                            text: forwardedText,
+                            type: originalMessage.type || 'text',
+                            imageUrl: originalMessage.imageUrl,
+                            isForwarded: true,
+                            createdAt: new Date().toISOString()
+                        };
+
+                        io.to(convId).emit('receiveMessage', newMessage);
+                        forwardedResults.push({ conversationId: convId, success: true });
+                    }
+                }
+
+                // Forward to groups
+                if (targetGroupIds && targetGroupIds.length > 0) {
+                    for (const groupId of targetGroupIds) {
+                        const newMessageId = uuidv4();
+                        const forwardedText = originalMessage.type === 'text'
+                            ? originalMessage.text
+                            : (originalMessage.type === 'image' ? '[Hình ảnh]' :
+                                (originalMessage.type === 'sticker' ? '' : originalMessage.text));
+
+                        // Insert forwarded group message
+                        await pool.execute(
+                            `INSERT INTO messages (id, group_id, sender_id, content, type, media_url, created_at) 
+                             VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+                            [
+                                newMessageId,
+                                groupId,
+                                senderId,
+                                forwardedText,
+                                originalMessage.type || 'text',
+                                originalMessage.imageUrl || null
+                            ]
+                        );
+
+                        // Emit to the group room
+                        const newMessage = {
+                            id: newMessageId,
+                            groupId: groupId,
+                            senderId: senderId,
+                            senderName: sender.name,
+                            senderAvatar: sender.avatar,
+                            text: forwardedText,
+                            type: originalMessage.type || 'text',
+                            imageUrl: originalMessage.imageUrl,
+                            isForwarded: true,
+                            createdAt: new Date().toISOString()
+                        };
+
+                        io.to(groupId).emit('receiveMessage', newMessage);
+                        forwardedResults.push({ groupId: groupId, success: true });
+                    }
+                }
+
+                // Notify sender of success
+                socket.emit('forwardSuccess', {
+                    results: forwardedResults,
+                    count: forwardedResults.length
+                });
+
+                console.log(`📤 Message forwarded to ${forwardedResults.length} conversations by ${senderId}`);
+
+            } catch (error) {
+                console.error('Forward message error:', error);
+                socket.emit('forwardError', { error: error.message });
+            }
+        });
+
         // ============ DISCONNECT ============
 
         socket.on('disconnect', async () => {

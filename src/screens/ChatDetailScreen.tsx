@@ -18,6 +18,7 @@ import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler'
 import * as Haptics from 'expo-haptics';
 import GroupAvatar from '../components/GroupAvatar';
 import * as Clipboard from 'expo-clipboard';
+import ForwardMessageModal from '../components/ForwardMessageModal';
 
 type ChatDetailRouteProp = RouteProp<RootStackParamList, 'ChatDetail'>;
 
@@ -92,6 +93,11 @@ export default function ChatDetailScreen() {
     const [showMention, setShowMention] = useState(false);
     const [mentionKeyword, setMentionKeyword] = useState('');
     const [groupMembers, setGroupMembers] = useState<any[]>([]);
+
+    // FORWARD MESSAGE STATE
+    const [showForwardModal, setShowForwardModal] = useState(false);
+    const [forwardMessage, setForwardMessage] = useState<any>(null);
+
     const socket = getSocket();
 
     useEffect(() => {
@@ -2097,7 +2103,11 @@ export default function ChatDetailScreen() {
                             </TouchableOpacity>
                             <View style={styles.menuDivider} />
 
-                            <TouchableOpacity style={styles.menuItem} onPress={() => setSelectedMessage(null)}>
+                            <TouchableOpacity style={styles.menuItem} onPress={() => {
+                                setForwardMessage(selectedMessage);
+                                setSelectedMessage(null);
+                                setTimeout(() => setShowForwardModal(true), 100);
+                            }}>
                                 <Text style={styles.menuItemText}>Chuyển tiếp</Text>
                                 <Ionicons name="arrow-redo-outline" size={20} color="white" />
                             </TouchableOpacity>
@@ -2127,6 +2137,17 @@ export default function ChatDetailScreen() {
                     </View>
                 </TouchableOpacity>
             </Modal>
+
+            {/* Forward Message Modal */}
+            <ForwardMessageModal
+                visible={showForwardModal}
+                onClose={() => {
+                    setShowForwardModal(false);
+                    setForwardMessage(null);
+                }}
+                message={forwardMessage}
+                currentUserId={currentUserId || ''}
+            />
         </View >
     );
 }
