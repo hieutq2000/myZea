@@ -106,12 +106,13 @@ export default function ChatListScreen() {
                     lastMessageTime: g.lastMessage?.created_at || g.lastMessage?.createdAt || g.created_at,
                     lastMessageSenderId: g.lastMessage?.sender_id,
                     lastMessageSenderName: g.lastMessage?.sender_name,
+                    lastMessageType: g.lastMessage?.type,
                     time: formatMessageTime(g.lastMessage?.created_at || g.lastMessage?.createdAt || g.created_at),
                     avatar: g.avatar,
                     unread: g.unreadCount || 0,
                     isOnline: false,
-                    isPinned: false,
-                    isMuted: false,
+                    isPinned: g.is_pinned || false,
+                    isMuted: g.is_muted || false,
                     isGroup: true,
                     memberCount: g.memberCount || g.members?.length || 0,
                     members: g.members,
@@ -280,13 +281,23 @@ export default function ChatListScreen() {
         const msg = item.lastMessage;
         const isFromMe = item.lastMessageSenderId === currentUserId;
 
-        // Check for system message first
+        // Check for system message first - show simplified version
         if (item.lastMessageType === 'system' || !item.lastMessageSenderId) {
-            // System message - show as is
-            if (msg.includes('đã tạo nhóm') || msg.includes('đã thêm') ||
-                msg.includes('đã xóa') || msg.includes('đã rời nhóm')) {
-                return msg.length > 35 ? msg.substring(0, 35) + '...' : msg;
+            // System message - show simplified version without full content
+            if (msg.includes('đã tạo nhóm')) {
+                return '📢 Nhóm mới được tạo';
             }
+            if (msg.includes('đã thêm')) {
+                return '👥 Có thành viên mới';
+            }
+            if (msg.includes('đã xóa') || msg.includes('đã rời nhóm')) {
+                return '👋 Có thành viên rời nhóm';
+            }
+            // Other system messages - truncate
+            if (msg.length > 25) {
+                return msg.substring(0, 25) + '...';
+            }
+            return msg;
         }
 
         // Determine prefix based on sender
