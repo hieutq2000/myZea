@@ -1,82 +1,14 @@
-import * as Clipboard from 'expo-clipboard';
-
-// ... (other imports)
-
-// ... existing code ...
-
-const togglePin = async () => {
-    try {
-        const newPinned = !isPinned;
-        await apiRequest(`/api/groups/${groupId}/pin`, {
-            method: 'POST',
-            body: JSON.stringify({ pinned: newPinned })
-        });
-        setIsPinned(newPinned);
-    } catch (e) {
-        Alert.alert('Lỗi', 'Không thể thay đổi trạng thái ghim');
-    }
-};
-
-// --- INVITE LINK LOGIC ---
-const [inviteLink, setInviteLink] = useState('');
-const [inviteCode, setInviteCode] = useState('');
-const [showInviteSection, setShowInviteSection] = useState(false);
-
-useEffect(() => {
-    if (groupId) {
-        loadInviteLink();
-    }
-}, [groupId]);
-
-const loadInviteLink = async () => {
-    try {
-        const res = await apiRequest<{ inviteCode: string, link: string }>(`/api/groups/${groupId}/invite-link`);
-        if (res) {
-            setInviteCode(res.inviteCode);
-            setInviteLink(res.link);
-            setShowInviteSection(true);
-        }
-    } catch (e) {
-        console.log('Cannot load invite link', e);
-    }
-};
-
-const copyInviteLink = async () => {
-    await Clipboard.setStringAsync(inviteLink);
-    Alert.alert('Đã sao chép', 'Link tham gia nhóm đã được sao chép vào bộ nhớ tạm.');
-};
-
-const resetInviteLink = async () => {
-    if (!isMeAdmin) {
-        Alert.alert('Thông báo', 'Chỉ quản trị viên mới có thể tạo link mới');
-        return;
-    }
-
-    Alert.alert(
-        'Xác nhận',
-        'Link cũ sẽ không còn hiệu lực. Bạn có chắc muốn tạo link mới?',
-        [
-            { text: 'Hủy', style: 'cancel' },
-            {
-                text: 'Tạo mới',
-                onPress: async () => {
-                    try {
-                        const res = await apiRequest<{ inviteCode: string, link: string }>(`/api/groups/${groupId}/reset-invite-link`, {
-                            method: 'POST'
-                        });
-                        if (res) {
-                            setInviteCode(res.inviteCode);
-                            setInviteLink(res.link);
-                            Alert.alert('Thành công', 'Đã tạo link mời mới');
-                        }
-                    } catch (e) {
-                        Alert.alert('Lỗi', 'Không thể tạo link mới');
-                    }
-                }
-            }
-        ]
-    );
-};
+import React, { useState, useEffect } from 'react';
+import {
+    View, Text, StyleSheet, TouchableOpacity, FlatList,
+    StatusBar, Platform, Alert, TextInput, SafeAreaView, Modal, ActivityIndicator
+} from 'react-native';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
+import { getAvatarUri } from '../utils/media';
+import { apiRequest, getCurrentUser, uploadImage, getImageUrl } from '../utils/api';
+import GroupAvatar from '../components/GroupAvatar';
+import { launchImageLibrary } from '../utils/imagePicker';
 
 interface Member {
     id: string;
@@ -280,67 +212,6 @@ export default function GroupInfoScreen({ navigation, route }: any) {
         }
     };
 
-    // --- INVITE LINK LOGIC ---
-    const [inviteLink, setInviteLink] = useState('');
-    const [inviteCode, setInviteCode] = useState('');
-    const [showInviteSection, setShowInviteSection] = useState(false);
-
-    useEffect(() => {
-        if (groupId) {
-            loadInviteLink();
-        }
-    }, [groupId]);
-
-    const loadInviteLink = async () => {
-        try {
-            const res = await apiRequest<{ inviteCode: string, link: string }>(`/api/groups/${groupId}/invite-link`);
-            if (res) {
-                setInviteCode(res.inviteCode);
-                setInviteLink(res.link);
-                setShowInviteSection(true);
-            }
-        } catch (e) {
-            console.log('Cannot load invite link', e);
-        }
-    };
-
-    const copyInviteLink = async () => {
-        await Clipboard.setStringAsync(inviteLink);
-        Alert.alert('Đã sao chép', 'Link tham gia nhóm đã được sao chép vào bộ nhớ tạm.');
-    };
-
-    const resetInviteLink = async () => {
-        if (!isAdmin) {
-            Alert.alert('Thông báo', 'Chỉ quản trị viên mới có thể tạo link mới');
-            return;
-        }
-
-        Alert.alert(
-            'Xác nhận',
-            'Link cũ sẽ không còn hiệu lực. Bạn có chắc muốn tạo link mới?',
-            [
-                { text: 'Hủy', style: 'cancel' },
-                {
-                    text: 'Tạo mới',
-                    onPress: async () => {
-                        try {
-                            const res = await apiRequest<{ inviteCode: string, link: string }>(`/api/groups/${groupId}/reset-invite-link`, {
-                                method: 'POST'
-                            });
-                            if (res) {
-                                setInviteCode(res.inviteCode);
-                                setInviteLink(res.link);
-                                Alert.alert('Thành công', 'Đã tạo link mời mới');
-                            }
-                        } catch (e) {
-                            Alert.alert('Lỗi', 'Không thể tạo link mới');
-                        }
-                    }
-                }
-            ]
-        );
-    };
-
     // Edit Group Functions
     const openEditModal = () => {
         setEditName(displayName);
@@ -527,30 +398,7 @@ export default function GroupInfoScreen({ navigation, route }: any) {
                             </View>
                             <Text style={styles.quickActionText}>{isPinned ? "Bỏ ghim" : "Ghim"}</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.quickActionBtn} onPress={() => setShowInviteSection(!showInviteSection)}>
-                            <View style={[styles.quickActionIcon, showInviteSection && styles.quickActionIconActive]}>
-                                <Ionicons name="link-outline" size={20} color={showInviteSection ? "#FFF" : "#666"} />
-                            </View>
-                            <Text style={styles.quickActionText}>Link nhóm</Text>
-                        </TouchableOpacity>
                     </View>
-
-                    {showInviteSection && (
-                        <View style={styles.inviteSection}>
-                            <Text style={styles.inviteSectionTitle}>Chia sẻ link tham gia nhóm</Text>
-                            <TouchableOpacity onPress={copyInviteLink} style={styles.inviteLinkBox}>
-                                <Text style={styles.inviteLinkText} numberOfLines={1}>{inviteLink || 'Đang tải...'}</Text>
-                                <Ionicons name="copy-outline" size={20} color="#0084FF" />
-                            </TouchableOpacity>
-                            {isMeAdmin && (
-                                <TouchableOpacity onPress={resetInviteLink} style={styles.resetLinkBtn}>
-                                    <Ionicons name="refresh-circle-outline" size={18} color="#666" />
-                                    <Text style={styles.resetLinkText}>Tạo link mới (Link cũ sẽ vô hiệu)</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    )}
                 </View>
 
                 <View style={styles.tabBar}>
@@ -796,47 +644,6 @@ const styles = StyleSheet.create({
     modalContent: { width: '90%', backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
     modalCancel: { color: '#666', fontSize: 16 },
-    // INVITE LINK STYLES
-    inviteSection: {
-        marginTop: 15,
-        backgroundColor: '#F5F9FF',
-        padding: 15,
-        borderRadius: 12,
-        width: '100%'
-    },
-    inviteSectionTitle: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#0084FF',
-        marginBottom: 10
-    },
-    inviteLinkBox: {
-        flexDirection: 'row',
-        backgroundColor: '#FFF',
-        borderWidth: 1,
-        borderColor: '#B3D7FF',
-        borderRadius: 8,
-        padding: 10,
-        alignItems: 'center',
-        marginBottom: 10
-    },
-    inviteLinkText: {
-        flex: 1,
-        fontSize: 14,
-        color: '#333',
-        marginRight: 10
-    },
-    resetLinkBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 5
-    },
-    resetLinkText: {
-        fontSize: 13,
-        color: '#666',
-        marginLeft: 6
-    },
     modalTitle: { fontSize: 17, fontWeight: '600', color: '#000' },
     modalSave: { color: '#0084FF', fontSize: 16, fontWeight: '600' },
     // Edit avatar section

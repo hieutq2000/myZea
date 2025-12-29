@@ -3,7 +3,7 @@ module.exports = {
         name: "myZyea",
         slug: "vinalive-ai-mobile",
         scheme: "zyea", // URL scheme for deep linking
-        version: "1.1.7",
+        version: "1.1.9",
         orientation: "portrait",
         icon: "./assets/icon-christmas.png",
         userInterfaceStyle: "automatic",
@@ -27,6 +27,7 @@ module.exports = {
                 NSMicrophoneUsageDescription: "Ứng dụng cần quyền microphone để ghi âm câu trả lời của bạn.",
                 NSPhotoLibraryUsageDescription: "Ứng dụng cần quyền truy cập thư viện ảnh để chọn ảnh đại diện.",
                 NSPhotoLibraryAddUsageDescription: "Ứng dụng cần quyền lưu ảnh vào thư viện của bạn.",
+                NSLocationWhenInUseUsageDescription: "Ứng dụng cần quyền vị trí để chia sẻ vị trí của bạn trong chat.",
                 // Allow HTTP connections to VPS server
                 NSAppTransportSecurity: {
                     NSAllowsArbitraryLoads: true,
@@ -58,7 +59,9 @@ module.exports = {
                 "android.permission.READ_EXTERNAL_STORAGE",
                 "android.permission.WRITE_EXTERNAL_STORAGE",
                 "android.permission.MODIFY_AUDIO_SETTINGS",
-                "android.permission.POST_NOTIFICATIONS"
+                "android.permission.POST_NOTIFICATIONS",
+                "android.permission.ACCESS_FINE_LOCATION",
+                "android.permission.ACCESS_COARSE_LOCATION"
             ]
         },
         web: {
@@ -104,6 +107,12 @@ module.exports = {
                 {
                     microphonePermission: "Cho phép $(PRODUCT_NAME) nhận dạng giọng nói của bạn.",
                     speechRecognitionPermission: "Cho phép $(PRODUCT_NAME) nhận dạng giọng nói của bạn."
+                }
+            ],
+            [
+                "expo-location",
+                {
+                    locationWhenInUsePermission: "Cho phép $(PRODUCT_NAME) truy cập vị trí để chia sẻ trong chat."
                 }
             ],
             "./plugins/withManifestFix",
