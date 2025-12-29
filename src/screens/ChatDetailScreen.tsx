@@ -98,6 +98,12 @@ export default function ChatDetailScreen() {
     const [showForwardModal, setShowForwardModal] = useState(false);
     const [forwardMessage, setForwardMessage] = useState<any>(null);
 
+    // SEARCH MESSAGE STATE
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searchLoading, setSearchLoading] = useState(false);
+
     const socket = getSocket();
 
     useEffect(() => {
@@ -908,98 +914,214 @@ export default function ChatDetailScreen() {
         return `${day} thg ${month}, ${time}`;
     };
 
-    const renderHeader = () => (
-        <View style={styles.header}>
-            <View style={styles.headerLeft}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Ionicons name="chevron-back" size={28} color="#000000" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={{ flexDirection: 'row', alignItems: 'center' }}
-                    onPress={() => {
-                        if (isGroup && groupId) {
-                            (navigation as any).navigate('GroupInfo', {
-                                groupId,
-                                groupName: headerName,
-                                groupAvatar: headerAvatar,
-                                members,
-                                creatorId: undefined // Will be loaded in GroupInfoScreen
-                            });
-                        }
-                    }}
-                    disabled={!isGroup}
-                >
-                    <View style={styles.headerAvatarContainer}>
-                        {isGroup ? (
-                            <GroupAvatar
-                                members={members}
-                                groupAvatar={headerAvatar}
-                                groupName={headerName}
-                                size={42}
-                            />
-                        ) : headerAvatar ? (
-                            <Image
-                                source={{ uri: getAvatarUri(headerAvatar, headerName) }}
-                                style={styles.headerAvatar}
-                            />
-                        ) : (
-                            <View style={[styles.headerAvatar, { backgroundColor: '#E4E6EB', alignItems: 'center', justifyContent: 'center' }]}>
-                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#666' }}>
-                                    {headerName?.[0]?.toUpperCase()}
-                                </Text>
-                            </View>
+    // Search Functions
+    const handleSearch = async (query: string) => {
+        setSearchQuery(query);
+        if (query.trim().length === 0) {
+            setSearchResults([]);
+            return;
+        }
+
+        if (query.trim().length < 2) return;
+
+        try {
+            setSearchLoading(true);
+            const results = await apiRequest<any[]>(`/api/groups/${groupId}/search?q=${encodeURIComponent(query)}`);
+            setSearchResults(results || []);
+        } catch (e) {
+            console.log('Search error', e);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
+    const handleNavigateToMessage = (messageId: string) => {
+        setIsSearching(false);
+        setSearchQuery('');
+        setSearchResults([]);
+        scrollToMessage(messageId);
+    };
+
+    const renderSearchResults = () => {
+        if (!isSearching || !searchQuery) return null;
+
+        return (
+            <View style={styles.searchResultsContainer}>
+                {searchLoading ? (
+                    <ActivityIndicator size="small" color={ZALO_BLUE} style={{ marginTop: 20 }} />
+                ) : searchResults.length > 0 ? (
+                    <FlatList
+                        data={searchResults}
+                        keyExtractor={item => item.id}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity
+                                style={styles.searchResultItem}
+                                onPress={() => handleNavigateToMessage(item.id)}
+                            >
+                                <Image source={{ uri: getAvatarUri(item.senderAvatar, item.senderName) }} style={styles.searchResultAvatar} />
+                                <View style={styles.searchResultContent}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <Text style={styles.searchResultName} numberOfLines={1}>{item.senderName}</Text>
+                                        <Text style={styles.searchResultTime}>{item.time}</Text>
+                                    </View>
+                                    <Text style={styles.searchResultText} numberOfLines={2}>
+                                        {item.text}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
                         )}
-                        {!isGroup && isPartnerOnline && <View style={styles.onlineIndicator} />}
+                        contentContainerStyle={{ paddingBottom: 20 }}
+                    />
+                ) : searchQuery.length > 1 ? (
+                    <View style={{ alignItems: 'center', marginTop: 20 }}>
+                        <Text style={{ color: '#666' }}>Không tìm thấy kết quả</Text>
                     </View>
-                    <View style={styles.headerInfo}>
-                        <Text style={styles.headerTitle} numberOfLines={1}>{headerName}</Text>
-                        <Text style={[
-                            styles.headerSubtitle,
-                            !isGroup && isPartnerOnline && { color: '#31A24C' }
-                        ]} numberOfLines={1}>
-                            {isGroup ? `${members?.length || 0} thành viên` : formatLastSeen()}
-                        </Text>
-                    </View>
-                </TouchableOpacity>
+                ) : null}
             </View>
-            <View style={styles.headerRight}>
-                {/* Only show call buttons for 1-1 chat, not group */}
-                {!isGroup && (
-                    <>
-                        <TouchableOpacity
-                            style={styles.headerIconCircle}
-                            onPress={() => (navigation as any).navigate('Call', {
-                                partnerId,
-                                userName,
-                                avatar,
-                                isVideo: false,
-                                isIncoming: false,
-                                conversationId,
-                            })}
-                        >
-                            <Ionicons name="call" size={18} color="#FFFFFF" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.headerIconCircle}
-                            onPress={() => (navigation as any).navigate('Call', {
-                                partnerId,
-                                userName,
-                                avatar,
-                                isVideo: true,
-                                isIncoming: false,
-                                conversationId,
-                            })}
-                        >
-                            <Ionicons name="videocam" size={18} color="#FFFFFF" />
-                        </TouchableOpacity>
+        );
+    };
+
+    const renderHeader = () => {
+        if (isSearching) {
+            return (
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => {
+                        setIsSearching(false);
+                        setSearchQuery('');
+                        setSearchResults([]);
+                    }} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color="#000" />
+                    </TouchableOpacity>
+                    <View style={styles.searchBarContainer}>
+                        <TextInput
+                            style={styles.headerSearchInput}
+                            placeholder="Tìm tin nhắn..."
+                            value={searchQuery}
+                            onChangeText={handleSearch}
+                            autoFocus
+                            placeholderTextColor="#999"
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => {
+                                setSearchQuery('');
+                                setSearchResults([]);
+                            }}>
+                                <Ionicons name="close-circle" size={18} color="#999" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.header}>
+                <View style={styles.headerLeft}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <Ionicons name="chevron-back" size={28} color="#000000" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center' }}
+                        onPress={() => {
+                            if (isGroup && groupId) {
+                                (navigation as any).navigate('GroupInfo', {
+                                    groupId,
+                                    groupName: headerName,
+                                    groupAvatar: headerAvatar,
+                                    members,
+                                    creatorId: undefined
+                                });
+                            }
+                        }}
+                        disabled={!isGroup}
+                    >
+                        <View style={styles.headerAvatarContainer}>
+                            {isGroup ? (
+                                <GroupAvatar
+                                    members={members}
+                                    groupAvatar={headerAvatar}
+                                    groupName={headerName}
+                                    size={42}
+                                />
+                            ) : headerAvatar ? (
+                                <Image
+                                    source={{ uri: getAvatarUri(headerAvatar, headerName) }}
+                                    style={styles.headerAvatar}
+                                />
+                            ) : (
+                                <View style={[styles.headerAvatar, { backgroundColor: '#E4E6EB', alignItems: 'center', justifyContent: 'center' }]}>
+                                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#666' }}>
+                                        {headerName?.[0]?.toUpperCase()}
+                                    </Text>
+                                </View>
+                            )}
+                            {!isGroup && isPartnerOnline && <View style={styles.onlineIndicator} />}
+                        </View>
+                        <View style={styles.headerInfo}>
+                            <Text style={styles.headerTitle} numberOfLines={1}>{headerName}</Text>
+                            <Text style={[
+                                styles.headerSubtitle,
+                                !isGroup && isPartnerOnline && { color: '#31A24C' }
+                            ]} numberOfLines={1}>
+                                {isGroup ? `${members?.length || 0} thành viên` : formatLastSeen()}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.headerRight}>
+                    {/* Search Button for all chats */}
+                    <TouchableOpacity
+                        style={[styles.headerIcon, { marginRight: 8 }]}
+                        onPress={() => setIsSearching(true)}
+                    >
+                        <Ionicons name="search" size={24} color="#000" />
+                    </TouchableOpacity>
+
+                    {/* Only show call buttons for 1-1 chat, not group */}
+                    {!isGroup && (
+                        <>
+                            <TouchableOpacity
+                                style={styles.headerIconCircle}
+                                onPress={() => (navigation as any).navigate('Call', {
+                                    partnerId,
+                                    userName,
+                                    avatar,
+                                    isVideo: false,
+                                    isIncoming: false,
+                                    conversationId,
+                                })}
+                            >
+                                <Ionicons name="call" size={18} color="#FFFFFF" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.headerIconCircle}
+                                onPress={() => (navigation as any).navigate('Call', {
+                                    partnerId,
+                                    userName,
+                                    avatar,
+                                    isVideo: true,
+                                    isIncoming: false,
+                                    conversationId,
+                                })}
+                            >
+                                <Ionicons name="videocam" size={18} color="#FFFFFF" />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.headerIcon}>
+                                <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
+                            </TouchableOpacity>
+                        </>
+                    )}
+
+                    {/* Menu for group */}
+                    {isGroup && (
                         <TouchableOpacity style={styles.headerIcon}>
-                            <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
+                            <Ionicons name="menu" size={24} color="#000" />
                         </TouchableOpacity>
-                    </>
-                )}
-            </View>
-        </View >
-    );
+                    )}
+                </View>
+            </View >
+        );
+    };
 
 
 
@@ -1592,6 +1714,7 @@ export default function ChatDetailScreen() {
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
             {renderHeader()}
+            {renderSearchResults()}
 
             {pinnedMessage && (
                 <View style={styles.pinnedMessageBar}>
@@ -3117,7 +3240,67 @@ const styles = StyleSheet.create({
     },
     typingIndicatorText: {
         fontSize: 12,
-        color: '#6B7280',
+        color: '#6B7280', // Gray text
         fontStyle: 'italic',
     },
+    // SEARCH STYLES
+    searchBarContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F0F2F5',
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        height: 40,
+        marginLeft: 8
+    },
+    headerSearchInput: {
+        flex: 1,
+        fontSize: 15,
+        color: '#000',
+        paddingVertical: 0
+    },
+    searchResultsContainer: {
+        position: 'absolute',
+        top: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 58 : 100,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#FFFFFF',
+        zIndex: 50,
+        paddingHorizontal: 16
+    },
+    searchResultItem: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#F0F0F0'
+    },
+    searchResultAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#E4E6EB'
+    },
+    searchResultContent: {
+        flex: 1,
+        marginLeft: 12,
+        justifyContent: 'center'
+    },
+    searchResultName: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#000',
+        marginBottom: 2,
+        flex: 1,
+        marginRight: 8
+    },
+    searchResultTime: {
+        fontSize: 12,
+        color: '#666'
+    },
+    searchResultText: {
+        fontSize: 14,
+        color: '#333'
+    }
 });

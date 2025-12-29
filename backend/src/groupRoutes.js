@@ -571,6 +571,62 @@ module.exports = function (app, pool, authenticateToken, uuidv4, formatDateForCl
         }
     });
 
+    // Search Messages in Group
+    app.get('/api/groups/:id/search', authenticateToken, async (req, res) => {
+        try {
+            const groupId = req.params.id;
+            const userId = req.user.id;
+            const query = req.query.q;
+
+            if (!query || query.trim().length === 0) {
+                return res.json([]);
+            }
+
+            // Check membership
+            const [membership] = await pool.execute(
+                'SELECT * FROM group_members WHERE group_id = ? AND user_id = ?',
+                [groupId, userId]
+            );
+
+            if (membership.length === 0) {
+                return res.status(403).json({ error: 'Bạn không phải thành viên của nhóm này' });
+            }
+
+            // Search messages
+            const [messages] = await pool.execute(`
+                SELECT m.*, u.name as sender_name, u.avatar as sender_avatar
+                FROM messages m
+                LEFT JOIN users u ON m.sender_id COLLATE utf8mb4_unicode_ci = u.id COLLATE utf8mb4_unicode_ci
+                WHERE m.group_id = ? 
+                AND m.content LIKE ?
+                AND m.type = 'text'
+                ORDER BY m.created_at DESC
+                LIMIT 50
+            `, [groupId, `%${query}%`]);
+
+            // Format messages
+            const formatted = messages.map(m => ({
+                id: m.id,
+                text: m.content,
+                type: m.type || 'text',
+                imageUrl: m.image_url,
+                senderId: m.sender_id,
+                senderName: m.sender_name,
+                senderAvatar: m.sender_avatar,
+                groupId: m.group_id,
+                createdAt: formatDateForClient(m.created_at),
+                rawTime: m.created_at, // For sorting/jumping if needed
+                time: new Date(m.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+            }));
+
+            res.json(formatted);
+
+        } catch (error) {
+            console.error('Search group messages error:', error);
+            res.status(500).json({ error: 'Lỗi server' });
+        }
+    });
+
     // Leave Group
     app.post('/api/groups/:id/leave', authenticateToken, async (req, res) => {
         try {
