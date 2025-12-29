@@ -544,7 +544,7 @@ module.exports = function (io, pool) {
 
                         // Insert forwarded message
                         await pool.execute(
-                            `INSERT INTO messages (id, conversation_id, sender_id, content, type, media_url, created_at) 
+                            `INSERT INTO messages (id, conversation_id, sender_id, content, type, image_url, created_at) 
                              VALUES (?, ?, ?, ?, ?, ?, NOW())`,
                             [
                                 newMessageId,
@@ -592,7 +592,7 @@ module.exports = function (io, pool) {
 
                         // Insert forwarded group message
                         await pool.execute(
-                            `INSERT INTO messages (id, group_id, sender_id, content, type, media_url, created_at) 
+                            `INSERT INTO messages (id, group_id, sender_id, content, type, image_url, created_at) 
                              VALUES (?, ?, ?, ?, ?, ?, NOW())`,
                             [
                                 newMessageId,
