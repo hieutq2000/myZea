@@ -5,7 +5,7 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { ActivityIndicator, View, Text, Alert, AppState } from 'react-native';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
+import PlaceProfileScreen from './src/screens/PlaceProfileScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import LiveSessionScreen from './src/screens/LiveSessionScreen';
 import SplashScreen from './src/screens/SplashScreen';
@@ -30,7 +30,7 @@ import MaintenanceScreen from './src/screens/MaintenanceScreen';
 import ForceUpdateModal from './src/components/ForceUpdateModal';
 import { getSystemSettings } from './src/utils/api';
 
-type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'PROFILE' | 'SESSION' | 'PLACE' | 'ONBOARDING' | 'STORE';
+type ViewType = 'AUTH' | 'HOME' | 'HISTORY' | 'SESSION' | 'PLACE' | 'ONBOARDING' | 'STORE';
 
 interface SessionConfig {
   mode: LiveMode;
@@ -496,15 +496,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
           />
         );
 
-      case 'PROFILE':
-        return (
-          <ProfileScreen
-            user={user}
-            onUpdate={handleUpdateUser}
-            onCancel={() => setView('HOME')}
-            onLogout={handleLogout}
-          />
-        );
+
 
       case 'SESSION':
         if (!sessionConfig) {
@@ -527,7 +519,6 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
       case 'STORE':
         return (
           <StoreScreen
-            onNavigateToProfile={() => setView('PROFILE')}
             onNavigateToSettings={() => {
               if (navigationRef.isReady()) {
                 navigationRef.navigate('Settings');
@@ -545,7 +536,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
           <HomeScreen
             user={user}
             onLogout={handleLogout}
-            onOpenProfile={() => setView('PROFILE')}
+            onOpenProfile={() => setView('STORE')}
             onStartSession={handleStartSession}
             onViewTasks={() => setView('HISTORY')}
           />
@@ -557,7 +548,6 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   const getActiveTab = (): TabType => {
     if (view === 'HOME') return 'HOME';
     if (view === 'HISTORY') return 'HISTORY';
-    if (view === 'PROFILE') return 'PROFILE'; // Profile still can be accessed from Store
     if (view === 'STORE') return 'PROFILE'; // Store uses PROFILE tab
     if (view === 'PLACE') return 'PLACE';
     return 'HOME';

@@ -28,6 +28,7 @@ import { isVideo, getUri } from '../utils/media';
 import VideoPlayer from '../components/VideoPlayer';
 import PostCard from '../components/PostCard';
 import { useNavigation } from '@react-navigation/native';
+import AboutScreen from './AboutScreen';
 
 const { width } = Dimensions.get('window');
 const COVER_HEIGHT = 200;
@@ -59,6 +60,7 @@ export default function PlaceProfileScreen({
     const [newPostText, setNewPostText] = useState('');
     const [modalVisible, setModalVisible] = useState(false);
     const [modalType, setModalType] = useState<'AVATAR' | 'COVER'>('AVATAR');
+    const [showAboutScreen, setShowAboutScreen] = useState(false);
 
     // Helper to get valid image URL with fallback
     // Uses getImageUrl to handle IP changes automatically
@@ -296,6 +298,20 @@ export default function PlaceProfileScreen({
         { icon: 'account-group-outline', label: `Có ${followerCount} người theo dõi` },
     ];
 
+    // Show AboutScreen when editing profile
+    if (showAboutScreen) {
+        return (
+            <AboutScreen
+                user={user}
+                onBack={() => setShowAboutScreen(false)}
+                onUpdate={(updatedUser) => {
+                    // TODO: Update user state here if needed
+                    setShowAboutScreen(false);
+                }}
+            />
+        );
+    }
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -383,7 +399,7 @@ export default function PlaceProfileScreen({
                     <View style={styles.actionRow}>
                         {isOwnProfile ? (
                             <>
-                                <TouchableOpacity style={styles.editButton} onPress={onEditProfile}>
+                                <TouchableOpacity style={styles.editButton} onPress={() => setShowAboutScreen(true)}>
                                     <Feather name="edit-2" size={16} color="#333" />
                                     <Text style={styles.editButtonText}>Chỉnh sửa trang cá nhân</Text>
                                 </TouchableOpacity>
@@ -440,11 +456,18 @@ export default function PlaceProfileScreen({
                             </View>
                         ))}
 
-                        {/* See Organization Chart Link */}
-                        <TouchableOpacity style={styles.orgChartLink}>
-                            <MaterialCommunityIcons name="sitemap" size={20} color="#65676B" />
-                            <Text style={styles.orgChartText}>Sơ đồ tổ chức</Text>
-                        </TouchableOpacity>
+                        {/* Birthday */}
+                        <View style={styles.detailRow}>
+                            <MaterialCommunityIcons
+                                name="cake-variant"
+                                size={20}
+                                color="#65676B"
+                                style={styles.detailIcon}
+                            />
+                            <Text style={styles.detailText}>
+                                {user?.birthday ? new Date(user.birthday).toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' }) : 'Chưa cập nhật ngày sinh'}
+                            </Text>
+                        </View>
                     </View>
                 </View>
 
@@ -1059,5 +1082,114 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '500',
         color: '#050505',
+    },
+
+    // Level & XP Styles
+    levelXpSection: {
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 8,
+    },
+    levelHeader: {
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    levelBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 4,
+    },
+    levelText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#92400E',
+    },
+    xpContainer: {
+        backgroundColor: '#F5F5F5',
+        borderRadius: 12,
+        padding: 12,
+    },
+    xpHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    xpText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#F97316',
+    },
+    xpNext: {
+        fontSize: 12,
+        color: '#65676B',
+    },
+    xpBar: {
+        height: 8,
+        backgroundColor: '#E4E6EB',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    xpProgress: {
+        height: '100%',
+        backgroundColor: '#F97316',
+        borderRadius: 4,
+    },
+
+    // Badges Styles
+    badgesSection: {
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 8,
+    },
+    badgesHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+        gap: 8,
+    },
+    badgesTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1C1E21',
+        flex: 1,
+    },
+    badgesCount: {
+        fontSize: 14,
+        color: '#65676B',
+    },
+    badgesGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    badgeCard: {
+        width: '30%',
+        alignItems: 'center',
+        padding: 12,
+        backgroundColor: '#F5F5F5',
+        borderRadius: 12,
+    },
+    badgeLocked: {
+        opacity: 0.4,
+    },
+    badgeIcon: {
+        fontSize: 28,
+        marginBottom: 4,
+    },
+    badgeIconLocked: {
+        opacity: 0.5,
+    },
+    badgeName: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#1C1E21',
+        textAlign: 'center',
+    },
+    badgeNameLocked: {
+        color: '#65676B',
     },
 });

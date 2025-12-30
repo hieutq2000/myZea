@@ -63,6 +63,16 @@ export interface User {
     followerCount?: number;
     followingCount?: number;
     isFollowing?: boolean;
+    // Personal info
+    birthday?: string; // ISO date string
+    bio?: string;
+    phone?: string;
+    location?: string;
+    // Work info
+    company?: string;
+    department?: string;
+    position?: string;
+    manager?: string;
 }
 
 export enum AuthView {

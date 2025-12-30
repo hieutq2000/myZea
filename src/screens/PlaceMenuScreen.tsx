@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
     View,
     Text,
@@ -7,11 +7,17 @@ import {
     Image,
     ScrollView,
     StatusBar,
+    PanResponder,
+    Animated,
+    Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getAvatarUri } from '../utils/media';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SWIPE_THRESHOLD = 80; // Minimum swipe distance to trigger back
 
 interface PlaceMenuScreenProps {
     user: any;
@@ -38,6 +44,42 @@ export default function PlaceMenuScreen({
     onGoToDrafts,
     onViewProfile
 }: PlaceMenuScreenProps) {
+
+    // Swipe gesture animation
+    const translateX = useRef(new Animated.Value(0)).current;
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                // Only respond to horizontal swipes starting from left edge
+                return gestureState.dx > 10 && Math.abs(gestureState.dy) < 30 && gestureState.x0 < 50;
+            },
+            onPanResponderMove: (_, gestureState) => {
+                if (gestureState.dx > 0) {
+                    translateX.setValue(gestureState.dx);
+                }
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (gestureState.dx > SWIPE_THRESHOLD) {
+                    // Animate out and go back
+                    Animated.timing(translateX, {
+                        toValue: SCREEN_WIDTH,
+                        duration: 200,
+                        useNativeDriver: true,
+                    }).start(() => {
+                        onBack();
+                    });
+                } else {
+                    // Reset position
+                    Animated.spring(translateX, {
+                        toValue: 0,
+                        useNativeDriver: true,
+                    }).start();
+                }
+            },
+        })
+    ).current;
 
     const menuItems: MenuItem[] = [
         {
@@ -78,11 +120,14 @@ export default function PlaceMenuScreen({
     };
 
     return (
-        <View style={styles.container}>
+        <Animated.View
+            style={[styles.container, { transform: [{ translateX }] }]}
+            {...panResponder.panHandlers}
+        >
             <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
             {/* Header */}
-            <SafeAreaView style={styles.headerSafeArea}>
+            <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Menu</Text>
                     <TouchableOpacity style={styles.searchButton}>
@@ -136,7 +181,7 @@ export default function PlaceMenuScreen({
                 </TouchableOpacity>
 
             </ScrollView>
-        </View>
+        </Animated.View>
     );
 }
 
@@ -153,10 +198,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingVertical: 8,
         backgroundColor: '#FFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEE',
     },
     headerTitle: {
         fontSize: 24,

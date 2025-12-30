@@ -1292,33 +1292,25 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
         }
 
         return (
-            <View style={{ flex: 1 }}>
-                <PlaceMenuScreen
-                    user={user}
-                    onBack={() => setPlaceActiveTab('HOME')}
-                    onGoToSettings={() => {
-                        // Navigate to Settings
-                        if (onGoHome) onGoHome();
-                        navigation.navigate('Settings');
-                    }}
-                    onGoToGroups={() => {
-                        setPlaceActiveTab('GROUPS');
-                    }}
-                    onGoToDrafts={() => {
-                        // TODO: Drafts feature
-                    }}
-                    onViewProfile={() => {
-                        // Show Place Profile Screen
-                        setShowProfileScreen(true);
-                    }}
-                />
-                <PlaceBottomBar
-                    activeTab={placeActiveTab}
-                    onTabChange={setPlaceActiveTab}
-                    unreadChatCount={unreadChatCount}
-                    unreadNotifCount={unreadNotifCount}
-                />
-            </View>
+            <PlaceMenuScreen
+                user={user}
+                onBack={() => setPlaceActiveTab('HOME')}
+                onGoToSettings={() => {
+                    // Navigate to Settings
+                    if (onGoHome) onGoHome();
+                    navigation.navigate('Settings');
+                }}
+                onGoToGroups={() => {
+                    setPlaceActiveTab('GROUPS');
+                }}
+                onGoToDrafts={() => {
+                    // TODO: Drafts feature
+                }}
+                onViewProfile={() => {
+                    // Show Place Profile Screen
+                    setShowProfileScreen(true);
+                }}
+            />
         );
     }
 
