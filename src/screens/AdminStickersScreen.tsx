@@ -13,7 +13,8 @@ import {
     ScrollView,
     Modal,
     Platform,
-    SafeAreaView
+    SafeAreaView,
+    StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -359,7 +360,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F5F7FA',
-        paddingTop: Platform.OS === 'android' ? 25 : 0
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0
     },
     header: {
         flexDirection: 'row',

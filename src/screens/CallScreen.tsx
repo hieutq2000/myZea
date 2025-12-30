@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
         paddingVertical: 20,
     },
     topControls: {
-        paddingTop: Platform.OS === 'ios' ? 20 : 40,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 50,
         paddingHorizontal: 20,
         flexDirection: 'row',
     },

@@ -13,7 +13,8 @@ import {
     Alert,
     Keyboard,
     ImageBackground,
-    ScrollView
+    ScrollView,
+    StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome, Feather } from '@expo/vector-icons';
@@ -469,7 +470,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
-        paddingTop: Platform.OS === 'android' ? 30 : 0,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0,
         backgroundColor: 'transparent',
     },
     headerContent: {

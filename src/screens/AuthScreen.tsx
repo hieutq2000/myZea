@@ -924,7 +924,7 @@ const styles = StyleSheet.create({
     },
     headerTextContainer: {
         paddingHorizontal: 30,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 40 : 80,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 40 : 80,
         alignItems: 'center',
     },
     wBrandTitle: {
