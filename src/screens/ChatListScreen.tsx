@@ -15,19 +15,19 @@ import { getConversations, Conversation, getCurrentUser, pinConversation, muteCo
 import { LinearGradient } from 'expo-linear-gradient';
 import { getAvatarUri } from '../utils/media';
 import GroupAvatar from '../components/GroupAvatar';
+import { useTheme } from '../context/ThemeContext';
 
-// Light Theme Colors
-const DARK_BG = '#FFFFFF';
-const DARK_HEADER = '#FFFFFF';
-const DARK_CARD = '#F5F5F5';
-const DARK_TEXT = '#000000';
-const DARK_TEXT_SECONDARY = '#666666';
+// Light Theme Colors (Deprecated - keeping for legacy ref if needed, but unused)
 const ZALO_BLUE = '#0068FF';
-const ONLINE_GREEN = '#34C759';
+const DARK_BG = '#121212';
+const DARK_TEXT = '#E5E7EB';
+const DARK_TEXT_SECONDARY = '#9CA3AF';
+const ONLINE_GREEN = '#22C55E';
 
 type TabType = 'all' | 'unread' | 'muted';
 
 export default function ChatListScreen() {
+    const { colors, isDark } = useTheme();
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
     const [conversations, setConversations] = useState<any[]>([]);
     const [searchText, setSearchText] = useState('');
@@ -95,8 +95,6 @@ export default function ChatListScreen() {
             let mappedGroups: any[] = [];
             try {
                 const groups = await apiRequest<any[]>('/api/groups');
-                console.log('📦 Groups API response:', JSON.stringify(groups, null, 2));
-                console.log('📦 Groups count:', groups?.length || 0);
                 mappedGroups = (groups || []).map((g: any) => ({
                     id: g.id,
                     groupId: g.id,
@@ -117,7 +115,6 @@ export default function ChatListScreen() {
                     memberCount: g.memberCount || g.members?.length || 0,
                     members: g.members,
                 }));
-                console.log('📦 Mapped groups:', mappedGroups.length);
             } catch (e) {
                 console.log('❌ Load groups error:', e);
             }
@@ -468,6 +465,9 @@ export default function ChatListScreen() {
     const renderItem = ({ item }: { item: any }) => {
         const isTyping = typingUsers[item.id];
 
+        // Conditional Styles for items
+        const itemBg = item.isPinned ? (isDark ? '#2D2D2D' : '#F0F9FF') : 'transparent';
+
         return (
             <Swipeable
                 renderRightActions={() => renderRightActions(item)}
@@ -477,7 +477,7 @@ export default function ChatListScreen() {
                 friction={2}
             >
                 <TouchableOpacity
-                    style={[styles.itemContainer, item.isPinned && styles.pinnedItem]}
+                    style={[styles.itemContainer, { backgroundColor: itemBg }]}
                     onPress={() => navigation.navigate('ChatDetail', item.isGroup ? {
                         conversationId: undefined,
                         partnerId: undefined,
@@ -517,9 +517,9 @@ export default function ChatListScreen() {
                                 </LinearGradient>
                             )
                         )}
-                        {!item.isGroup && item.isOnline && <View style={styles.onlineDot} />}
+                        {!item.isGroup && item.isOnline && <View style={[styles.onlineDot, { borderColor: colors.card }]} />}
                         {item.isGroup && item.memberCount > 0 && (
-                            <View style={[styles.onlineDot, { backgroundColor: '#667eea', width: 18, height: 18, borderRadius: 9 }]}>
+                            <View style={[styles.onlineDot, { backgroundColor: '#667eea', width: 18, height: 18, borderRadius: 9, borderColor: colors.card }]}>
                                 <Text style={{ fontSize: 9, color: '#fff', fontWeight: 'bold' }}>
                                     {item.memberCount}
                                 </Text>
@@ -534,24 +534,24 @@ export default function ChatListScreen() {
                                 <Ionicons name="pin" size={14} color={ZALO_BLUE} style={{ marginRight: 4 }} />
                             )}
                             {item.isGroup && (
-                                <Ionicons name="people" size={14} color={DARK_TEXT_SECONDARY} style={{ marginRight: 4 }} />
+                                <Ionicons name="people" size={14} color={colors.textSecondary} style={{ marginRight: 4 }} />
                             )}
-                            <Text style={[styles.name, item.unread > 0 && styles.nameUnread]} numberOfLines={1}>
+                            <Text style={[styles.name, { color: colors.text }, item.unread > 0 && styles.nameUnread]} numberOfLines={1}>
                                 {item.name}
                             </Text>
-                            <Text style={styles.time}>{item.time}</Text>
+                            <Text style={[styles.time, { color: colors.textSecondary }]}>{item.time}</Text>
                         </View>
 
                         <View style={styles.messageRow}>
                             {isTyping ? (
-                                <Text style={styles.typingText} numberOfLines={1}>Đang nhập...</Text>
+                                <Text style={[styles.typingText, { color: colors.primary }]} numberOfLines={1}>Đang nhập...</Text>
                             ) : (
-                                <Text style={[styles.lastMessage, item.unread > 0 && styles.lastMessageUnread]} numberOfLines={1}>
+                                <Text style={[styles.lastMessage, { color: colors.textSecondary }, item.unread > 0 && { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>
                                     {formatLastMessage(item)}
                                 </Text>
                             )}
                             {item.isMuted && (
-                                <Ionicons name="notifications-off" size={14} color={DARK_TEXT_SECONDARY} style={{ marginLeft: 4 }} />
+                                <Ionicons name="notifications-off" size={14} color={colors.textSecondary} style={{ marginLeft: 4 }} />
                             )}
                             {item.unread > 0 && (
                                 <View style={styles.unreadBadge}>
@@ -568,87 +568,77 @@ export default function ChatListScreen() {
     const renderTabs = () => (
         <View style={styles.tabContainer}>
             <TouchableOpacity
-                style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+                style={[styles.tab, { backgroundColor: activeTab === 'all' ? (isDark ? colors.card : '#1F2937') : (isDark ? '#2D2D2D' : '#E5E7EB') }]}
                 onPress={() => setActiveTab('all')}
             >
-                <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>Tất cả</Text>
+                <Text style={[styles.tabText, { color: activeTab === 'all' ? '#FFFFFF' : colors.textSecondary }]}>Tất cả</Text>
             </TouchableOpacity>
             <TouchableOpacity
-                style={[styles.tab, activeTab === 'unread' && styles.tabActive]}
+                style={[styles.tab, { backgroundColor: activeTab === 'unread' ? (isDark ? colors.card : '#1F2937') : (isDark ? '#2D2D2D' : '#E5E7EB') }]}
                 onPress={() => setActiveTab('unread')}
             >
-                <Text style={[styles.tabText, activeTab === 'unread' && styles.tabTextActive]}>Chưa đọc</Text>
+                <Text style={[styles.tabText, { color: activeTab === 'unread' ? '#FFFFFF' : colors.textSecondary }]}>Chưa đọc</Text>
             </TouchableOpacity>
             <TouchableOpacity
-                style={[styles.tab, activeTab === 'muted' && styles.tabActive]}
+                style={[styles.tab, { backgroundColor: activeTab === 'muted' ? (isDark ? colors.card : '#1F2937') : (isDark ? '#2D2D2D' : '#E5E7EB') }]}
                 onPress={() => setActiveTab('muted')}
             >
-                <Text style={[styles.tabText, activeTab === 'muted' && styles.tabTextActive]}>Tắt thông báo</Text>
+                <Text style={[styles.tabText, { color: activeTab === 'muted' ? '#FFFFFF' : colors.textSecondary }]}>Tắt thông báo</Text>
             </TouchableOpacity>
         </View>
     );
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar
+                barStyle={isDark ? 'light-content' : 'dark-content'}
+                backgroundColor="transparent"
+                translucent={true}
+            />
 
             <LinearGradient
-                colors={['#FFE4D6', '#E0F2FE', '#FFFFFF']} // Pastel Peach -> Blue -> White (fade out)
-                locations={[0, 0.4, 0.9]} // Adjust locations to keep color at top and white at bottom
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0.8, y: 1 }} // Slanted fade
+                colors={['#ffebd9', '#e0f8ff']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
                 style={styles.headerGradient}
             >
                 {/* Header */}
                 <View style={styles.header}>
                     <View style={styles.headerLeft}>
-                        {/* <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                            <Ionicons name="arrow-back" size={24} color={DARK_TEXT} />
-                        </TouchableOpacity> */}
-                        {/* Image shows avatar then "Chats" ? Actually just "Chats" title. Keeping Back for navigation safety if nested, but looks like main tab.
-                             User image shows Avatar then "Chats".
-                             Let's stick to the current structure but transparent.
-                         */}
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                            {/* User might be on main tab, but let's keep back button logic if it was there, or maybe hide it if it's main screen.
-                                 Assuming it is a stack screen for now.
-                             */}
-                            <Ionicons name="arrow-back" size={24} color="#000000" display="none" />
-                        </TouchableOpacity>
-                        {/* Avatar in header */}
+                        {/* Avatar using user data */}
                         <View style={{ marginRight: 10 }}>
                             <Image
                                 source={{ uri: getAvatarUri(currentUser?.avatar, currentUser?.name || 'User') }}
                                 style={{ width: 38, height: 38, borderRadius: 19 }}
                             />
-                            <View style={[styles.onlineDot, { right: 0, bottom: 0 }]} />
+                            <View style={[styles.onlineDot, { right: 0, bottom: 0, borderColor: '#ffebd9' }]} />
                         </View>
-                        <Text style={styles.headerTitle}>Chats</Text>
+                        <Text style={[styles.headerTitle, { color: colors.text }]}>Chats</Text>
                     </View>
                     <View style={styles.headerRight}>
                         <TouchableOpacity
                             style={styles.headerIcon}
                             onPress={() => navigation.navigate('CreateGroup')}
                         >
-                            <Ionicons name="people" size={24} color="#000000" />
+                            <Ionicons name="people" size={24} color={colors.text} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.headerIcon}
                             onPress={() => navigation.navigate('NewChat')}
                         >
-                            <Ionicons name="add-circle-outline" size={26} color="#000000" />
+                            <Ionicons name="add-circle-outline" size={26} color={colors.text} />
                         </TouchableOpacity>
                     </View>
                 </View>
 
                 {/* Search Bar */}
                 <View style={styles.searchContainer}>
-                    <View style={styles.searchBar}>
-                        <Ionicons name="search" size={18} color="#9CA3AF" />
+                    <View style={[styles.searchBar, { backgroundColor: colors.inputBackground }]}>
+                        <Ionicons name="search" size={18} color={colors.placeholder || '#9CA3AF'} />
                         <TextInput
-                            style={styles.searchInput}
+                            style={[styles.searchInput, { color: colors.text }]}
                             placeholder="Tìm kiếm"
-                            placeholderTextColor="#9CA3AF"
+                            placeholderTextColor={colors.placeholder || "#9CA3AF"}
                             value={searchText}
                             onChangeText={setSearchText}
                         />
@@ -662,13 +652,13 @@ export default function ChatListScreen() {
             {/* Content */}
             {loading ? (
                 <View style={styles.centerContainer}>
-                    <ActivityIndicator size="large" color={ZALO_BLUE} />
-                    <Text style={styles.loadingText}>Đang tải tin nhắn...</Text>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Đang tải tin nhắn...</Text>
                 </View>
             ) : filteredConversations.length === 0 ? (
                 <View style={styles.emptyContainer}>
-                    <MaterialIcons name="chat-bubble-outline" size={80} color={DARK_TEXT_SECONDARY} />
-                    <Text style={styles.emptyTitle}>
+                    <MaterialIcons name="chat-bubble-outline" size={80} color={colors.textSecondary} />
+                    <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>
                         {activeTab === 'unread' ? 'Không có tin nhắn chưa đọc' :
                             activeTab === 'muted' ? 'Không có cuộc trò chuyện nào bị tắt thông báo' :
                                 searchText ? 'Không tìm thấy kết quả' : 'Chưa có cuộc trò chuyện nào'}
@@ -684,8 +674,8 @@ export default function ChatListScreen() {
                         <RefreshControl
                             refreshing={refreshing}
                             onRefresh={onRefresh}
-                            colors={[ZALO_BLUE]}
-                            tintColor={ZALO_BLUE}
+                            colors={[colors.primary]}
+                            tintColor={colors.primary}
                         />
                     }
                 />

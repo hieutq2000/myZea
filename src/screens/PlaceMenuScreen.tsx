@@ -126,15 +126,22 @@ export default function PlaceMenuScreen({
         >
             <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-            {/* Header */}
-            <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Menu</Text>
-                    <TouchableOpacity style={styles.searchButton}>
-                        <Ionicons name="search" size={24} color="#333" />
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
+            {/* Header with Gradient */}
+            <LinearGradient
+                colors={['#ffebd9', '#e0f8ff']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={styles.headerGradient}
+            >
+                <SafeAreaView edges={['top']}>
+                    <View style={styles.header}>
+                        <Text style={styles.headerTitle}>Menu</Text>
+                        <TouchableOpacity style={styles.searchButton}>
+                            <Ionicons name="search" size={24} color="#333" />
+                        </TouchableOpacity>
+                    </View>
+                </SafeAreaView>
+            </LinearGradient>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 {/* Profile Card */}
@@ -190,8 +197,11 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5F5F5',
     },
+    headerGradient: {
+        paddingBottom: 0,
+    },
     headerSafeArea: {
-        backgroundColor: '#FFF',
+        backgroundColor: 'transparent',
     },
     header: {
         flexDirection: 'row',
@@ -199,7 +209,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 8,
-        backgroundColor: '#FFF',
+        backgroundColor: 'transparent',
     },
     headerTitle: {
         fontSize: 24,

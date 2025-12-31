@@ -28,9 +28,8 @@ export default function HistoryScreen({ user }: HistoryScreenProps) {
         setTimeout(() => setRefreshing(false), 1000);
     };
 
-    const getScoreColor = (score: number) => {
-        if (score >= 80) return COLORS.success;
-        if (score >= 60) return COLORS.warning;
+    const getScoreColor = (score: string) => {
+        if (score === 'ĐẠT') return COLORS.success;
         return COLORS.error;
     };
 
@@ -63,14 +62,14 @@ export default function HistoryScreen({ user }: HistoryScreenProps) {
                 </View>
                 <View style={styles.statCard}>
                     <Text style={[styles.statNumber, { color: COLORS.success }]}>
-                        {examHistory.filter(e => (e.score || 0) >= 60).length}
+                        {examHistory.filter(e => e.score === 'ĐẠT').length}
                     </Text>
                     <Text style={styles.statLabel}>Đạt</Text>
                 </View>
                 <View style={styles.statCard}>
                     <Text style={[styles.statNumber, { color: COLORS.primary }]}>
                         {examHistory.length > 0
-                            ? Math.round(examHistory.reduce((sum, e) => sum + (e.score || 0), 0) / examHistory.length)
+                            ? Math.round(examHistory.filter(e => e.score === 'ĐẠT').length / examHistory.length * 100)
                             : 0}%
                     </Text>
                     <Text style={styles.statLabel}>TB</Text>
@@ -101,18 +100,18 @@ export default function HistoryScreen({ user }: HistoryScreenProps) {
                                 <View style={styles.examInfo}>
                                     <Text style={styles.examTopic}>{exam.topic}</Text>
                                     <Text style={styles.examDate}>
-                                        {formatDate(exam.completedAt)}
+                                        {formatDate(exam.timestamp)}
                                     </Text>
                                 </View>
                                 <View style={[
                                     styles.scoreBadge,
-                                    { backgroundColor: getScoreColor(exam.score || 0) + '20' }
+                                    { backgroundColor: getScoreColor(exam.score) + '20' }
                                 ]}>
                                     <Text style={[
                                         styles.scoreText,
-                                        { color: getScoreColor(exam.score || 0) }
+                                        { color: getScoreColor(exam.score) }
                                     ]}>
-                                        {exam.score}%
+                                        {exam.score}
                                     </Text>
                                 </View>
                             </View>
@@ -121,13 +120,13 @@ export default function HistoryScreen({ user }: HistoryScreenProps) {
                                 <View style={styles.examStat}>
                                     <Feather name="clock" size={14} color={COLORS.textMuted} />
                                     <Text style={styles.examStatText}>
-                                        {exam.duration ? `${Math.round(exam.duration / 60)} phút` : 'N/A'}
+                                        {exam.duration || 'N/A'}
                                     </Text>
                                 </View>
                                 <View style={styles.examStat}>
                                     <Feather name="message-circle" size={14} color={COLORS.textMuted} />
                                     <Text style={styles.examStatText}>
-                                        {exam.totalQuestions || 0} câu hỏi
+                                        {exam.transcript?.length || 0} câu hỏi
                                     </Text>
                                 </View>
                             </View>

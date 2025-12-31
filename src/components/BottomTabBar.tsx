@@ -38,10 +38,7 @@ export default function BottomTabBar({ activeTab, onTabChange, unreadChatCount =
         <View style={styles.container}>
             <View style={styles.tabBar}>
                 {tabs.map((tab) => {
-                    // Map active logic (HOME covers My Zone, etc)
-                    // For now, let's strictly follow the activeTab prop
                     const isActive = activeTab === tab.key;
-                    // Custom mapping for icon names if needed based on active state (filled vs outline)
                     let iconName = tab.icon;
                     if (isActive) {
                         if (tab.key === 'HOME') iconName = 'planet';
@@ -50,7 +47,6 @@ export default function BottomTabBar({ activeTab, onTabChange, unreadChatCount =
                         if (tab.key === 'PROFILE') iconName = 'grid';
                     }
 
-                    // Determine badge count for this tab
                     let badgeCount = 0;
                     if (tab.key === 'CHAT_TAB') badgeCount = unreadChatCount;
                     if (tab.key === 'PLACE') badgeCount = unreadNotifCount;
@@ -90,7 +86,6 @@ export default function BottomTabBar({ activeTab, onTabChange, unreadChatCount =
     );
 }
 
-
 const styles = StyleSheet.create({
     container: {
         backgroundColor: COLORS.white,
@@ -104,7 +99,7 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         zIndex: 1000,
-        elevation: 200, // Higher than HomeScreen content
+        elevation: 200,
     },
     tabBar: {
         flexDirection: 'row',

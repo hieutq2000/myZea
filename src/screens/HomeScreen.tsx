@@ -17,6 +17,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
 import { User, LiveMode, TargetAudience, Topic, TOPIC_LABELS, TOPIC_ICONS } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { getAvatarUri } from '../utils/media';
@@ -31,6 +32,7 @@ interface HomeScreenProps {
 }
 
 export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSession, onViewTasks }: HomeScreenProps) {
+    const { colors, isDark } = useTheme();
     const scrollY = useRef(new Animated.Value(0)).current;
 
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -78,8 +80,8 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
     const renderModeSelection = () => (
         <View style={styles.modeSection}>
             <View style={styles.sectionHeader}>
-                <MaterialIcons name="category" size={20} color={COLORS.primary} />
-                <Text style={styles.sectionTitle}>Chọn Hình Thức Học</Text>
+                <MaterialIcons name="category" size={20} color={colors.primary} />
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Chọn Hình Thức Học</Text>
             </View>
 
             <View style={styles.modeGrid}>
@@ -91,7 +93,10 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                             style={[
                                 styles.modeCard,
                                 selectedMode === mode.id && styles.modeCardActive,
-                                { borderColor: selectedMode === mode.id ? mode.color : COLORS.border }
+                                {
+                                    backgroundColor: isDark ? colors.card : '#FFFFFF',
+                                    borderColor: selectedMode === mode.id ? mode.color : colors.border
+                                }
                             ]}
                             onPress={() => setSelectedMode(selectedMode === mode.id ? null : mode.id)}
                             activeOpacity={0.7}
@@ -102,6 +107,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                             <View style={styles.modeInfo}>
                                 <Text style={[
                                     styles.modeTitle,
+                                    { color: colors.text },
                                     selectedMode === mode.id && { color: mode.color }
                                 ]}>
                                     {mode.title}
@@ -110,7 +116,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                             </View>
                             {selectedMode === mode.id && (
                                 <View style={[styles.modeCheck, { backgroundColor: mode.color }]}>
-                                    <Feather name="check" size={14} color={COLORS.white} />
+                                    <Feather name="check" size={14} color="#FFFFFF" />
                                 </View>
                             )}
                         </TouchableOpacity>
@@ -122,6 +128,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
             <TouchableOpacity
                 style={[
                     styles.kidsToggle,
+                    { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: isDark ? colors.border : '#F1F5F9' },
                     targetAudience === TargetAudience.KIDS && styles.kidsToggleActive
                 ]}
                 onPress={() => setTargetAudience(
@@ -135,7 +142,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                     <MaterialIcons
                         name={targetAudience === TargetAudience.KIDS ? "child-care" : "person-outline"}
                         size={24}
-                        color={targetAudience === TargetAudience.KIDS ? '#DB2777' : COLORS.textMuted}
+                        color={targetAudience === TargetAudience.KIDS ? '#DB2777' : colors.textSecondary}
                     />
                 </View>
 
@@ -174,9 +181,10 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
         return (
             <View style={styles.topicsSection}>
                 <View style={styles.sectionHeader}>
-                    <Feather name="target" size={20} color={targetAudience === TargetAudience.KIDS ? '#DB2777' : COLORS.primary} />
+                    <Feather name="target" size={20} color={targetAudience === TargetAudience.KIDS ? '#DB2777' : colors.primary} />
                     <Text style={[
                         styles.sectionTitle,
+                        { color: colors.text },
                         targetAudience === TargetAudience.KIDS && { color: '#DB2777' }
                     ]}>
                         {targetAudience === TargetAudience.KIDS ? 'Chọn Chủ Đề Vui Nhộn' : 'Chọn Môn Học'}
@@ -197,22 +205,23 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                             <LinearGradient
                                 colors={targetAudience === TargetAudience.KIDS
                                     ? ['#FDF2F8', '#FCE7F3']
-                                    : ['#F8FAFC', '#F1F5F9']
+                                    : (isDark ? ['#1F1F1F', '#2D2D2D'] : ['#F8FAFC', '#F1F5F9'])
                                 }
                                 style={styles.topicGradient}
                             >
                                 <Text style={styles.topicIcon}>{TOPIC_ICONS[topic]}</Text>
                                 <Text style={[
                                     styles.topicLabel,
+                                    { color: colors.text },
                                     targetAudience === TargetAudience.KIDS && styles.kidsTopicLabel
                                 ]}>
                                     {TOPIC_LABELS[topic]}
                                 </Text>
-                                <View style={[styles.topicArrow, targetAudience === TargetAudience.KIDS && { backgroundColor: '#FBCFE8' }]}>
+                                <View style={[styles.topicArrow, { backgroundColor: isDark ? '#374151' : '#F1F5F9' }, targetAudience === TargetAudience.KIDS && { backgroundColor: '#FBCFE8' }]}>
                                     <Feather
                                         name="chevron-right"
                                         size={20}
-                                        color={targetAudience === TargetAudience.KIDS ? '#DB2777' : COLORS.primary}
+                                        color={targetAudience === TargetAudience.KIDS ? '#DB2777' : colors.primary}
                                     />
                                 </View>
                             </LinearGradient>
@@ -240,7 +249,7 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
     });
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
             {/* Layer 0: Animated Header Background (Collapses on Scroll) */}
@@ -334,18 +343,18 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                 contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, paddingBottom: 160 }}
             >
                 {/* 1. Quick Menu (Moved up to overlap) */}
-                <View style={[styles.quickMenuCard, { marginTop: -40 }]}>
+                <View style={[styles.quickMenuCard, { marginTop: -40, backgroundColor: isDark ? colors.card : '#FFFFFF' }]}>
                     <View style={styles.quickMenuItem}>
                         <View style={[styles.quickMenuIcon, { backgroundColor: '#FFEDD5' }]}>
                             <Ionicons name="trophy" size={24} color="#F97316" />
                         </View>
-                        <Text style={styles.quickMenuLabel}>Reward</Text>
+                        <Text style={[styles.quickMenuLabel, { color: colors.text }]}>Reward</Text>
                     </View>
                     <View style={styles.quickMenuItem}>
                         <View style={[styles.quickMenuIcon, { backgroundColor: '#FEF9C3' }]}>
                             <Ionicons name="star" size={24} color="#EAB308" />
                         </View>
-                        <Text style={styles.quickMenuLabel}>My Gold</Text>
+                        <Text style={[styles.quickMenuLabel, { color: colors.text }]}>My Gold</Text>
                     </View>
                     <TouchableOpacity
                         style={styles.quickMenuItem}
@@ -354,20 +363,23 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                         <View style={[styles.quickMenuIcon, { backgroundColor: '#DCFCE7' }]}>
                             <Ionicons name="wallet" size={24} color="#16A34A" />
                         </View>
-                        <Text style={styles.quickMenuLabel}>Ví</Text>
+                        <Text style={[styles.quickMenuLabel, { color: colors.text }]}>Ví</Text>
                     </TouchableOpacity>
-                    <View style={styles.quickMenuItem}>
+                    <TouchableOpacity
+                        style={styles.quickMenuItem}
+                        onPress={() => navigation.navigate('TodoNotes')}
+                    >
                         <View style={[styles.quickMenuIcon, { backgroundColor: '#FFEDD5' }]}>
                             <Ionicons name="clipboard" size={24} color="#F97316" />
                         </View>
-                        <Text style={styles.quickMenuLabel}>To-do Notes</Text>
-                    </View>
+                        <Text style={[styles.quickMenuLabel, { color: colors.text }]}>To-do Notes</Text>
+                    </TouchableOpacity>
                 </View>
 
                 {/* 2. My Tasks (Việc của tôi) */}
                 <View style={styles.sectionContainer}>
                     <View style={styles.sectionHeaderNew}>
-                        <Text style={styles.sectionTitleNew}>Việc của tôi</Text>
+                        <Text style={[styles.sectionTitleNew, { color: colors.text }]}>Việc của tôi</Text>
                         <TouchableOpacity onPress={onViewTasks}>
                             <Text style={styles.viewAllText}>Xem tất cả {'>'}</Text>
                         </TouchableOpacity>
@@ -387,12 +399,12 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                         </TouchableOpacity>
 
                         {/* White Card */}
-                        <TouchableOpacity style={[styles.taskCard, { backgroundColor: 'white', borderColor: '#E2E8F0', borderWidth: 1 }]}>
+                        <TouchableOpacity style={[styles.taskCard, { backgroundColor: isDark ? colors.card : 'white', borderColor: colors.border, borderWidth: 1 }]}>
                             <View style={styles.taskCardHeader}>
-                                <Text style={[styles.taskCount, { color: '#0F172A' }]}>0</Text>
-                                <Feather name="info" size={16} color="#94A3B8" />
+                                <Text style={[styles.taskCount, { color: colors.text }]}>0</Text>
+                                <Feather name="info" size={16} color={colors.textSecondary} />
                             </View>
-                            <Text style={[styles.taskLabel, { color: '#0F172A' }]}>Quá hạn{'\n'}đã lâu</Text>
+                            <Text style={[styles.taskLabel, { color: colors.text }]}>Quá hạn{'\n'}đã lâu</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -400,8 +412,9 @@ export default function HomeScreen({ user, onLogout, onOpenProfile, onStartSessi
                 {/* 3. News (Không thể bỏ lỡ) - Temporarily hidden */}
 
                 {/* --- Existing Functionality (Moved to bottom) --- */}
-                <View style={styles.divider} />
-                <Text style={styles.functionalityTitle}>Học tập & Rèn luyện</Text>
+                {/* --- Existing Functionality (Moved to bottom) --- */}
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <Text style={[styles.functionalityTitle, { color: colors.text }]}>Học tập & Rèn luyện</Text>
                 {renderModeSelection()}
                 {renderTopicSelection()}
 
@@ -517,7 +530,10 @@ const styles = StyleSheet.create({
     quickMenuCard: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        backgroundColor: COLORS.white,
+        backgroundColor: '#FFFFFF', // Fix this to white even in dark mode initially? Or adapt?
+        // Let's adapt
+        // backgroundColor: COLORS.white, 
+        // We can't access 'colors' here. We'll utilize inline style for dynamic background if needed or assume Card is White for pop
         borderRadius: 24,
         padding: 16,
         marginHorizontal: 16,
@@ -664,7 +680,7 @@ const styles = StyleSheet.create({
     // Existing styles required for compatibility
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        // backgroundColor: '#F8FAFC', // Overridden
     },
 
     scrollContent: {

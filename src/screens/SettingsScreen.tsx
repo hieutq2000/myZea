@@ -30,32 +30,8 @@ interface SettingsScreenProps {
 export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
     const { theme, setTheme, colors, isDark } = useTheme();
-    const [faceIdEnabled, setFaceIdEnabled] = useState(false);
     const [showUpdateModal, setShowUpdateModal] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
-
-    // Load Face ID setting on mount
-    useEffect(() => {
-        loadFaceIdSetting();
-    }, []);
-
-    const loadFaceIdSetting = async () => {
-        try {
-            const saved = await AsyncStorage.getItem('faceIdEnabled');
-            setFaceIdEnabled(saved === 'true');
-        } catch (e) {
-            console.log('Error loading Face ID setting');
-        }
-    };
-
-    const toggleFaceId = async (value: boolean) => {
-        setFaceIdEnabled(value);
-        try {
-            await AsyncStorage.setItem('faceIdEnabled', value.toString());
-        } catch (e) {
-            console.log('Error saving Face ID setting');
-        }
-    };
 
     const handleCheckUpdate = async () => {
         try {
@@ -113,7 +89,7 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                             <Ionicons name="chevron-back" size={28} color={isDark ? '#FFF' : '#000'} />
                         </TouchableOpacity>
-                        <Text style={[styles.headerTitle, { color: isDark ? '#FFF' : '#000' }]}>Cài đặt</Text>
+                        <Text style={[styles.headerTitle, { color: isDark ? '#FFF' : '#000' }]}>Cài đặt & Riêng tư</Text>
                     </View>
                 </SafeAreaView>
             </LinearGradient>
@@ -160,24 +136,32 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Face ID Setting */}
-                <View style={[styles.card, { marginTop: 20, backgroundColor: colors.card }]}>
+                {/* Privacy & Security */}
+                <View style={[styles.sectionTitleContainer, { paddingHorizontal: 4, marginTop: 20 }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Bảo mật & Riêng tư</Text>
+                </View>
+
+                <TouchableOpacity
+                    style={[styles.card, { backgroundColor: colors.card }]}
+                    onPress={() => navigation.navigate('PrivacySettings')}
+                >
                     <View style={styles.cardRow}>
                         <View style={styles.iconLabel}>
-                            <Ionicons name="finger-print" size={22} color={colors.primary} style={styles.cardIcon} />
+                            <View style={{
+                                width: 32, height: 32, borderRadius: 8,
+                                backgroundColor: isDark ? '#2D2D2D' : '#E0F2FE',
+                                alignItems: 'center', justifyContent: 'center', marginRight: 12
+                            }}>
+                                <Ionicons name="shield-checkmark" size={20} color="#0EA5E9" />
+                            </View>
                             <View>
-                                <Text style={[styles.cardTitle, { color: colors.text }]}>Đăng nhập Face ID</Text>
-                                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>Xác thực khuôn mặt khi đăng nhập</Text>
+                                <Text style={[styles.cardTitle, { color: colors.text }]}>Quyền riêng tư & Bảo mật</Text>
+                                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>Sinh trắc học, khóa ứng dụng, chặn...</Text>
                             </View>
                         </View>
-                        <Switch
-                            value={faceIdEnabled}
-                            onValueChange={toggleFaceId}
-                            trackColor={{ false: colors.border, true: colors.primary + '60' }}
-                            thumbColor={faceIdEnabled ? colors.primary : '#f4f3f4'}
-                        />
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                     </View>
-                </View>
+                </TouchableOpacity>
 
                 {/* Feedback */}
                 <TouchableOpacity

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { apiRequest } from '../utils/api';
 import { getAvatarUri } from '../utils/media';
 
@@ -159,25 +160,32 @@ export default function PlaceGroupsScreen({ onBack, onOpenGroup, onCreateGroup }
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
+            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-            {/* Header */}
-            <SafeAreaView style={styles.headerSafeArea}>
-                <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
-                    <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                        <Ionicons name="arrow-back" size={24} color="#333" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Nhóm</Text>
-                    <View style={styles.headerRight}>
-                        <TouchableOpacity style={styles.iconButton} onPress={onCreateGroup}>
-                            <Ionicons name="add" size={26} color="#333" />
+            {/* Header with Gradient */}
+            <LinearGradient
+                colors={['#ffebd9', '#e0f8ff']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={styles.headerGradient}
+            >
+                <SafeAreaView>
+                    <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
+                        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                            <Ionicons name="arrow-back" size={24} color="#333" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.iconButton}>
-                            <Ionicons name="search" size={24} color="#333" />
-                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>Nhóm</Text>
+                        <View style={styles.headerRight}>
+                            <TouchableOpacity style={styles.iconButton} onPress={onCreateGroup}>
+                                <Ionicons name="add" size={26} color="#333" />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.iconButton}>
+                                <Ionicons name="search" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
-            </SafeAreaView>
+                </SafeAreaView>
+            </LinearGradient>
 
             {isLoading ? (
                 <View style={styles.loadingContainer}>
@@ -299,17 +307,18 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5F5F5',
     },
+    headerGradient: {
+        paddingBottom: 0,
+    },
     headerSafeArea: {
-        backgroundColor: '#FFF',
+        backgroundColor: 'transparent',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        backgroundColor: '#FFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEE',
+        backgroundColor: 'transparent',
     },
     backButton: {
         padding: 4,

@@ -28,7 +28,6 @@ export default function PlaceBottomBar({
 
     const handleTabPress = (tab: PlaceTabType) => {
         if (tab === 'CHAT') {
-            // Navigate to ChatList screen
             navigation.navigate('ChatList');
         } else {
             onTabChange(tab);
@@ -49,7 +48,6 @@ export default function PlaceBottomBar({
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.id;
 
-                    // Determine badge count for this tab
                     let badgeCount = 0;
                     if (tab.id === 'CHAT') badgeCount = unreadChatCount;
                     if (tab.id === 'NOTIFICATIONS') badgeCount = unreadNotifCount;
@@ -65,7 +63,7 @@ export default function PlaceBottomBar({
                                 <Ionicons
                                     name={isActive ? tab.activeIcon as any : tab.icon as any}
                                     size={26}
-                                    color={isActive ? '#F97316' : '#6B7280'}
+                                    color={isActive ? '#F97316' : '#94A3B8'}
                                 />
                                 {badgeCount > 0 && (
                                     <View style={styles.badge}>

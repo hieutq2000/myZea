@@ -21,6 +21,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import { login, register, checkServerHealth } from '../utils/api';
 import { User, AuthView } from '../types';
@@ -79,8 +81,23 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             const enrolled = await LocalAuthentication.isEnrolledAsync();
             setHasBiometrics(compatible && enrolled);
 
-            const faceIdSetting = await AsyncStorage.getItem('faceIdEnabled');
-            setFaceIdEnabled(faceIdSetting === 'true');
+            // Load setting from PrivacySettings
+            const settings = await AsyncStorage.getItem('privacySettings');
+            if (settings) {
+                const parsed = JSON.parse(settings);
+                const isEnabled = parsed.biometricEnabled === true;
+                setFaceIdEnabled(isEnabled);
+
+                // Auto-prompt if enabled and has credentials
+                if (isEnabled && compatible && enrolled) {
+                    const savedEmail = await AsyncStorage.getItem('savedEmail');
+                    const savedPassword = await AsyncStorage.getItem('savedPassword');
+                    if (savedEmail && savedPassword) {
+                        // Small delay to ensure UI is ready
+                        setTimeout(() => handleFaceIdLogin(), 500);
+                    }
+                }
+            }
         } catch (e) {
             console.log('Biometric check error:', e);
         }
@@ -101,7 +118,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     };
 
     const handleFaceIdLogin = async () => {
-        if (!hasSavedCredentials) {
+        // Retrieve credentials directly to avoid state race conditions
+        const savedEmail = await AsyncStorage.getItem('savedEmail');
+        const savedPassword = await AsyncStorage.getItem('savedPassword');
+
+        if (!savedEmail || !savedPassword) {
             Alert.alert('Thông báo', 'Chưa có thông tin đăng nhập được lưu. Vui lòng đăng nhập thủ công trước.');
             return;
         }
@@ -126,13 +147,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         throw new Error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.');
                     }
 
-                    // Retrieve saved credentials directly
-                    const savedEmail = await AsyncStorage.getItem('savedEmail');
-                    const savedPassword = await AsyncStorage.getItem('savedPassword');
-
+                    // Use credentials retrieved at start of function
                     if (savedEmail && savedPassword) {
                         const response = await login(savedEmail, savedPassword);
                         onLogin(response.user);
+                        await saveLoginSession();
+                        await sendLoginNotification();
                     } else {
                         setError('Không tìm thấy thông tin đăng nhập đã lưu');
                     }
@@ -161,6 +181,68 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             await AsyncStorage.setItem('savedPassword', password);
         } catch (e) {
             console.log('Error saving credentials');
+        }
+    };
+
+    const saveLoginSession = async () => {
+        try {
+            // Get current sessions
+            const sessionsRaw = await AsyncStorage.getItem('loginSessions');
+            const sessions = sessionsRaw ? JSON.parse(sessionsRaw) : [];
+
+            // Create new session entry
+            const newSession = {
+                id: `session_${Date.now()}`,
+                deviceName: Device.modelName || 'Unknown Device',
+                osName: `${Platform.OS === 'ios' ? 'iOS' : 'Android'} ${Device.osVersion || ''}`,
+                loginTime: new Date().toISOString(),
+                lastActive: new Date().toISOString(),
+                isCurrent: true,
+            };
+
+            // Mark all other sessions as not current
+            const updatedSessions = sessions.map((s: any) => ({ ...s, isCurrent: false }));
+
+            // Add new session at the beginning
+            updatedSessions.unshift(newSession);
+
+            // Keep only last 10 sessions
+            const limitedSessions = updatedSessions.slice(0, 10);
+
+            await AsyncStorage.setItem('loginSessions', JSON.stringify(limitedSessions));
+        } catch (e) {
+            console.log('Error saving login session:', e);
+        }
+    };
+
+    const sendLoginNotification = async () => {
+        try {
+            // Check if login notifications are enabled
+            const settings = await AsyncStorage.getItem('privacySettings');
+            if (settings) {
+                const parsed = JSON.parse(settings);
+                if (parsed.loginNotifications === false) {
+                    return; // Notifications disabled
+                }
+            }
+
+            // Get device info
+            const deviceName = Device.modelName || 'Thiết bị';
+            const osName = Platform.OS === 'ios' ? 'iOS' : 'Android';
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+            // Schedule local notification
+            await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: ' Đăng nhập thành công',
+                    body: `Tài khoản đã đăng nhập từ ${deviceName} (${osName}) lúc ${timeStr}`,
+                    sound: 'default',
+                },
+                trigger: null, // Show immediately
+            });
+        } catch (e) {
+            console.log('Error sending login notification:', e);
         }
     };
 
@@ -273,6 +355,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
             onLogin(response.user);
             await saveCredentials();
+            await saveLoginSession();
+            await sendLoginNotification();
         } catch (err) {
             const errorMessage = (err as Error).message;
             setError(errorMessage);
@@ -578,8 +662,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                                             )}
                                         </TouchableOpacity>
 
-                                        {/* Face ID Button - Only show in Login view */}
-                                        {view === AuthView.LOGIN && hasBiometrics && (
+                                        {/* Face ID Button - Only show if enabled in settings AND hardware supported */}
+                                        {view === AuthView.LOGIN && hasBiometrics && faceIdEnabled && (
                                             <TouchableOpacity
                                                 style={styles.faceIdIconButton}
                                                 onPress={handleFaceIdLogin}

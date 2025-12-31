@@ -13,6 +13,9 @@ import UpdateModal from './src/components/UpdateModal';
 import PlaceScreen from './src/screens/PlaceScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import PrivacySettingsScreen from './src/screens/PrivacySettingsScreen';
+import ActiveSessionsScreen from './src/screens/ActiveSessionsScreen';
+import TodoNotesScreen from './src/screens/TodoNotesScreen';
 import StoreScreen from './src/screens/StoreScreen';
 import IncomingCallModal from './src/components/IncomingCallModal';
 import BottomTabBar, { TabType } from './src/components/BottomTabBar';
@@ -628,6 +631,10 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         <Stack.Screen name="Settings">
           {(props) => <SettingsScreen {...props} onLogout={handleLogout} />}
         </Stack.Screen>
+
+        <Stack.Screen name="PrivacySettings" component={PrivacySettingsScreen} />
+        <Stack.Screen name="ActiveSessions" component={ActiveSessionsScreen} />
+        <Stack.Screen name="TodoNotes" component={TodoNotesScreen} />
 
         <Stack.Screen
           name="PostDetail"

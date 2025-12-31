@@ -30,6 +30,7 @@ import PostCard from '../components/PostCard';
 import { formatTime } from '../utils/formatTime';
 import { isVideo, getUri, getAvatarUri } from '../utils/media';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface GroupDetail {
     id: string;
@@ -277,6 +278,49 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
     const [editAvatar, setEditAvatar] = useState('');
     const [isSavingGroup, setSavingGroup] = useState(false);
 
+    // Mute Notification State
+    const [isMuted, setIsMuted] = useState(false);
+
+    // Load mute status on mount
+    useEffect(() => {
+        loadMuteStatus();
+    }, [groupId]);
+
+    const loadMuteStatus = async () => {
+        try {
+            const mutedGroups = await AsyncStorage.getItem('mutedGroups');
+            if (mutedGroups) {
+                const parsed = JSON.parse(mutedGroups);
+                setIsMuted(parsed.includes(groupId));
+            }
+        } catch (e) {
+            console.log('Error loading mute status');
+        }
+    };
+
+    const toggleMuteGroup = async () => {
+        try {
+            const mutedGroups = await AsyncStorage.getItem('mutedGroups');
+            let parsed = mutedGroups ? JSON.parse(mutedGroups) : [];
+
+            if (isMuted) {
+                // Unmute - remove from list
+                parsed = parsed.filter((id: string) => id !== groupId);
+                Alert.alert('Đã bật thông báo', 'Bạn sẽ nhận thông báo từ nhóm này');
+            } else {
+                // Mute - add to list
+                parsed.push(groupId);
+                Alert.alert('Đã tắt thông báo', 'Bạn sẽ không nhận thông báo từ nhóm này');
+            }
+
+            await AsyncStorage.setItem('mutedGroups', JSON.stringify(parsed));
+            setIsMuted(!isMuted);
+        } catch (e) {
+            console.log('Error toggling mute');
+            Alert.alert('Lỗi', 'Không thể thay đổi cài đặt thông báo');
+        }
+    };
+
     const openEditGroupModal = () => {
         if (!group) return;
         setEditName(group.name);
@@ -361,11 +405,11 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
         const result = await launchImageLibrary({ selectionLimit: 1 });
         console.log('📷 Image picker result:', result);
 
-        if (result && result.length > 0) {
+        if (result && result.assets && result.assets.length > 0) {
             try {
                 setUploadingCover(true);
-                console.log('📷 Uploading cover image:', result[0]);
-                const uploaded = await uploadImage(result[0]);
+                console.log('📷 Uploading cover image:', result.assets[0]);
+                const uploaded = await uploadImage(result.assets[0].uri);
                 console.log('📷 Upload result:', uploaded);
                 setEditCoverImage(uploaded.url);
                 Alert.alert('Thành công', 'Đã tải ảnh bìa lên');
@@ -383,11 +427,11 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
         const result = await launchImageLibrary({ selectionLimit: 1 });
         console.log('📷 Image picker result:', result);
 
-        if (result && result.length > 0) {
+        if (result && result.assets && result.assets.length > 0) {
             try {
                 setUploadingAvatar(true);
-                console.log('📷 Uploading avatar:', result[0]);
-                const uploaded = await uploadImage(result[0]);
+                console.log('📷 Uploading avatar:', result.assets[0]);
+                const uploaded = await uploadImage(result.assets[0].uri);
                 console.log('📷 Upload result:', uploaded);
                 setEditAvatar(uploaded.url);
                 Alert.alert('Thành công', 'Đã tải avatar lên');
@@ -702,6 +746,20 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
                                     onPress={openEditGroupModal}
                                 >
                                     <Ionicons name="settings-outline" size={18} color="#666" />
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Mute Notification Button - Show for members */}
+                            {group.isMember && (
+                                <TouchableOpacity
+                                    style={[styles.editGroupButton, isMuted && { backgroundColor: '#FEE2E2' }]}
+                                    onPress={toggleMuteGroup}
+                                >
+                                    <Ionicons
+                                        name={isMuted ? 'notifications-off' : 'notifications-outline'}
+                                        size={18}
+                                        color={isMuted ? '#EF4444' : '#666'}
+                                    />
                                 </TouchableOpacity>
                             )}
                         </View>

@@ -17,34 +17,39 @@ interface ColorPalette {
     statusBar: 'dark-content' | 'light-content';
     icon: string;
     inputBackground: string;
+    placeholder: string;
 }
 
-// Bảng màu Sáng (Hiện tại)
+import { COLORS, NEUTRAL, BACKGROUND, TEXT, BORDER, BRAND } from '../theme/colors';
+
+// Bảng màu Sáng (Based on Design System)
 export const lightColors: ColorPalette = {
-    background: '#F3F4F6',
+    background: BACKGROUND.primary,
     card: '#FFFFFF',
-    text: '#1F2937', // Gray 800
-    textSecondary: '#6B7280', // Gray 500
-    border: '#E5E7EB', // Gray 200
-    primary: '#0068FF',
-    headerGradient: ['#ffebd9', '#e0f8ff'], // Peach -> Light Blue
+    text: TEXT.primary,
+    textSecondary: TEXT.secondary,
+    border: BORDER.default,
+    primary: BRAND.orange, // Brand Core
+    headerGradient: ['#FFF0E6', '#F0F9FF'], // Pastel Peach -> Light Blue (Aligned with Chats Screen)
     statusBar: 'dark-content',
-    icon: '#4B5563',
-    inputBackground: '#F9FAFB',
+    icon: NEUTRAL.gray600,
+    inputBackground: NEUTRAL.gray100,
+    placeholder: NEUTRAL.gray400,
 };
 
-// Bảng màu Tối (Mới - Sang trọng & Dịu mắt)
+// Bảng màu Tối (Dark Mode)
 export const darkColors: ColorPalette = {
-    background: '#121212', // Very dark gray, almost black
-    card: '#1E1E1E', // Dark gray for cards
-    text: '#E5E7EB', // Light gray text (not pure white for ease of reading)
-    textSecondary: '#9CA3AF', // Gray 400
-    border: '#2D2D2D', // Dark border
-    primary: '#4DA3FF', // Lighter blue for dark mode visibility
-    headerGradient: ['#3E2D24', '#18262E'], // Deep Warm Brown -> Deep Cool Blue (Phiên bản tối của Gradient gốc)
+    background: BACKGROUND.dark,   // #121212
+    card: BACKGROUND.darkCard,     // #1F1F1F
+    text: NEUTRAL.gray200,         // Light gray for softer contrast
+    textSecondary: NEUTRAL.gray400,
+    border: '#2D2D2D',
+    primary: BRAND.orange,         // Keep brand identity
+    headerGradient: ['#2A1810', '#0F1A24'], // Dark version of the gradient
     statusBar: 'light-content',
-    icon: '#D1D5DB',
+    icon: NEUTRAL.gray400,
     inputBackground: '#2C2C2C',
+    placeholder: NEUTRAL.gray500,
 };
 
 interface ThemeContextType {

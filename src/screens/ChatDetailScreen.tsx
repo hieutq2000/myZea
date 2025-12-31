@@ -75,6 +75,7 @@ export default function ChatDetailScreen() {
     const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
     const [pinnedMessage, setPinnedMessage] = useState<any>(null);
     const [showUnpinOption, setShowUnpinOption] = useState(false);
+    const [showHeaderOptions, setShowHeaderOptions] = useState(false);
 
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [partnerTyping, setPartnerTyping] = useState(false);
@@ -1132,13 +1133,15 @@ export default function ChatDetailScreen() {
                     </TouchableOpacity>
                 </View>
                 <View style={styles.headerRight}>
-                    {/* Search Button for all chats */}
-                    <TouchableOpacity
-                        style={[styles.headerIcon, { marginRight: 8 }]}
-                        onPress={() => setIsSearching(true)}
-                    >
-                        <Ionicons name="search" size={24} color="#000" />
-                    </TouchableOpacity>
+                    {/* Search Button for all chats - NOW ONLY FOR GROUP (Moved to menu for 1-1) */}
+                    {isGroup && (
+                        <TouchableOpacity
+                            style={[styles.headerIcon, { marginRight: 8 }]}
+                            onPress={() => setIsSearching(true)}
+                        >
+                            <Ionicons name="search" size={24} color="#000" />
+                        </TouchableOpacity>
+                    )}
 
                     {/* Only show call buttons for 1-1 chat, not group */}
                     {!isGroup && (
@@ -1169,7 +1172,10 @@ export default function ChatDetailScreen() {
                             >
                                 <Ionicons name="videocam" size={18} color="#FFFFFF" />
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.headerIcon}>
+                            <TouchableOpacity
+                                style={styles.headerIcon}
+                                onPress={() => setShowHeaderOptions(true)}
+                            >
                                 <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
                             </TouchableOpacity>
                         </>
@@ -1266,7 +1272,7 @@ export default function ChatDetailScreen() {
         // Optimistically update UI
         setMessages(prev => prev.map(m => {
             if (m.id !== messageId) return m;
-            const reactions = { ...m.reactions } || {};
+            const reactions = { ...(m.reactions || {}) };
 
             // Remove user from any existing reaction
             Object.keys(reactions).forEach(key => {
@@ -1831,6 +1837,45 @@ export default function ChatDetailScreen() {
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
             {renderHeader()}
+
+            {/* Header Options Menu (3-dots) */}
+            {showHeaderOptions && (
+                <TouchableOpacity
+                    style={{
+                        position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+                        zIndex: 200,
+                    }}
+                    activeOpacity={1}
+                    onPress={() => setShowHeaderOptions(false)}
+                >
+                    <View style={{
+                        position: 'absolute',
+                        top: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 50 : 90,
+                        right: 10,
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 8,
+                        paddingVertical: 4,
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 3.84,
+                        elevation: 5,
+                        minWidth: 180,
+                    }}>
+                        <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16 }}
+                            onPress={() => {
+                                setShowHeaderOptions(false);
+                                setIsSearching(true);
+                            }}
+                        >
+                            <Ionicons name="search" size={20} color="#333" style={{ marginRight: 12 }} />
+                            <Text style={{ fontSize: 16, color: '#333' }}>Tìm kiếm tin nhắn</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            )}
+
             {renderSearchResults()}
 
             {pinnedMessage && (

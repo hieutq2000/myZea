@@ -11,6 +11,9 @@ export type RootStackParamList = {
     History: undefined;
     Profile: undefined;
     Settings: undefined;
+    PrivacySettings: undefined;
+    ActiveSessions: undefined;
+    TodoNotes: undefined;
     PostDetail: { postId: string };
     PlaceNotifications: undefined;
 
