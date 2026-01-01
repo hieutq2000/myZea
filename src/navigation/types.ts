@@ -16,6 +16,10 @@ export type RootStackParamList = {
     TodoNotes: undefined;
     PostDetail: { postId: string };
     PlaceNotifications: undefined;
+    ChangePassword: undefined;
+    EditProfile: undefined;
+    DeleteAccount: undefined;
+    BlockedUsers: undefined;
 
     // Chat Screens
     ChatList: undefined;

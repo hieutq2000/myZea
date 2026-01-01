@@ -407,6 +407,43 @@ export default function PrivacySettingsScreen() {
                     </View>
                 </View>
 
+                {/* Blocked Users */}
+                <View style={styles.section}>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>NGƯỜI DÙNG ĐÃ CHẶN</Text>
+
+                    <View style={[styles.card, { backgroundColor: colors.card }]}>
+                        <SettingItem
+                            icon="ban"
+                            iconType="materialCommunity"
+                            title="Danh sách chặn"
+                            subtitle="Xem và quản lý người dùng đã chặn"
+                            showArrow
+                            onPress={() => navigation.navigate('BlockedUsers' as never)}
+                        />
+                    </View>
+                </View>
+
+                {/* Danger Zone */}
+                <View style={styles.section}>
+                    <Text style={[styles.sectionTitle, { color: '#EF4444' }]}>VÙNG NGUY HIỂM</Text>
+
+                    <TouchableOpacity
+                        style={[styles.card, { backgroundColor: colors.card, borderWidth: 1, borderColor: '#FECACA' }]}
+                        onPress={() => navigation.navigate('DeleteAccount' as never)}
+                    >
+                        <View style={styles.settingItem}>
+                            <View style={[styles.iconContainer, { backgroundColor: '#FEE2E2' }]}>
+                                <Ionicons name="trash-outline" size={22} color="#EF4444" />
+                            </View>
+                            <View style={styles.settingContent}>
+                                <Text style={[styles.settingTitle, { color: '#EF4444' }]}>Xóa tài khoản</Text>
+                                <Text style={[styles.settingSubtitle, { color: '#F87171' }]}>Xóa vĩnh viễn tài khoản và dữ liệu</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color="#F87171" />
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
                 <View style={{ height: 40 }} />
             </ScrollView>
         </View>

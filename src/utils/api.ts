@@ -120,6 +120,70 @@ export async function logout(): Promise<void> {
     await removeToken();
 }
 
+// ============ PASSWORD RECOVERY API ============
+
+export interface ForgotPasswordResponse {
+    success: boolean;
+    message: string;
+    devOtp?: string; // Only in development mode
+}
+
+export async function forgotPassword(email: string): Promise<ForgotPasswordResponse> {
+    return apiRequest<ForgotPasswordResponse>('/api/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+    });
+}
+
+export interface VerifyOtpResponse {
+    success: boolean;
+    resetToken: string;
+    message: string;
+}
+
+export async function verifyOtp(email: string, otp: string): Promise<VerifyOtpResponse> {
+    return apiRequest<VerifyOtpResponse>('/api/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({ email, otp }),
+    });
+}
+
+export interface ResetPasswordResponse {
+    success: boolean;
+    message: string;
+}
+
+export async function resetPassword(resetToken: string, newPassword: string): Promise<ResetPasswordResponse> {
+    return apiRequest<ResetPasswordResponse>('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ resetToken, newPassword }),
+    });
+}
+
+export interface ChangePasswordResponse {
+    success: boolean;
+    message: string;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<ChangePasswordResponse> {
+    return apiRequest<ChangePasswordResponse>('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+    });
+}
+
+export interface DeleteAccountResponse {
+    success: boolean;
+    message: string;
+}
+
+export async function deleteAccount(password: string, reason?: string): Promise<DeleteAccountResponse> {
+    return apiRequest<DeleteAccountResponse>('/api/auth/account', {
+        method: 'DELETE',
+        body: JSON.stringify({ password, reason }),
+    });
+}
+
 export async function getCurrentUser(): Promise<User | null> {
     try {
         const token = await getToken();
@@ -609,5 +673,77 @@ export async function toggleMessageReaction(messageId: string, type: ReactionTyp
     return apiRequest(`/api/messages/${messageId}/react`, {
         method: 'POST',
         body: JSON.stringify({ type })
+    });
+}
+
+// ============ BLOCK/REPORT API ============
+
+export interface BlockUserResponse {
+    success: boolean;
+    message: string;
+}
+
+export async function blockUser(userId: string): Promise<BlockUserResponse> {
+    return apiRequest<BlockUserResponse>(`/api/users/${userId}/block`, {
+        method: 'POST',
+    });
+}
+
+export async function unblockUser(userId: string): Promise<BlockUserResponse> {
+    return apiRequest<BlockUserResponse>(`/api/users/${userId}/block`, {
+        method: 'DELETE',
+    });
+}
+
+export interface BlockedUser {
+    id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+    blocked_at: string;
+}
+
+export async function getBlockedUsers(): Promise<BlockedUser[]> {
+    return apiRequest<BlockedUser[]>('/api/users/blocked');
+}
+
+export interface BlockStatus {
+    blockedByMe: boolean;
+    blockedByThem: boolean;
+    canChat: boolean;
+}
+
+export async function checkBlockStatus(userId: string): Promise<BlockStatus> {
+    return apiRequest<BlockStatus>(`/api/users/${userId}/is-blocked`);
+}
+
+export interface ReportReason {
+    id: string;
+    label: string;
+    icon: string;
+}
+
+export async function getReportReasons(): Promise<ReportReason[]> {
+    return apiRequest<ReportReason[]>('/api/report/reasons');
+}
+
+export interface ReportResponse {
+    success: boolean;
+    reportId?: string;
+    message: string;
+}
+
+export type ReportTargetType = 'user' | 'message' | 'post' | 'comment';
+
+export async function reportContent(
+    targetId: string,
+    targetType: ReportTargetType,
+    reason: string,
+    details?: string,
+    messageId?: string
+): Promise<ReportResponse> {
+    return apiRequest<ReportResponse>('/api/report', {
+        method: 'POST',
+        body: JSON.stringify({ targetId, targetType, reason, details, messageId }),
     });
 }

@@ -96,8 +96,31 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
 
             <ScrollView style={[styles.content, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 40 }}>
 
+                {/* Edit Profile */}
+                <TouchableOpacity
+                    style={[styles.card, { backgroundColor: colors.card }]}
+                    onPress={() => navigation.navigate('EditProfile')}
+                >
+                    <View style={styles.cardRow}>
+                        <View style={styles.iconLabel}>
+                            <View style={{
+                                width: 32, height: 32, borderRadius: 8,
+                                backgroundColor: isDark ? '#2D2D2D' : '#E0E7FF',
+                                alignItems: 'center', justifyContent: 'center', marginRight: 12
+                            }}>
+                                <Ionicons name="person-circle-outline" size={20} color="#6366F1" />
+                            </View>
+                            <View>
+                                <Text style={[styles.cardTitle, { color: colors.text }]}>Chỉnh sửa hồ sơ</Text>
+                                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>Ảnh đại diện, tên, tiểu sử...</Text>
+                            </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                    </View>
+                </TouchableOpacity>
+
                 {/* Theme Selection */}
-                <View style={[styles.sectionTitleContainer, { paddingHorizontal: 4 }]}>
+                <View style={[styles.sectionTitleContainer, { paddingHorizontal: 4, marginTop: 20 }]}>
                     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Giao diện</Text>
                 </View>
 
@@ -157,6 +180,29 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
                             <View>
                                 <Text style={[styles.cardTitle, { color: colors.text }]}>Quyền riêng tư & Bảo mật</Text>
                                 <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>Sinh trắc học, khóa ứng dụng, chặn...</Text>
+                            </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                    </View>
+                </TouchableOpacity>
+
+                {/* Change Password */}
+                <TouchableOpacity
+                    style={[styles.card, { marginTop: 12, backgroundColor: colors.card }]}
+                    onPress={() => navigation.navigate('ChangePassword')}
+                >
+                    <View style={styles.cardRow}>
+                        <View style={styles.iconLabel}>
+                            <View style={{
+                                width: 32, height: 32, borderRadius: 8,
+                                backgroundColor: isDark ? '#2D2D2D' : '#FEF3C7',
+                                alignItems: 'center', justifyContent: 'center', marginRight: 12
+                            }}>
+                                <Ionicons name="key-outline" size={20} color="#F59E0B" />
+                            </View>
+                            <View>
+                                <Text style={[styles.cardTitle, { color: colors.text }]}>Đổi mật khẩu</Text>
+                                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>Thay đổi mật khẩu đăng nhập</Text>
                             </View>
                         </View>
                         <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />

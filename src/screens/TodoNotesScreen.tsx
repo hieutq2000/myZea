@@ -388,7 +388,11 @@ export default function TodoNotesScreen() {
                             {/* Reminder */}
                             <TouchableOpacity
                                 style={styles.addRow}
-                                onPress={() => setShowDatePicker(true)}
+                                onPress={() => {
+                                    if (!showDatePicker && !showTimePicker) {
+                                        setShowDatePicker(true);
+                                    }
+                                }}
                             >
                                 <Ionicons name="alarm-outline" size={18} color={reminderDate ? '#F97316' : colors.textSecondary} />
                                 <Text style={[styles.addRowText, { color: reminderDate ? '#F97316' : colors.textSecondary }]}>
@@ -397,11 +401,69 @@ export default function TodoNotesScreen() {
                                         : 'Đặt thời gian nhắc nhở'}
                                 </Text>
                                 {reminderDate && (
-                                    <TouchableOpacity onPress={() => setReminderDate(null)}>
+                                    <TouchableOpacity onPress={() => { setReminderDate(null); setShowDatePicker(false); setShowTimePicker(false); }}>
                                         <Ionicons name="close-circle" size={18} color="#EF4444" />
                                     </TouchableOpacity>
                                 )}
                             </TouchableOpacity>
+
+                            {/* Inline Date Picker */}
+                            {showDatePicker && (
+                                <View style={styles.inlinePicker}>
+                                    <View style={styles.pickerLabelRow}>
+                                        <Text style={[styles.pickerLabel, { color: colors.text }]}>Chọn ngày:</Text>
+                                        <TouchableOpacity onPress={() => { setShowDatePicker(false); setShowTimePicker(true); }}>
+                                            <Text style={{ color: '#F97316', fontWeight: '600' }}>Tiếp →</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <DateTimePicker
+                                        value={reminderDate || new Date()}
+                                        mode="date"
+                                        display="spinner"
+                                        onChange={(event, date) => {
+                                            if (date) {
+                                                const newDate = new Date(date);
+                                                if (reminderDate) {
+                                                    newDate.setHours(reminderDate.getHours(), reminderDate.getMinutes());
+                                                } else {
+                                                    newDate.setHours(9, 0); // Default 9:00 AM
+                                                }
+                                                setReminderDate(newDate);
+                                            }
+                                        }}
+                                        minimumDate={new Date()}
+                                        style={{ height: 150 }}
+                                    />
+                                </View>
+                            )}
+
+                            {/* Inline Time Picker */}
+                            {showTimePicker && (
+                                <View style={styles.inlinePicker}>
+                                    <View style={styles.pickerLabelRow}>
+                                        <TouchableOpacity onPress={() => { setShowTimePicker(false); setShowDatePicker(true); }}>
+                                            <Text style={{ color: '#F97316', fontWeight: '600' }}>← Ngày</Text>
+                                        </TouchableOpacity>
+                                        <Text style={[styles.pickerLabel, { color: colors.text }]}>Chọn giờ:</Text>
+                                        <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                                            <Text style={{ color: '#10B981', fontWeight: '600' }}>Xong ✓</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <DateTimePicker
+                                        value={reminderDate || new Date()}
+                                        mode="time"
+                                        display="spinner"
+                                        onChange={(event, time) => {
+                                            if (time && reminderDate) {
+                                                const newDate = new Date(reminderDate);
+                                                newDate.setHours(time.getHours(), time.getMinutes());
+                                                setReminderDate(newDate);
+                                            }
+                                        }}
+                                        style={{ height: 150 }}
+                                    />
+                                </View>
+                            )}
 
                             {/* Subtasks */}
                             <TouchableOpacity
@@ -471,73 +533,6 @@ export default function TodoNotesScreen() {
                         </View>
                     </View>
                 </KeyboardAvoidingView>
-            </Modal>
-
-            {/* Date/Time Picker Modal for iOS */}
-            <Modal
-                visible={showDatePicker || showTimePicker}
-                transparent
-                animationType="slide"
-            >
-                <View style={styles.pickerModalOverlay}>
-                    <View style={[styles.pickerModalContent, { backgroundColor: colors.card }]}>
-                        <View style={styles.pickerHeader}>
-                            <TouchableOpacity onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}>
-                                <Text style={{ color: '#EF4444', fontSize: 16 }}>Hủy</Text>
-                            </TouchableOpacity>
-                            <Text style={[styles.pickerTitle, { color: colors.text }]}>
-                                {showDatePicker ? 'Chọn ngày' : 'Chọn giờ'}
-                            </Text>
-                            <TouchableOpacity onPress={() => {
-                                if (showDatePicker) {
-                                    setShowDatePicker(false);
-                                    setTimeout(() => setShowTimePicker(true), 300);
-                                } else {
-                                    setShowTimePicker(false);
-                                }
-                            }}>
-                                <Text style={{ color: '#F97316', fontSize: 16, fontWeight: '600' }}>
-                                    {showDatePicker ? 'Tiếp' : 'Xong'}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {showDatePicker && (
-                            <DateTimePicker
-                                value={reminderDate || new Date()}
-                                mode="date"
-                                display="spinner"
-                                onChange={(event, date) => {
-                                    if (date) {
-                                        const newDate = new Date(date);
-                                        if (reminderDate) {
-                                            newDate.setHours(reminderDate.getHours(), reminderDate.getMinutes());
-                                        }
-                                        setReminderDate(newDate);
-                                    }
-                                }}
-                                minimumDate={new Date()}
-                                style={{ height: 200 }}
-                            />
-                        )}
-
-                        {showTimePicker && (
-                            <DateTimePicker
-                                value={reminderDate || new Date()}
-                                mode="time"
-                                display="spinner"
-                                onChange={(event, time) => {
-                                    if (time && reminderDate) {
-                                        const newDate = new Date(reminderDate);
-                                        newDate.setHours(time.getHours(), time.getMinutes());
-                                        setReminderDate(newDate);
-                                    }
-                                }}
-                                style={{ height: 200 }}
-                            />
-                        )}
-                    </View>
-                </View>
             </Modal>
         </View>
     );
@@ -758,5 +753,22 @@ const styles = StyleSheet.create({
     pickerTitle: {
         fontSize: 17,
         fontWeight: '600',
+    },
+    inlinePicker: {
+        backgroundColor: '#F9FAFB',
+        borderRadius: 12,
+        marginVertical: 8,
+        padding: 8,
+    },
+    pickerLabelRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingBottom: 8,
+    },
+    pickerLabel: {
+        fontSize: 14,
+        fontWeight: '500',
     },
 });

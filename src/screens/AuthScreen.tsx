@@ -28,6 +28,7 @@ import { login, register, checkServerHealth } from '../utils/api';
 import { User, AuthView } from '../types';
 import { getLatestChangelog } from '../utils/changelog';
 import FloatingLabelInput from '../components/FloatingLabelInput';
+import ForgotPasswordScreen from './ForgotPasswordScreen';
 
 interface AuthScreenProps {
     onLogin: (user: User) => void;
@@ -52,6 +53,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const [faceIdEnabled, setFaceIdEnabled] = useState(false);
     const [hasBiometrics, setHasBiometrics] = useState(false);
     const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
 
     // Carousel State
     const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
@@ -468,6 +470,20 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         </View>
     );
 
+    // If showing forgot password screen
+    if (showForgotPassword) {
+        return (
+            <ForgotPasswordScreen
+                onBack={() => setShowForgotPassword(false)}
+                onSuccess={() => {
+                    setShowForgotPassword(false);
+                    // Optionally clear password field so user has to enter new one
+                    setPassword('');
+                }}
+            />
+        );
+    }
+
     // If showing login form, render the "Bottom Sheet" style form (FPT Next style)
     if (showLoginForm) {
         return (
@@ -677,45 +693,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
                             <View style={{ flexDirection: 'row', justifyContent: view === AuthView.LOGIN ? 'space-between' : 'flex-end', marginTop: 16 }}>
                                 {view === AuthView.LOGIN && (
-                                    <TouchableOpacity onPress={() => {
-                                        if (!email.trim()) {
-                                            Alert.alert(
-                                                'Quên mật khẩu',
-                                                'Vui lòng nhập email của bạn vào ô Email phía trên, sau đó nhấn lại "Quên mật khẩu?"',
-                                                [{ text: 'Đã hiểu' }]
-                                            );
-                                            return;
-                                        }
-
-                                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                                        if (!emailRegex.test(email.trim())) {
-                                            Alert.alert(
-                                                'Email không hợp lệ',
-                                                'Vui lòng nhập đúng định dạng email (ví dụ: email@domain.com)',
-                                                [{ text: 'Đóng' }]
-                                            );
-                                            return;
-                                        }
-
-                                        Alert.alert(
-                                            '📧 Đặt lại mật khẩu',
-                                            `Chúng tôi sẽ gửi hướng dẫn đặt lại mật khẩu đến:\n\n${email.trim()}\n\nVui lòng kiểm tra hộp thư (bao gồm cả thư mục Spam).`,
-                                            [
-                                                { text: 'Hủy', style: 'cancel' },
-                                                {
-                                                    text: 'Gửi email',
-                                                    onPress: async () => {
-                                                        // TODO: Call API to send reset password email
-                                                        Alert.alert(
-                                                            'Đã gửi!',
-                                                            'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu trong vài phút.\n\nNếu không nhận được email, vui lòng liên hệ: support@myzyea.com',
-                                                            [{ text: 'Đóng' }]
-                                                        );
-                                                    }
-                                                }
-                                            ]
-                                        );
-                                    }}>
+                                    <TouchableOpacity onPress={() => setShowForgotPassword(true)}>
                                         <Text style={{ color: '#666' }}>Quên mật khẩu?</Text>
                                     </TouchableOpacity>
                                 )}

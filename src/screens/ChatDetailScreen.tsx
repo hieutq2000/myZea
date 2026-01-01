@@ -22,6 +22,7 @@ import * as Haptics from 'expo-haptics';
 import GroupAvatar from '../components/GroupAvatar';
 import * as Clipboard from 'expo-clipboard';
 import ForwardMessageModal from '../components/ForwardMessageModal';
+import ChatOptionsModal from '../components/ChatOptionsModal';
 
 
 
@@ -2449,6 +2450,18 @@ export default function ChatDetailScreen() {
                 message={forwardMessage}
                 currentUserId={currentUserId || ''}
             />
+
+            {/* Chat Options Modal (Block/Report) - Only for 1-1 chats */}
+            {!isGroup && (
+                <ChatOptionsModal
+                    visible={showHeaderOptions}
+                    onClose={() => setShowHeaderOptions(false)}
+                    partnerId={partnerId}
+                    partnerName={headerName}
+                    onSearch={() => setIsSearching(true)}
+                    onViewProfile={() => (navigation as any).navigate('Profile', { userId: partnerId })}
+                />
+            )}
         </View >
     );
 }

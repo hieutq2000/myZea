@@ -514,6 +514,56 @@ async function initDatabase() {
             FOREIGN KEY (pack_id) REFERENCES sticker_packs(id) ON DELETE CASCADE
         )`);
 
+        // === BLOCK/REPORT TABLES ===
+        console.log("🛠 Creating blocked_users and reports tables...");
+
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS blocked_users (
+                id VARCHAR(36) PRIMARY KEY,
+                blocker_id VARCHAR(36) NOT NULL,
+                blocked_id VARCHAR(36) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_block (blocker_id, blocked_id),
+                INDEX idx_blocker (blocker_id),
+                INDEX idx_blocked (blocked_id)
+            )
+        `);
+
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS reports (
+                id VARCHAR(36) PRIMARY KEY,
+                reporter_id VARCHAR(36) NOT NULL,
+                target_id VARCHAR(36) NOT NULL,
+                target_type VARCHAR(20) DEFAULT 'user',
+                reason VARCHAR(50) NOT NULL,
+                details TEXT,
+                message_id VARCHAR(36),
+                status VARCHAR(20) DEFAULT 'pending',
+                admin_notes TEXT,
+                resolved_by VARCHAR(36),
+                resolved_at TIMESTAMP NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_status (status),
+                INDEX idx_target (target_id, target_type),
+                INDEX idx_reporter (reporter_id),
+                INDEX idx_created (created_at)
+            )
+        `);
+
+        // === OTP TABLE FOR PASSWORD RESET ===
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS password_reset_otps (
+                id VARCHAR(36) PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                otp VARCHAR(6) NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                used BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_user (user_id),
+                INDEX idx_expires (expires_at)
+            )
+        `);
+
         console.log('✅ Database connected and tables created');
     } catch (error) {
         console.error('❌ Database connection failed:', error.message);
@@ -6200,6 +6250,7 @@ const initGroupRoutes = require('./groupRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const authRoutes = require('./routes/authRoutes');
+const blockReportRoutes = require('./routes/blockReportRoutes');
 
 initDatabase().then(async () => {
     // Initialize Socket.IO handlers for realtime features
@@ -6216,8 +6267,9 @@ initDatabase().then(async () => {
     app.use('/api/admin', adminRoutes(pool, authenticateToken));
     app.use('/api/admin/notifications', notificationRoutes(pool, authenticateToken));
     app.use('/api/auth', authRoutes(pool, authenticateToken));
+    app.use('/api', blockReportRoutes(pool, authenticateToken));
 
-    console.log('✅ Modular routes loaded (Admin, Notifications, Auth)');
+    console.log('✅ Modular routes loaded (Admin, Notifications, Auth, Block/Report)');
     console.log('✅ Socket.IO handlers initialized (Typing, Online Status, Seen)');
 
     server.listen(PORT, '0.0.0.0', () => {

@@ -61,6 +61,10 @@ import FeedbackScreen from './src/screens/FeedbackScreen';
 import PlaceNotificationsScreen from './src/screens/PlaceNotificationsScreen';
 import CreateGroupScreen from './src/screens/CreateGroupScreen';
 import GroupInfoScreen from './src/screens/GroupInfoScreen';
+import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
+import EditProfileScreen from './src/screens/EditProfileScreen';
+import DeleteAccountScreen from './src/screens/DeleteAccountScreen';
+import BlockedUsersScreen from './src/screens/BlockedUsersScreen';
 
 // Configure Notifications to show alert when app is in foreground
 Notifications.setNotificationHandler({
@@ -694,6 +698,12 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         {/* Admin Screens */}
         <Stack.Screen name="Feedback" component={FeedbackScreen} options={{ headerShown: false }} />
         <Stack.Screen name="PlaceNotifications" component={PlaceNotificationsScreen} options={{ headerShown: false }} />
+
+        {/* Settings Screens */}
+        <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
 
       <UpdateModal
