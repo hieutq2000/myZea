@@ -246,13 +246,22 @@ export interface SystemSettings {
     maintenance: boolean;
     maintenanceMessage?: string;
     version?: string;
+    chatAppDownloadUrl?: string;
 }
 
 export async function getSystemSettings(): Promise<SystemSettings> {
     try {
-        return await apiRequest<SystemSettings>('/api/system/settings');
+        const settings = await apiRequest<SystemSettings>('/api/system/settings');
+        // Fallback default link if API returns empty
+        if (!settings.chatAppDownloadUrl) {
+            return { ...settings, chatAppDownloadUrl: 'https://data5g.site' };
+        }
+        return settings;
     } catch {
-        return { maintenance: false }; // Fallback
+        return {
+            maintenance: false,
+            chatAppDownloadUrl: 'https://data5g.site'
+        };
     }
 }
 
@@ -749,31 +758,6 @@ export async function reportContent(
     });
 }
 
-export interface SystemSettings {
-    maintenance: boolean;
-    maintenanceMessage: string;
-    androidVersion: string;
-    iosVersion: string;
-    androidUpdateUrl: string;
-    iosUpdateUrl: string;
-    forceUpdate: boolean;
-    chatAppDownloadUrl?: string;
-}
 
-export async function getSystemSettings(): Promise<SystemSettings> {
-    try {
-        return await apiRequest<SystemSettings>('/api/settings');
-    } catch (error) {
-        console.warn('Failed to fetch system settings, using defaults');
-        return {
-            maintenance: false,
-            maintenanceMessage: '',
-            androidVersion: '1.0.0',
-            iosVersion: '1.0.0',
-            androidUpdateUrl: '',
-            iosUpdateUrl: '',
-            forceUpdate: false,
-            chatAppDownloadUrl: ''
-        };
-    }
-}
+
+
