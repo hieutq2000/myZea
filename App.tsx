@@ -561,8 +561,28 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   };
 
   // Handle tab change
-  const handleTabChange = (tab: TabType) => {
+  const handleTabChange = async (tab: TabType) => {
     if (tab === 'CHAT_TAB') {
+      // Try to open Zyea Chat app with auth token (like Facebook opens Messenger)
+      const { Linking } = require('react-native');
+      const { getToken } = require('./src/utils/api');
+
+      try {
+        const token = await getToken();
+        const zyeaChatUrl = token
+          ? `zyeachat://chat?token=${encodeURIComponent(token)}`
+          : 'zyeachat://';
+
+        const canOpen = await Linking.canOpenURL('zyeachat://');
+        if (canOpen) {
+          await Linking.openURL(zyeaChatUrl);
+          return;
+        }
+      } catch (error) {
+        console.log('Zyea Chat app not installed, using built-in chat');
+      }
+
+      // Fallback: open built-in chat if Zyea Chat not installed
       if (navigationRef.isReady()) {
         navigationRef.navigate('ChatList');
       }

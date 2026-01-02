@@ -196,7 +196,9 @@ export default function PlaceGroupDetailScreen({ groupId, onBack }: PlaceGroupDe
             // Initialize localReactions from server data
             const newReactions: { [postId: string]: string } = {};
             postsData.forEach(post => {
-                if (post.isLiked) {
+                if (post.isLiked && post.myReactionType) {
+                    newReactions[post.id] = post.myReactionType;
+                } else if (post.isLiked) {
                     newReactions[post.id] = 'like';
                 }
             });

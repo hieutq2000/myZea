@@ -520,6 +520,7 @@ export interface Post {
     createdAt: string;
     likes: number;
     isLiked: boolean;
+    myReactionType?: string | null; // 'like', 'love', 'haha', 'wow', 'sad', 'angry'
     comments: number;
     views: number;
     shares: number;

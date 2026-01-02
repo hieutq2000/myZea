@@ -237,7 +237,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             // Schedule local notification
             await Notifications.scheduleNotificationAsync({
                 content: {
-                    title: ' Đăng nhập thành công',
+                    title: '✅ Đăng nhập thành công',
                     body: `Tài khoản đã đăng nhập từ ${deviceName} (${osName}) lúc ${timeStr}`,
                     sound: 'default',
                 },

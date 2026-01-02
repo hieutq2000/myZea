@@ -186,8 +186,10 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             // Initialize localReactions from server data
             const newReactions: LocalPostState = {};
             data.forEach(post => {
-                if (post.isLiked) {
-                    newReactions[post.id] = 'like'; // Default to 'like' if liked
+                if (post.isLiked && post.myReactionType) {
+                    newReactions[post.id] = post.myReactionType; // Use actual reaction type from server
+                } else if (post.isLiked) {
+                    newReactions[post.id] = 'like'; // Fallback to 'like' if no type specified
                 }
             });
 
@@ -1324,11 +1326,32 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                     setViewingProfileUser(null);
                 }}
                 onEditProfile={() => Alert.alert('Thông báo', 'Tính năng chỉnh sửa profile đang phát triển')}
-                onMessage={() => {
+                onMessage={async () => {
+                    // Try to open Zyea Chat app with deep link and token
+                    const { Linking } = require('react-native');
+                    const { getToken } = require('../utils/api');
+                    const partnerId = viewingProfileUser?.id;
+                    const userName = viewingProfileUser?.name;
+                    const avatar = viewingProfileUser?.avatar;
+
+                    try {
+                        const token = await getToken();
+                        const zyeaChatUrl = `zyeachat://chat?token=${encodeURIComponent(token || '')}&partnerId=${partnerId}&userName=${encodeURIComponent(userName || '')}&avatar=${encodeURIComponent(avatar || '')}`;
+
+                        const canOpen = await Linking.canOpenURL('zyeachat://');
+                        if (canOpen) {
+                            await Linking.openURL(zyeaChatUrl);
+                            return;
+                        }
+                    } catch (error) {
+                        console.log('Zyea Chat not installed, using built-in chat');
+                    }
+
+                    // Fallback: open built-in chat
                     navigation.navigate('ChatDetail', {
-                        partnerId: viewingProfileUser?.id,
-                        userName: viewingProfileUser?.name,
-                        avatar: viewingProfileUser?.avatar,
+                        partnerId: partnerId,
+                        userName: userName,
+                        avatar: avatar,
                     });
                 }}
             />

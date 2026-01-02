@@ -2938,6 +2938,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes,
                 (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) as comments,
                 (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ?) as isLiked,
+                (SELECT reaction_type FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ? LIMIT 1) as myReactionType,
                 0 as views,
                 -- Original Post Info (Self Join)
                 op.id as op_id,
@@ -2959,7 +2960,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
             LEFT JOIN place_groups pg ON p.group_id = pg.id
             ORDER BY p.created_at DESC
             LIMIT ? OFFSET ?
-        `, [userId, limit.toString(), offset.toString()]);
+        `, [userId, userId, limit.toString(), offset.toString()]);
 
         // Helper to fix localhost URLs to actual IP
         const fixImageUrl = (url) => {
@@ -3043,6 +3044,7 @@ app.get('/api/place/posts', authenticateToken, async (req, res) => {
                 createdAt: formatDateForClient(p.createdAt),
                 likes: p.likes,
                 isLiked: p.isLiked > 0,
+                myReactionType: p.myReactionType || null, // 'like', 'love', 'haha', etc.
                 comments: p.comments,
                 views: p.views || 0,
                 shares: 0,
@@ -4358,13 +4360,14 @@ app.get('/api/place/groups/:id/posts', authenticateToken, async (req, res) => {
                 u.avatar as author_avatar,
                 (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes,
                 (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) as comments,
-                (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ?) as isLiked
+                (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ?) as isLiked,
+                (SELECT reaction_type FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ? LIMIT 1) as myReactionType
             FROM posts p
             JOIN users u ON p.user_id = u.id
             WHERE p.group_id = ?
             ORDER BY p.created_at DESC
             LIMIT 50
-        `, [userId, groupId]);
+        `, [userId, userId, groupId]);
 
         // Helper to process images - handles both string URLs and {uri, width, height} objects
         const processImages = (dbImageString) => {
@@ -4413,6 +4416,7 @@ app.get('/api/place/groups/:id/posts', authenticateToken, async (req, res) => {
                 createdAt: p.createdAt,
                 likes: p.likes,
                 isLiked: p.isLiked > 0,
+                myReactionType: p.myReactionType || null,
                 comments: p.comments
             };
         });
