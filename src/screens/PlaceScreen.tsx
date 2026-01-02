@@ -17,11 +17,12 @@ import {
     Platform,
     Share,
     KeyboardAvoidingView,
+    Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getPosts, createPost, updatePost, toggleLikePost, Post, uploadImage, trackPostView, searchUsers, getUnreadNotificationCount, getConversations } from '../utils/api';
+import { getPosts, createPost, updatePost, toggleLikePost, Post, uploadImage, trackPostView, searchUsers, getUnreadNotificationCount, getConversations, getToken } from '../utils/api';
 import { launchImageLibrary } from '../utils/imagePicker';
 import { useNavigation } from '@react-navigation/native';
 import FacebookImageViewer from '../components/FacebookImageViewer';
@@ -1227,7 +1228,29 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
             {/* Place Bottom Bar */}
             <PlaceBottomBar
                 activeTab={placeActiveTab}
-                onTabChange={(tab) => {
+                onTabChange={async (tab) => {
+                    if (tab === 'CHAT') {
+                        // Try to open Zyea Chat app with auth token
+                        try {
+                            const token = await getToken();
+                            const zyeaChatUrl = token
+                                ? `zyeachat://chat?token=${encodeURIComponent(token)}`
+                                : 'zyeachat://';
+
+                            const canOpen = await Linking.canOpenURL('zyeachat://');
+                            if (canOpen) {
+                                await Linking.openURL(zyeaChatUrl);
+                                return;
+                            }
+                        } catch (error) {
+                            console.log('Zyea Chat not installed, using built-in chat');
+                        }
+
+                        // Fallback: open built-in chat
+                        navigation.navigate('ChatList');
+                        return;
+                    }
+
                     if (tab === 'HOME') {
                         if (placeActiveTab === 'HOME') {
                             if (scrollY.current > 50) { // If scrolled down > 50px

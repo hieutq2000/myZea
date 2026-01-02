@@ -27,11 +27,7 @@ export default function PlaceBottomBar({
     const navigation = useNavigation<any>();
 
     const handleTabPress = (tab: PlaceTabType) => {
-        if (tab === 'CHAT') {
-            navigation.navigate('ChatList');
-        } else {
-            onTabChange(tab);
-        }
+        onTabChange(tab);
     };
 
     const tabs = [
