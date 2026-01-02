@@ -748,3 +748,32 @@ export async function reportContent(
         body: JSON.stringify({ targetId, targetType, reason, details, messageId }),
     });
 }
+
+export interface SystemSettings {
+    maintenance: boolean;
+    maintenanceMessage: string;
+    androidVersion: string;
+    iosVersion: string;
+    androidUpdateUrl: string;
+    iosUpdateUrl: string;
+    forceUpdate: boolean;
+    chatAppDownloadUrl?: string;
+}
+
+export async function getSystemSettings(): Promise<SystemSettings> {
+    try {
+        return await apiRequest<SystemSettings>('/api/settings');
+    } catch (error) {
+        console.warn('Failed to fetch system settings, using defaults');
+        return {
+            maintenance: false,
+            maintenanceMessage: '',
+            androidVersion: '1.0.0',
+            iosVersion: '1.0.0',
+            androidUpdateUrl: '',
+            iosUpdateUrl: '',
+            forceUpdate: false,
+            chatAppDownloadUrl: ''
+        };
+    }
+}

@@ -47,13 +47,14 @@ const { width } = Dimensions.get('window');
 interface PlaceScreenProps {
     user: any;
     onGoHome?: () => void;
+    downloadChatUrl?: string | null;
 }
 
 interface LocalPostState {
     [postId: string]: string; // reactionId
 }
 
-export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
+export default function PlaceScreen({ user, onGoHome, downloadChatUrl }: PlaceScreenProps) {
     const navigation = useNavigation<any>();
     const [posts, setPosts] = useState<Post[]>([]);
     const [isImageViewerVisible, setIsImageViewerVisible] = useState(false);
@@ -1244,6 +1245,19 @@ export default function PlaceScreen({ user, onGoHome }: PlaceScreenProps) {
                             }
                         } catch (error) {
                             console.log('Zyea Chat not installed, using built-in chat');
+                        }
+
+                        // If download URL is available, prompt user
+                        if (downloadChatUrl) {
+                            Alert.alert(
+                                "Cài đặt Zyea Chat",
+                                "Bạn cần cài đặt ứng dụng Zyea Chat để có trải nghiệm nhắn tin tốt nhất.",
+                                [
+                                    { text: "Dùng Chat Web/Lite", style: "cancel", onPress: () => navigation.navigate('ChatList') },
+                                    { text: "Tải App Ngay", onPress: () => Linking.openURL(downloadChatUrl) }
+                                ]
+                            );
+                            return;
                         }
 
                         // Fallback: open built-in chat

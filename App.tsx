@@ -100,6 +100,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   const [maintenanceMode, setMaintenanceMode] = useState<{ enabled: boolean; message?: string }>({
     enabled: false,
   });
+  const [downloadChatUrl, setDownloadChatUrl] = useState<string | null>(null);
 
   // Badge counts for bottom tab bar
   const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -295,6 +296,9 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   useEffect(() => {
     const checkMaintenance = async () => {
       const settings = await getSystemSettings();
+      if (settings?.chatAppDownloadUrl) {
+        setDownloadChatUrl(settings.chatAppDownloadUrl);
+      }
       if (settings.maintenance) {
         setMaintenanceMode({ enabled: true, message: settings.maintenanceMessage });
       }
@@ -535,7 +539,7 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         );
 
       case 'PLACE':
-        return <PlaceScreen user={user} onGoHome={() => setView('HOME')} />;
+        return <PlaceScreen user={user} downloadChatUrl={downloadChatUrl} onGoHome={() => setView('HOME')} />;
 
       case 'HOME':
       default:
@@ -582,7 +586,20 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         console.log('Zyea Chat app not installed, using built-in chat');
       }
 
-      // Fallback: open built-in chat if Zyea Chat not installed
+      // If download URL is available, prompt user
+      if (downloadChatUrl) {
+        Alert.alert(
+          "Cài đặt Zyea Chat",
+          "Bạn cần cài đặt ứng dụng Zyea Chat để có trải nghiệm nhắn tin tốt nhất.",
+          [
+            { text: "Dùng Chat Web/Lite", style: "cancel", onPress: () => navigationRef.isReady() && navigationRef.navigate('ChatList') },
+            { text: "Tải App Ngay", onPress: () => Linking.openURL(downloadChatUrl) }
+          ]
+        );
+        return;
+      }
+
+      // Fallback: open built-in chat if Zyea Chat not installed and no download link
       if (navigationRef.isReady()) {
         navigationRef.navigate('ChatList');
       }
