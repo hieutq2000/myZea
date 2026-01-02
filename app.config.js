@@ -28,6 +28,8 @@ module.exports = {
                 NSPhotoLibraryUsageDescription: "Ứng dụng cần quyền truy cập thư viện ảnh để chọn ảnh đại diện.",
                 NSPhotoLibraryAddUsageDescription: "Ứng dụng cần quyền lưu ảnh vào thư viện của bạn.",
                 NSLocationWhenInUseUsageDescription: "Ứng dụng cần quyền vị trí để chia sẻ vị trí của bạn trong chat.",
+                // Allow querying zyeachat:// URL scheme
+                LSApplicationQueriesSchemes: ["zyeachat"],
                 // Allow HTTP connections to VPS server
                 NSAppTransportSecurity: {
                     NSAllowsArbitraryLoads: true,
